@@ -1,0 +1,22 @@
+{
+  "_comment": "Canned Solana JSON-RPC response (simulateTransaction). Offline rehearsal only.",
+  "jsonrpc": "2.0",
+  "result": {
+    "context": { "slot": 287000001 },
+    "value": {
+      "err": null,
+      "logs": [
+        "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+        "Program log: Instruction: Swap",
+        "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [2]",
+        "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 success",
+        "Program log: swap executed"
+      ],
+      "unitsConsumed": 124877,
+      "accounts": null,
+      "returnData": null
+    }
+  },
+  "id": 1
+}
+

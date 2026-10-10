@@ -1,0 +1,11 @@
+{
+  "venue": "okx_demo",
+  "cash": 103358.46688886615,
+  "positions": {
+    "PYTH/USDT": 0.000745,
+    "OKB/USDT": 9.2e-08,
+    "INJ/USDT": 1.08e-06
+  },
+  "created_at": "2026-09-30T09:04:48+00:00",
+  "note": "created automatically on first successful account read"
+}

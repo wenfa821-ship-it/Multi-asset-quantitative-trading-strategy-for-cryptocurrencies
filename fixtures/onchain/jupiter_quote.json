@@ -1,0 +1,57 @@
+{
+  "_comment": "Shape of GET https://lite-api.jup.ag/swap/v1/quote. priceImpactPct is a fraction (0.0042 = 0.42%).",
+  "by_mint": {
+    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+      "inputMint": "So11111111111111111111111111111111111111112",
+      "inAmount": "50000000",
+      "outputMint": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      "outAmount": "5800000000",
+      "otherAmountThreshold": "5742000000",
+      "swapMode": "ExactIn",
+      "slippageBps": 80,
+      "priceImpactPct": "0.0042",
+      "routePlan": [
+        { "swapInfo": { "ammKey": "RaydiumPool111111111111111111111111111111111", "label": "Raydium", "inputMint": "So11111111111111111111111111111111111111112", "outputMint": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "inAmount": "50000000", "outAmount": "5800000000", "feeAmount": "12500", "feeMint": "So11111111111111111111111111111111111111112" }, "percent": 100 }
+      ],
+      "contextSlot": 287000000,
+      "timeTaken": 0.021
+    },
+    "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+      "inputMint": "So11111111111111111111111111111111111111112",
+      "inAmount": "50000000",
+      "outputMint": "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV",
+      "outAmount": "150000000",
+      "otherAmountThreshold": "148500000",
+      "slippageBps": 80,
+      "priceImpactPct": "0.045",
+      "routePlan": [
+        { "swapInfo": { "label": "Raydium" }, "percent": 100 }
+      ]
+    },
+    "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+      "inputMint": "So11111111111111111111111111111111111111112",
+      "inAmount": "50000000",
+      "outputMint": "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW",
+      "outAmount": "640000000",
+      "otherAmountThreshold": "633600000",
+      "slippageBps": 80,
+      "priceImpactPct": "0.045",
+      "routePlan": [
+        { "swapInfo": { "label": "Meteora" }, "percent": 100 }
+      ]
+    },
+    "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+      "inputMint": "So11111111111111111111111111111111111111112",
+      "inAmount": "50000000",
+      "outputMint": "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E",
+      "outAmount": "700000000000",
+      "otherAmountThreshold": "693000000000",
+      "slippageBps": 80,
+      "priceImpactPct": "0.184",
+      "routePlan": [
+        { "swapInfo": { "label": "Pump.fun" }, "percent": 100 }
+      ]
+    }
+  }
+}
+

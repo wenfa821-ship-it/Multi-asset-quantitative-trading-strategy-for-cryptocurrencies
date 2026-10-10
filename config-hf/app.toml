@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# HIGH-FREQUENCY RESEARCH config (1m base). Separate from config/ on purpose:
+# the live/demo loop keeps running on 15m while you measure 1m here.
+#
+#   ta data fetch --config-dir config-hf --timeframes 1m,5m --bars 20160
+#   ta backtest --config-dir config-hf --source history --strategy hf_reversion --split 0.7
+# ---------------------------------------------------------------------------
+
+[app]
+mode            = "paper"
+base_currency   = "USDT"
+data_dir        = "data"
+log_dir         = "logs"
+timezone        = "Asia/Shanghai"
+kill_switch_file = "KILL_SWITCH"
+
+# Only the deepest books: at 1m the spread is the cost, so majors only.
+[universe]
+timeframe   = "1m"
+timeframes  = ["5m", "15m"]
+bar_limit   = 300
+symbols     = []
+
+[universe.symbols_by_tier]
+majors = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "DOGE/USDT"]
+alts   = ["XRP/USDT", "LINK/USDT"]
+new    = []
+
+[loop]
+poll_seconds    = 15
+max_iterations  = 0
+
+# Real OKX spot costs for these instruments, measured 2026-09-29:
+#   spread ~0.01-1.0 bps, maker 8 bps, taker 10 bps (standard tier).
+# The backtest must charge the taker fee on BOTH sides or it is fiction.
+[venues.paper]
+initial_cash    = 10000.0
+fee_bps         = 10.0
+maker_fee_bps   = 8.0
+slippage_bps    = 1.0
+
+[venues.okx_demo]
+exchange_id     = "okx"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"
+fee_bps         = 10.0
+slippage_bps    = 1.0
+
+[venues.binance_testnet]
+exchange_id     = "binance"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "BINANCE_TESTNET_API_KEY"
+secret_env      = "BINANCE_TESTNET_SECRET"
+password_env    = ""
+fee_bps         = 10.0
+slippage_bps    = 1.0

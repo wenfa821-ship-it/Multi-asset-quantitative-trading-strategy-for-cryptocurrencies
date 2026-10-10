@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job for the TRADING LOOP (OKX Demo Trading).
+
+  READ THIS BEFORE INSTALLING. Unlike the dashboard job, this one places orders
+  (simulated), so:
+
+    * KeepAlive is SuccessfulExit=false, not true. A crash or a kill is restarted;
+      a CLEAN exit is respected and NOT restarted. The runner exits 0 on purpose
+      when the kill switch fires or when it gives up after too many broken ticks -
+      silently recreating that state on a timer is the thing we do not want.
+    * API keys are NOT in this file. The wrapper scripts/run_demo_foreground.sh
+      sources ./.env (mode 600) at launch, so secrets never land in
+      ~/Library/LaunchAgents.
+    * The emergency brake is the same as everywhere else:
+          touch /Users/.../trading-agent/KILL_SWITCH
+      The runner checks it every tick and shuts itself down (and stays down,
+      because of the SuccessfulExit rule above).
+
+  Do not copy by hand: scripts/install_runner_service.sh fills in the paths.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingagent.runner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- The python BINARY plus arguments, never a shell script.
+             Handing launchd `scripts/run_demo_foreground.sh` (mode 755, valid
+             `#!/bin/zsh`, ran fine from a terminal) failed with a bare
+             "/bin/zsh: can't open input file: ..." and exit 127 - as did naming
+             /bin/zsh explicitly. The dashboard job, which is the same directory
+             but invoked as `<python> -m ta dashboard`, works. So the loop uses
+             that shape too; --env-file replaces what the shell wrapper did. -->
+        <string>__PYTHON__</string>
+        <string>-u</string>
+        <string>-m</string>
+        <string>ta</string>
+        <string>run</string>
+        <string>--venue</string>
+        <string>okx_demo</string>
+        <string>--iterations</string>
+        <string>0</string>
+        <string>--interval</string>
+        <string>60</string>
+        <string>--config-dir</string>
+        <string>config</string>
+        <string>--metrics-port</string>
+        <string>__METRICS_PORT__</string>
+        <string>--enable-trading</string>
+        <string>--env-file</string>
+        <string>.env</string>
+        <string>--pid-file</string>
+        <string>logs/ta-run.pid</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <!-- Only PATH/TZ here. Secrets come from .env through the wrapper. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>src</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/anaconda3/bin:/Users/wenfa/.workbuddy/binaries/python/current/bin</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <!-- ccxt ignores the proxy env vars unless they are exported, and okx.com
+             is unreachable without them from this machine. -->
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- restart a crash or a kill; respect a clean self-shutdown -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/ta-run-service.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/ta-run-service.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,70 @@
+{
+  "_comment": "Shape of GET https://api.rugcheck.xyz/v1/tokens/{mint}/report",
+  "by_mint": {
+    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+      "score": 210,
+      "score_normalised": 12,
+      "lpLockedPct": 100.0,
+      "totalHolders": 5200,
+      "topHolders": [
+        { "address": "H1", "pct": 6.2, "insider": false },
+        { "address": "H2", "pct": 3.1, "insider": false },
+        { "address": "H3", "pct": 2.4, "insider": false },
+        { "address": "H4", "pct": 1.8, "insider": false },
+        { "address": "H5", "pct": 1.2, "insider": false },
+        { "address": "H6", "pct": 0.9, "insider": false },
+        { "address": "H7", "pct": 0.8, "insider": false },
+        { "address": "H8", "pct": 0.7, "insider": false },
+        { "address": "H9", "pct": 0.6, "insider": false },
+        { "address": "H10", "pct": 0.5, "insider": false }
+      ],
+      "risks": [
+        { "name": "Low amount of LP Providers", "level": "warn", "score": 1, "description": "Only a few providers." }
+      ]
+    },
+    "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+      "score": 3400,
+      "score_normalised": 62,
+      "lpLockedPct": 60.0,
+      "totalHolders": 900,
+      "topHolders": [
+        { "address": "T1", "pct": 30.0 },
+        { "address": "T2", "pct": 20.0 }
+      ],
+      "risks": [
+        { "name": "Top 10 holders high ownership", "level": "warn", "score": 500 }
+      ]
+    },
+    "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+      "score": 48000,
+      "score_normalised": 96,
+      "lpLockedPct": 0.0,
+      "totalHolders": 41,
+      "topHolders": [
+        { "address": "R1", "pct": 82.0, "insider": true },
+        { "address": "R2", "pct": 9.0, "insider": true }
+      ],
+      "risks": [
+        { "name": "Honeypot", "level": "danger", "score": 1000, "description": "Sell simulation fails." },
+        { "name": "Top 10 holders high ownership", "level": "danger", "score": 900 }
+      ]
+    },
+    "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+      "score": 900,
+      "score_normalised": 30,
+      "lpLockedPct": 95.0,
+      "totalHolders": 3100,
+      "topHolders": [
+        { "address": "I1", "pct": 5.0 },
+        { "address": "I2", "pct": 4.0 },
+        { "address": "I3", "pct": 3.0 },
+        { "address": "I4", "pct": 2.0 },
+        { "address": "I5", "pct": 1.0 }
+      ],
+      "risks": [
+        { "name": "Low liquidity", "level": "warn", "score": 200 }
+      ]
+    }
+  }
+}
+

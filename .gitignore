@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# never commit secrets or runtime state
+.env
+.env.live
+data/
+logs/
+backups/
+out/
+KILL_SWITCH
+*.jsonl
+*.csv
+
+# ...except the version archive, whose whole point is that it is immutable and
+# reviewable later: its changelog/progress snapshots ARE the release record.
+!archive/versions/**/*.jsonl
+
+# local virtualenvs
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# the automation/agent harness keeps its own memory here - tool state, not project
+.workbuddy/
+
+
+# macOS
+.DS_Store

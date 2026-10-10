@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-05",
+  "process": {
+    "pid": 1477,
+    "alive": true,
+    "pid_file_ok": true,
+    "restarts_today": 0,
+    "first_start_utc": null,
+    "last_start_utc": null,
+    "runner_starts": 0,
+    "venues_active": {},
+    "current_venue": "okx_demo"
+  },
+  "overview": {
+    "baseline_equity": 102992.432771,
+    "final_equity": 103029.830061,
+    "final_cash": 103029.829576,
+    "position_value": 0.0,
+    "pnl": 37.39728999999352,
+    "return_pct": 0.036310716228196156,
+    "max_drawdown_pct": 0.04534332909183478,
+    "current_drawdown_pct": 0.03376435376643075,
+    "open_positions": 0,
+    "positions": {},
+    "marks": {
+      "ADA/USDT": 0.264,
+      "APT/USDT": 0.817,
+      "AVAX/USDT": 10.871,
+      "BTC/USDT": 85250.8,
+      "DOGE/USDT": 0.09465,
+      "ETH/USDT": 2697.14,
+      "INJ/USDT": 7.488,
+      "JUP/USDT": 0.3385,
+      "LINK/USDT": 13.793,
+      "NEAR/USDT": 5.023,
+      "OKB/USDT": 126.77,
+      "ONDO/USDT": 0.4905,
+      "PENGU/USDT": 0.0096,
+      "PEPE/USDT": 4.39e-06,
+      "PYTH/USDT": 0.0765,
+      "SOL/USDT": 119.33,
+      "SUI/USDT": 1.1869,
+      "TIA/USDT": 5.5,
+      "W/USDT": 0.01414,
+      "XRP/USDT": 1.493
+    }
+  },
+  "trading": {
+    "fill_count": 11,
+    "buy_fills": 5,
+    "sell_fills": 6,
+    "total_fees": 47.431250955971,
+    "realized_pnl": 0.0,
+    "closed_trades": 0,
+    "wins": 0,
+    "win_rate_pct": null
+  },
+  "risk": {
+    "blocked_count": 2,
+    "blocked_reasons": {
+      "symbol_daily_cap: SOL/USDT 2/2 today": 1,
+      "daily_trade_cap: 4 entries already today": 1
+    },
+    "risk_events": 3,
+    "kill_switch_triggered": false,
+    "kill_reason": ""
+  },
+  "alerts": {
+    "total": 4,
+    "by_level": {
+      "warning": 2,
+      "info": 2
+    },
+    "by_title": {
+      "onchain token blocked": 1,
+      "order rejected": 1,
+      "partial take profit": 1,
+      "stop moved to breakeven": 1
+    }
+  },
+  "stability": {
+    "log_lines": 0,
+    "traceback_count": 0,
+    "exception_count": 0,
+    "network_error_count": 0,
+    "reconnect_count": 0,
+    "kill_switch_mentions": 0,
+    "critical_count": 0,
+    "ssl_errors": 0,
+    "http_errors": 0
+  },
+  "live_metrics": {
+    "_alive": true,
+    "_pid": 1477,
+    "_pid_file_ok": true,
+    "ta_fills_total": 35.0,
+    "ta_orders_blocked_total": 27.0,
+    "ta_orders_submitted_total": 37.0,
+    "ta_reconcile_mismatch_total": 3.0,
+    "ta_reconcile_repeat_total": 100.0,
+    "ta_signals_total": 54.0,
+    "ta_stale_data_skips_total": 9.0,
+    "ta_stop_outs_total": 7.0,
+    "ta_ticks_total": 4115.0,
+    "ta_venue_degraded_total": 21.0,
+    "ta_cash": 103029.82957569008,
+    "ta_daily_pnl_pct": 0.036310610754956923,
+    "ta_drawdown_pct": 0.2108486826942503,
+    "ta_dust_notional": 0.00044653991476718033,
+    "ta_entries_paused": 0.0,
+    "ta_entries_today": 4.0,
+    "ta_equity": 103029.83006099284,
+    "ta_fees_total": 176.72979926398907,
+    "ta_heat_pct": 0.0,
+    "ta_kill_switch": 0.0,
+    "ta_open_positions": 0.0,
+    "ta_unmanaged_notional": 3.876285023281968e-05,
+    "ta_venue_degraded": 0.0
+  }
+}

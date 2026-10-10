@@ -1,0 +1,60 @@
+{
+ "generated_ts": "2026-10-05T11:26:21+0800",
+ "source": "data/onchain/watchlist.json",
+ "screened": 3,
+ "passed": 2,
+ "reasons": {
+  "OK score N": 2,
+  "REJECT liquidity N < N USD": 1
+ },
+ "rows": [
+  {
+   "mint": "8nPoBHiBM6pybxMws9PA2JRb9BjkppBfqcZGmot4DMBC",
+   "symbol": "Human",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 407,
+   "liquidity_usd": 138027.2,
+   "volume_24h_usd": 19257070.83,
+   "holder_count": 19673,
+   "top10_holder_pct": 20.2896,
+   "price_usd": 0.001246,
+   "passed": true,
+   "score": 86.2,
+   "reasons": [
+    "OK score 86.2"
+   ]
+  },
+  {
+   "mint": "6HFJ5sxVoEtczr9siAUeGssmpfhQSS3pEoBcCycUpump",
+   "symbol": "XEET",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 54,
+   "liquidity_usd": 67326.11,
+   "volume_24h_usd": 1520077.51,
+   "holder_count": 4989,
+   "top10_holder_pct": 23.6494,
+   "price_usd": 0.0004924,
+   "passed": true,
+   "score": 76.69,
+   "reasons": [
+    "OK score 76.69"
+   ]
+  },
+  {
+   "mint": "37vV3bR2ewPZL9CWPn3atGWao3qLD3uUkYAxpLqJpump",
+   "symbol": "JETPACK",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 60,
+   "liquidity_usd": 38856.08,
+   "volume_24h_usd": 308546.91,
+   "holder_count": 2551,
+   "top10_holder_pct": 19.8599,
+   "price_usd": 0.0001895,
+   "passed": false,
+   "score": 73.89,
+   "reasons": [
+    "REJECT liquidity 38,856 < 50,000 USD"
+   ]
+  }
+ ]
+}

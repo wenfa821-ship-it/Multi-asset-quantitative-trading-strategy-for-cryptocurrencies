@@ -1,0 +1,56 @@
+################ trend_pullback
+backtest trend_pullback  symbols=BTC/USDT,ETH/USDT,SOL/USDT,OKB/USDT,DOGE/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,LINK/USDT,SUI/USDT,NEAR/USDT,APT/USDT,INJ/USDT,TIA/USDT,PEPE/USDT  bars=17219  timeframe=15m
+  total_return_pct     -0.54
+  max_drawdown_pct     0.54
+  trades               115
+  win_rate_pct         24.6
+  profit_factor        0.45
+  expectancy           -0.5693
+  fees_paid            38.78
+  exposure_pct         1.4
+  blocked_orders       1
+  exits                {'signal_loss': 11, 'time_loss': 29, 'partial_win': 7, 'target_win': 3, 'time_win': 5, 'stop_loss': 6}
+  out-of-sample at 3x costs: -1.31% (decay 0.77 pp)
+  !! out-of-sample is not profitable: do not trade this configuration
+################ new_listing_breakout
+backtest new_listing_breakout  symbols=JUP/USDT,PYTH/USDT,ONDO/USDT,W/USDT,PENGU/USDT  bars=17255  timeframe=15m
+  total_return_pct     -0.6
+  max_drawdown_pct     0.64
+  trades               279
+  win_rate_pct         37.7
+  profit_factor        0.52
+  expectancy           -0.2589
+  fees_paid            39.88
+  exposure_pct         3.7
+  blocked_orders       85
+  exits                {'stop_loss': 34, 'partial_win': 29, 'time_loss': 62, 'target_win': 5, 'time_win': 23, 'stop_win': 1}
+  out-of-sample at 3x costs: -1.39% (decay 0.79 pp)
+  !! out-of-sample is not profitable: do not trade this configuration
+################ trend_breakout
+backtest trend_breakout  symbols=BTC/USDT,ETH/USDT,SOL/USDT,OKB/USDT,DOGE/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,LINK/USDT,SUI/USDT,NEAR/USDT,APT/USDT,INJ/USDT,TIA/USDT,PEPE/USDT  bars=17174  timeframe=15m
+  total_return_pct     -0.92
+  max_drawdown_pct     1.95
+  trades               129
+  win_rate_pct         50.7
+  profit_factor        0.69
+  expectancy           -0.9799
+  fees_paid            37.84
+  exposure_pct         31.8
+  blocked_orders       8
+  exits                {'stop_loss': 37, 'partial_win': 21, 'target_win': 13, 'stop_win': 4}
+  out-of-sample at 3x costs: -1.68% (decay 0.75 pp)
+  !! out-of-sample is not profitable: do not trade this configuration
+################ mean_reversion
+backtest mean_reversion  symbols=BTC/USDT,ETH/USDT,SOL/USDT,OKB/USDT  bars=17225  timeframe=15m
+  total_return_pct     -0.76
+  max_drawdown_pct     0.85
+  trades               227
+  win_rate_pct         45.9
+  profit_factor        0.69
+  expectancy           -0.2902
+  fees_paid            74.92
+  exposure_pct         9.5
+  blocked_orders       61
+  exits                {'signal_loss': 35, 'partial_win': 39, 'stop_loss': 37, 'signal_win': 22}
+  out-of-sample at 3x costs: -2.24% (decay 1.48 pp)
+  !! out-of-sample is not profitable: do not trade this configuration

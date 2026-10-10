@@ -1,0 +1,296 @@
+{
+ "ledger_kinds_today": {
+  "equity": 990,
+  "order": 5,
+  "risk": 7,
+  "blocked": 6
+ },
+ "today_ledger_total": 1008,
+ "today_run_ids": {
+  "e59c93c52c0e": 577,
+  "84fc6e2aeaa0": 74,
+  "607d19eb9ec0": 124,
+  "c1dffbfbab3f": 233
+ },
+ "run_summary": {
+  "e59c93c52c0e": {
+   "count": 577,
+   "first_cst": "2026-10-07 00:00:48",
+   "last_cst": "2026-10-07 12:15:21",
+   "kinds": {
+    "equity": 566,
+    "order": 3,
+    "risk": 3,
+    "blocked": 5
+   }
+  },
+  "84fc6e2aeaa0": {
+   "count": 74,
+   "first_cst": "2026-10-07 12:43:18",
+   "last_cst": "2026-10-07 14:11:02",
+   "kinds": {
+    "order": 2,
+    "risk": 2,
+    "equity": 69,
+    "blocked": 1
+   }
+  },
+  "607d19eb9ec0": {
+   "count": 124,
+   "first_cst": "2026-10-07 14:12:58",
+   "last_cst": "2026-10-07 16:54:48",
+   "kinds": {
+    "equity": 123,
+    "risk": 1
+   }
+  },
+  "c1dffbfbab3f": {
+   "count": 233,
+   "first_cst": "2026-10-07 16:55:59",
+   "last_cst": "2026-10-07 22:02:31",
+   "kinds": {
+    "equity": 232,
+    "risk": 1
+   }
+  }
+ },
+ "n_equity_today": 990,
+ "first_equity": {
+  "cst": "2026-10-07 00:00:48",
+  "equity": 103029.830069,
+  "cash": 103029.829576,
+  "drawdown_pct": null
+ },
+ "last_equity": {
+  "cst": "2026-10-07 22:02:31",
+  "equity": 103027.532885,
+  "cash": 103027.532415,
+  "drawdown_pct": null,
+  "realized_today": 0.0
+ },
+ "equity_max_today": 103098.98574,
+ "equity_min_today": 103027.532883,
+ "max_drawdown_pct_today": 0.069305,
+ "vs_morning_baseline": {
+  "baseline_equity": 103029.83,
+  "pnl": -2.2971,
+  "pnl_pct": -0.00223
+ },
+ "current_drawdown_pct": 0.069305,
+ "last_positions": null,
+ "n_orders_today": 5,
+ "n_fills_today": 0,
+ "fills_detail": [],
+ "buy_n": 0,
+ "sell_n": 0,
+ "buy_notional": 0.0,
+ "sell_notional": 0.0,
+ "fees_today": 0.0,
+ "order_status": {
+  "rejected": 5
+ },
+ "order_rejects": [
+  {
+   "cst": "2026-10-07 03:45:58",
+   "symbol": "AVAX/USDT",
+   "status": "rejected",
+   "reason": "ExchangeError: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAetrendAVAXUSDTb4f655e8e8\",\"ordId\":\"\",\"sCode\":\"54092\",\"sMsg\":\"Action required: Please go to the TradFi Perpetuals or Spot trading page on Web or App, and complete the disclaimer confirmation when prompted. If the prompt is not displayed in the current language, you may switch to another language environment and try again. Each main account and sub-account must accept the disclaimer separately before API trading can be enabled. \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791315958932\"}],\"inTime\":\"1791315958932456\",\"msg\":\"All operations failed\",\"outTime\":\"1791315958933220\"}"
+  },
+  {
+   "cst": "2026-10-07 10:00:34",
+   "symbol": "OKB/USDT",
+   "status": "rejected",
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT21f1ce9af3\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791338434324\"}],\"inTime\":\"1791338434324246\",\"msg\":\"All operations failed\",\"outTime\":\"1791338434324970\"}"
+  },
+  {
+   "cst": "2026-10-07 10:16:17",
+   "symbol": "OKB/USDT",
+   "status": "rejected",
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDTbe50f0905c\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791339377086\"}],\"inTime\":\"1791339377086264\",\"msg\":\"All operations failed\",\"outTime\":\"1791339377086886\"}"
+  },
+  {
+   "cst": "2026-10-07 12:43:18",
+   "symbol": "OKB/USDT",
+   "status": "rejected",
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT417bb84cc7\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791348198891\"}],\"inTime\":\"1791348198890553\",\"msg\":\"All operations failed\",\"outTime\":\"1791348198892750\"}"
+  },
+  {
+   "cst": "2026-10-07 12:45:54",
+   "symbol": "OKB/USDT",
+   "status": "rejected",
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT029d8e6c26\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791348354564\"}],\"inTime\":\"1791348354563713\",\"msg\":\"All operations failed\",\"outTime\":\"1791348354564583\"}"
+  }
+ ],
+ "n_blocked_today": 6,
+ "blocked_reasons": {
+  "symbol_daily_cap: OKB/USDT 2/2 today": 6
+ },
+ "blocked_by_symbol": {
+  "?": 6
+ },
+ "n_risk_today": 7,
+ "risk_samples": [
+  {
+   "ts": 1791315958981,
+   "type": null,
+   "reason": "ExchangeError: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAetrendAVAXUSDTb4f655e8e8\",\"ordId\":\"\",\"sCode\":\"54092\",\"sMsg\":\"Action required: Please go to the TradFi Perpetuals or Spot trading page on Web or App, and complete the disclaimer confirmation when prompted. If the prompt is not displayed in the current language, you may switch to another language environment and try again. Each main account and sub-account must accept the disclaimer separately before API trading can be enabled. \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791315958932\"}],\"inTime\":\"1791315958932456\",\"msg\":\"All operations failed\",\"outTime\":\"1791315958933220\"}"
+  },
+  {
+   "ts": 1791338434368,
+   "type": null,
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT21f1ce9af3\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791338434324\"}],\"inTime\":\"1791338434324246\",\"msg\":\"All operations failed\",\"outTime\":\"1791338434324970\"}"
+  },
+  {
+   "ts": 1791339377127,
+   "type": null,
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDTbe50f0905c\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791339377086\"}],\"inTime\":\"1791339377086264\",\"msg\":\"All operations failed\",\"outTime\":\"1791339377086886\"}"
+  },
+  {
+   "ts": 1791348198934,
+   "type": null,
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT417bb84cc7\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791348198891\"}],\"inTime\":\"1791348198890553\",\"msg\":\"All operations failed\",\"outTime\":\"1791348198892750\"}"
+  },
+  {
+   "ts": 1791348354603,
+   "type": null,
+   "reason": "BadRequest: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAemeanrOKBUSDT029d8e6c26\",\"ordId\":\"\",\"sCode\":\"51000\",\"sMsg\":\"Parameter tdMode error \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791348354564\"}],\"inTime\":\"1791348354563713\",\"msg\":\"All operations failed\",\"outTime\":\"1791348354564583\"}"
+  },
+  {
+   "ts": 1791363059831,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791365618986,
+   "type": null,
+   "reason": null
+  }
+ ],
+ "realized_by_symbol": {},
+ "realized_total": 0,
+ "closed_trades": 0,
+ "wins": 0,
+ "win_rate_pct": null,
+ "sell_rows": [],
+ "n_alerts_today": 7,
+ "alert_types": {
+  "warning": 7
+ },
+ "alerts_today": [
+  {
+   "cst": "2026-10-07 03:45:58",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"AVAX/USDT\", \"reason\": \"ExchangeError: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAetrendAVAXUSDTb4f655e8e8\\\",\\\"ordId\\\""
+  },
+  {
+   "cst": "2026-10-07 10:00:34",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"OKB/USDT\", \"reason\": \"BadRequest: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAemeanrOKBUSDT21f1ce9af3\\\",\\\"ordId\\\":\\\"\\\""
+  },
+  {
+   "cst": "2026-10-07 10:16:17",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"OKB/USDT\", \"reason\": \"BadRequest: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAemeanrOKBUSDTbe50f0905c\\\",\\\"ordId\\\":\\\"\\\""
+  },
+  {
+   "cst": "2026-10-07 12:43:18",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"OKB/USDT\", \"reason\": \"BadRequest: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAemeanrOKBUSDT417bb84cc7\\\",\\\"ordId\\\":\\\"\\\""
+  },
+  {
+   "cst": "2026-10-07 12:45:54",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"OKB/USDT\", \"reason\": \"BadRequest: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAemeanrOKBUSDT029d8e6c26\\\",\\\"ordId\\\":\\\"\\\""
+  },
+  {
+   "cst": "2026-10-07 16:50:59",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"reconciliation mismatch\", \"source\": \"periodic\", \"diffs\": [\"cash delta: expected 103029.82953782 (baseline 103358.46688886615 + our flow -328.63735105"
+  },
+  {
+   "cst": "2026-10-07 17:33:38",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"reconciliation mismatch\", \"source\": \"periodic\", \"diffs\": [\"cash delta: expected 103029.82953782 (baseline 103358.46688886615 + our flow -328.63735105"
+  }
+ ],
+ "n_ta_today": 53,
+ "ta_event_kinds": {
+  "WARNING": 34,
+  "INFO": 19
+ },
+ "ta_error_count": 0,
+ "ta_error_events_top": {},
+ "ta_symbol_net_err": {
+  "ADA/USDT": 24,
+  "AVAX/USDT": 2
+ },
+ "ta_reconnect_count": 0,
+ "ta_reconnect_samples": [],
+ "ta_reconcile_events": [
+  {
+   "cst": "2026-10-07 16:50:59",
+   "msg": "{\"ts\": \"2026-10-07T08:50:59+00:00\", \"level\": \"WARNING\", \"logger\": \"ta\", \"msg\": \"reconciliation mismatch\", \"source\": \"periodic\", \"diffs\": [\"cash delta: expected 103029.82953782 (baseline 103358.4668888"
+  },
+  {
+   "cst": "2026-10-07 17:33:38",
+   "msg": "{\"ts\": \"2026-10-07T09:33:38+00:00\", \"level\": \"WARNING\", \"logger\": \"ta\", \"msg\": \"reconciliation mismatch\", \"source\": \"periodic\", \"diffs\": [\"cash delta: expected 103029.82953782 (baseline 103358.4668888"
+  }
+ ],
+ "proc_log_stats_today": {
+  "traceback": 0,
+  "reconnect": 0,
+  "network_error": 746,
+  "fatal": 0,
+  "shutdown": 31,
+  "startup": 6,
+  "ip_whitelist": 237,
+  "reconciliation_mismatch": 5,
+  "order_rejected": 10,
+  "blocked": 8
+ },
+ "proc_startup_lines": [
+  {
+   "cst": "2026-10-07 15:09:32",
+   "line": "07:09:32 INFO    runner start  [run_id=355e237ad67e venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  },
+  {
+   "cst": "2026-10-07 15:16:19",
+   "line": "07:16:19 INFO    runner start  [run_id=2b2d1bfc9d8b venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  },
+  {
+   "cst": "2026-10-07 21:13:11",
+   "line": "13:13:11 INFO    runner start  [run_id=acc8f3c0e08c venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  },
+  {
+   "cst": "2026-10-07 12:43:06",
+   "line": "04:43:06 INFO    runner start  [run_id=84fc6e2aeaa0 venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  },
+  {
+   "cst": "2026-10-07 14:12:43",
+   "line": "06:12:43 INFO    runner start  [run_id=607d19eb9ec0 venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  },
+  {
+   "cst": "2026-10-07 16:55:44",
+   "line": "08:55:44 INFO    runner start  [run_id=c1dffbfbab3f venue=okx_demo simulated=False dry_run=False strategies=['trend_breakout', 'trend_pullback', 'mean_reversion', 'new_listing_breakout'] symbols=['ADA/USDT', 'APT/USDT', "
+  }
+ ],
+ "metrics_sample": {
+  "ta_bars_evaluated_total": 633.0,
+  "ta_reconcile_mismatch_total": 1.0,
+  "ta_reconcile_repeat_total": 6.0,
+  "ta_ticks_total": 232.0,
+  "ta_cash": 103027.5324148715,
+  "ta_daily_pnl_pct": -4.656414718539075e-05,
+  "ta_drawdown_pct": 4.656414718539075e-05,
+  "ta_dust_notional": 0.0004328667647770587,
+  "ta_entries_paused": 0.0,
+  "ta_entries_today": 0.0,
+  "ta_equity": 103027.53288508355,
+  "ta_fees_total": 176.72979926398907,
+  "ta_heat_pct": 0.0,
+  "ta_kill_switch": 0.0,
+  "ta_open_positions": 0.0,
+  "ta_unmanaged_notional": 3.734501022294129e-05,
+  "ta_venue_degraded": 0.0
+ }
+}

@@ -1,0 +1,221 @@
+{
+ "ledger_kinds_today": {
+  "equity": 634,
+  "risk": 9,
+  "blocked": 3,
+  "order": 1
+ },
+ "today_run_ids": {
+  "acc8f3c0e08c": 570,
+  "e59c93c52c0e": 77
+ },
+ "old_instance_last_event": {
+  "ts": "16:13:38",
+  "kind": "risk"
+ },
+ "new_instance_first_event": {
+  "ts": "20:13:48",
+  "kind": "risk"
+ },
+ "n_equity_today": 634,
+ "first_equity": {
+  "ts": 1791216080496,
+  "equity": 103029.830061,
+  "cash": 103029.829576,
+  "drawdown": null
+ },
+ "first_equity_cst": "00:01:20",
+ "last_equity": {
+  "equity": 103029.830071,
+  "cash": 103029.829576,
+  "drawdown": null,
+  "day_pnl": null,
+  "day_pnl_pct": null
+ },
+ "last_equity_cst": "22:02:27",
+ "equity_max_today": 103029.830072,
+ "equity_min_today": 103029.830038,
+ "max_drawdown_pct_today": 0.0,
+ "morning_baseline_0700": {
+  "cst": "06:59:58",
+  "equity": 103029.830069,
+  "cash": 103029.829576,
+  "positions": {}
+ },
+ "latest_equity_any": {
+  "ts": 1791295347577,
+  "equity": 103029.830071,
+  "cash": 103029.829576,
+  "drawdown": null,
+  "day_pnl": null,
+  "day_pnl_pct": null
+ },
+ "latest_equity_cst": "2026-10-06 22:02:27",
+ "last_positions": null,
+ "n_orders_today": 1,
+ "n_fills_today": 0,
+ "fills_detail": [],
+ "buy_n": 0,
+ "sell_n": 0,
+ "buy_notional": 0.0,
+ "sell_notional": 0.0,
+ "fees_today": 0.0,
+ "order_status": {
+  "rejected": 1
+ },
+ "order_rejects": [
+  {
+   "ts": "11:01:19",
+   "symbol": "AVAX/USDT",
+   "status": "rejected",
+   "note": "ExchangeError: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAetrendAVAXUSDT645c8fc7e1\",\"ordId\":\"\",\"sCode\":\"54092\",\"sMsg\":\"Action required: Please go to the TradFi Perpetuals or Spot trading page on Web or App, and complete the disclaimer confirmation when prompted. If the prompt is not displayed in the current language, you may switch to another language environment and try again. Each main account and sub-account must accept the disclaimer separately before API trading can be enabled. \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791255678988\"}],\"inTime\":\"1791255678987021\",\"msg\":\"All operations failed\",\"outTime\":\"1791255678989310\"}"
+  }
+ ],
+ "n_blocked_today": 3,
+ "blocked_reasons": {
+  "daily_trade_cap: 4 entries already today": 3
+ },
+ "blocked_by_symbol": {
+  "?": 3
+ },
+ "n_risk_today": 9,
+ "risk_samples": [
+  {
+   "ts": 1791224965654,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791255679041,
+   "type": null,
+   "reason": "ExchangeError: okx {\"code\":\"1\",\"data\":[{\"clOrdId\":\"TAetrendAVAXUSDT645c8fc7e1\",\"ordId\":\"\",\"sCode\":\"54092\",\"sMsg\":\"Action required: Please go to the TradFi Perpetuals or Spot trading page on Web or App, and complete the disclaimer confirmation when prompted. If the prompt is not displayed in the current language, you may switch to another language environment and try again. Each main account and sub-account must accept the disclaimer separately before API trading can be enabled. \",\"subCode\":\"\",\"tag\":\"\",\"ts\":\"1791255678988\"}],\"inTime\":\"1791255678987021\",\"msg\":\"All operations failed\",\"outTime\":\"1791255678989310\"}"
+  },
+  {
+   "ts": 1791261530511,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791264651132,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791267774363,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791270897294,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791274418846,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791288828993,
+   "type": null,
+   "reason": null
+  },
+  {
+   "ts": 1791289133552,
+   "type": null,
+   "reason": null
+  }
+ ],
+ "realized_by_symbol": {},
+ "realized_total": 0,
+ "closed_trades": 0,
+ "wins": 0,
+ "win_rate_pct": null,
+ "sell_rows": [],
+ "n_alerts_today": 9,
+ "alert_types": {
+  "critical": 8,
+  "warning": 1
+ },
+ "alerts_today": [
+  {
+   "ts": "02:29:25",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"market data\", \"error\": \"fetch_bars(ADA/USDT) failed after 3 attempt(s): okx GE"
+  },
+  {
+   "ts": "11:01:19",
+   "type": null,
+   "msg": "{\"level\": \"warning\", \"title\": \"order rejected\", \"symbol\": \"AVAX/USDT\", \"reason\": \"ExchangeError: okx {\\\"code\\\":\\\"1\\\",\\\"data\\\":[{\\\"clOrdId\\\":\\\"TAetrendAVAXUSDT64"
+  },
+  {
+   "ts": "12:38:50",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"market data\", \"error\": \"fetch_bars(ADA/USDT) failed after 3 attempt(s): okx GE"
+  },
+  {
+   "ts": "13:30:51",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"market data\", \"error\": \"fetch_bars(ADA/USDT) failed after 3 attempt(s): okx GE"
+  },
+  {
+   "ts": "14:22:54",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"market data\", \"error\": \"fetch_bars(ADA/USDT) failed after 3 attempt(s): okx GE"
+  },
+  {
+   "ts": "15:14:57",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"market data\", \"error\": \"fetch_bars(ADA/USDT) failed after 3 attempt(s): okx GE"
+  },
+  {
+   "ts": "16:13:38",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"account\", \"error\": \"get_account failed after 3 attempt(s): okx {\\\"msg\\\":\\\"Your"
+  },
+  {
+   "ts": "20:13:48",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"account\", \"error\": \"get_account failed after 3 attempt(s): okx {\\\"msg\\\":\\\"Your"
+  },
+  {
+   "ts": "20:18:53",
+   "type": null,
+   "msg": "{\"level\": \"critical\", \"title\": \"venue degraded - new entries suspended\", \"call\": \"account\", \"error\": \"get_account failed after 3 attempt(s): okx {\\\"msg\\\":\\\"Your"
+  }
+ ],
+ "n_ta_today": 1047,
+ "ta_event_kinds": {
+  "WARNING": 787,
+  "ERROR": 254,
+  "INFO": 6
+ },
+ "ta_error_count": 254,
+ "ta_error_events_top": {
+  "{\"ts\": \"2026-10-06T12:15:06+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"get_account\", \"c": 1,
+  "{\"ts\": \"2026-10-06T06:42:40+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1,
+  "{\"ts\": \"2026-10-06T04:52:21+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1,
+  "{\"ts\": \"2026-10-06T08:23:24+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"get_account\", \"c": 1,
+  "{\"ts\": \"2026-10-06T08:13:38+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"get_account\", \"c": 1,
+  "{\"ts\": \"2026-10-06T05:33:57+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1,
+  "{\"ts\": \"2026-10-06T04:51:18+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1,
+  "{\"ts\": \"2026-10-06T04:37:47+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1,
+  "{\"ts\": \"2026-10-06T08:25:51+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"get_account\", \"c": 1,
+  "{\"ts\": \"2026-10-06T05:16:16+00:00\", \"level\": \"ERROR\", \"logger\": \"ta\", \"msg\": \"venue degraded\", \"call\": \"fetch_bars(ADA/U": 1
+ },
+ "ta_symbol_net_err": {
+  "ADA/USDT": 577,
+  "AVAX/USDT": 2
+ },
+ "ta_reconnect_count": 0,
+ "ta_reconnect_samples": [],
+ "proc_log_stats_today": {
+  "traceback": 0,
+  "reconnect": 0,
+  "network_error": 0,
+  "fatal": 0,
+  "shutdown": 0,
+  "startup": 0
+ },
+ "proc_startup_lines": []
+}

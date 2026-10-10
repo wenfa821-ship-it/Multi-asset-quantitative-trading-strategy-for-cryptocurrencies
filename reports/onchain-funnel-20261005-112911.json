@@ -1,0 +1,668 @@
+{
+ "generated_ts": "2026-10-05T11:29:11+0800",
+ "source": "data/onchain/watchlist.json",
+ "screened": 40,
+ "passed": 17,
+ "reasons": {
+  "REJECT liquidity N < N USD": 17,
+  "REJECT topN holders N%": 14,
+  "REJECT lp locked N% < N%": 4,
+  "REJECT honeypot status unknown (no scanner result)": 2
+ },
+ "rows": [
+  {
+   "mint": "8nPoBHiBM6pybxMws9PA2JRb9BjkppBfqcZGmot4DMBC",
+   "symbol": "Human",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 407,
+   "liquidity_usd": 132352.62,
+   "volume_24h_usd": 19267162.44,
+   "holder_count": 19673,
+   "top10_holder_pct": 20.2896,
+   "price_usd": 0.001147,
+   "passed": true,
+   "score": 85.49,
+   "reasons": [
+    "OK score 85.49"
+   ]
+  },
+  {
+   "mint": "6HFJ5sxVoEtczr9siAUeGssmpfhQSS3pEoBcCycUpump",
+   "symbol": "XEET",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 55,
+   "liquidity_usd": 71421.84,
+   "volume_24h_usd": 1530019.49,
+   "holder_count": 5030,
+   "top10_holder_pct": 23.3164,
+   "price_usd": 0.000552,
+   "passed": true,
+   "score": 77.26,
+   "reasons": [
+    "OK score 77.26"
+   ]
+  },
+  {
+   "mint": "37vV3bR2ewPZL9CWPn3atGWao3qLD3uUkYAxpLqJpump",
+   "symbol": "JETPACK",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 60,
+   "liquidity_usd": 38924.33,
+   "volume_24h_usd": 309717.46,
+   "holder_count": 2552,
+   "top10_holder_pct": 19.8243,
+   "price_usd": 0.0001901,
+   "passed": false,
+   "score": 73.9,
+   "reasons": [
+    "REJECT liquidity 38,924 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "G99RVCRTqtGBQQ6svNxbGQhVMAbcLAY7dCtd75kkZUhS",
+   "symbol": "TEXCAT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 98,
+   "liquidity_usd": 12100.74,
+   "volume_24h_usd": 382643.42,
+   "holder_count": 1711,
+   "top10_holder_pct": 58.0344,
+   "price_usd": 2.285e-05,
+   "passed": false,
+   "score": 62.91,
+   "reasons": [
+    "REJECT top10 holders 58.03%",
+    "REJECT liquidity 12,101 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "Bt4P59vEwmfrY92wfkWmxZLavdDTCEA2bGoRA9mVpyCx",
+   "symbol": "NOTAI",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 70,
+   "liquidity_usd": 17473.22,
+   "volume_24h_usd": 153038.0,
+   "holder_count": 1127,
+   "top10_holder_pct": 47.1885,
+   "price_usd": 4.471e-05,
+   "passed": false,
+   "score": 60.77,
+   "reasons": [
+    "REJECT top10 holders 47.19%",
+    "REJECT liquidity 17,473 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "F5WvFdG9sCfhv3bVYAMJNWiwpx5e3X2uvpXDtLtdsDJs",
+   "symbol": "Ash",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 707,
+   "liquidity_usd": 117092.9,
+   "volume_24h_usd": 7672627.02,
+   "holder_count": 13635,
+   "top10_holder_pct": 20.6372,
+   "price_usd": 0.00115,
+   "passed": true,
+   "score": 83.51,
+   "reasons": [
+    "OK score 83.51"
+   ]
+  },
+  {
+   "mint": "8nKp4JkesNtDgu3PiSjdTdNSrtBt8YCHhW8BU14wpump",
+   "symbol": "BATONROGUE",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 349,
+   "liquidity_usd": 100134.58,
+   "volume_24h_usd": 2204143.44,
+   "holder_count": 9774,
+   "top10_holder_pct": 5.9879,
+   "price_usd": 0.001076,
+   "passed": true,
+   "score": 84.32,
+   "reasons": [
+    "OK score 84.32"
+   ]
+  },
+  {
+   "mint": "BbJJUTuGV2B7tJ99YeryiCBFLG39Hoc4RTzEwchtpump",
+   "symbol": "EGO",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 639,
+   "liquidity_usd": 32225.0,
+   "volume_24h_usd": 7412906.97,
+   "holder_count": 13429,
+   "top10_holder_pct": 32.681,
+   "price_usd": 9.462e-05,
+   "passed": false,
+   "score": 70.49,
+   "reasons": [
+    "REJECT liquidity 32,225 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "2SXnYy9TewvZ1FjJf96aE6xbYB7fiqMMXoRzznNtpump",
+   "symbol": "SOLgiving",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 49,
+   "liquidity_usd": 13505.0,
+   "volume_24h_usd": 42232.34,
+   "holder_count": 539,
+   "top10_holder_pct": 49.2734,
+   "price_usd": 2.864e-05,
+   "passed": false,
+   "score": 52.02,
+   "reasons": [
+    "REJECT top10 holders 49.27%",
+    "REJECT liquidity 13,505 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "75gGuxuqKhQQiHae8JKDQaetK3XguKf1rUJ1csispump",
+   "symbol": "Attention+",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1122,
+   "liquidity_usd": 81688.71,
+   "volume_24h_usd": 3607256.75,
+   "holder_count": 8623,
+   "top10_holder_pct": 23.646,
+   "price_usd": 0.0006283,
+   "passed": true,
+   "score": 78.48,
+   "reasons": [
+    "OK score 78.48"
+   ]
+  },
+  {
+   "mint": "EkFRff9a2jKztJHML1LG9FRmEkPJDR6XAYp3uCPdpump",
+   "symbol": "SLOPCORE",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 10281,
+   "liquidity_usd": 100122.76,
+   "volume_24h_usd": 1860850.74,
+   "holder_count": 6477,
+   "top10_holder_pct": 26.1665,
+   "price_usd": 0.0008688,
+   "passed": true,
+   "score": 80.28,
+   "reasons": [
+    "OK score 80.28"
+   ]
+  },
+  {
+   "mint": "GYFLuEAZMDdpUsTmyGdHstuXQC3JB9ZqtZbfktpppump",
+   "symbol": "SWAP",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 527,
+   "liquidity_usd": 48640.2,
+   "volume_24h_usd": 1125841.98,
+   "holder_count": 2417,
+   "top10_holder_pct": 27.2028,
+   "price_usd": 0.000272,
+   "passed": false,
+   "score": 73.64,
+   "reasons": [
+    "REJECT liquidity 48,640 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "DoVAVzViX8Bjy3r15nwikSaSbzE6dV4ovd28aWpJpump",
+   "symbol": "HIGGS",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 890,
+   "liquidity_usd": 111346.59,
+   "volume_24h_usd": 17093472.74,
+   "holder_count": 26417,
+   "top10_holder_pct": 22.919,
+   "price_usd": 0.0008798,
+   "passed": true,
+   "score": 82.33,
+   "reasons": [
+    "OK score 82.33"
+   ]
+  },
+  {
+   "mint": "HW6mnfHambF4Hu3oT3PpmRXgeJS7GxDWgZv2XJzcpump",
+   "symbol": "Network",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 430,
+   "liquidity_usd": 21304.79,
+   "volume_24h_usd": 916780.76,
+   "holder_count": 2952,
+   "top10_holder_pct": 41.4681,
+   "price_usd": 5.739e-05,
+   "passed": false,
+   "score": 67.37,
+   "reasons": [
+    "REJECT top10 holders 41.47%",
+    "REJECT liquidity 21,305 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "BXoHJddsWJLHtAopeiSbKUSELsu8hSFMs8baGMDkpump",
+   "symbol": "CRAWL",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1747,
+   "liquidity_usd": 182111.36,
+   "volume_24h_usd": 2961397.52,
+   "holder_count": 22915,
+   "top10_holder_pct": 18.1868,
+   "price_usd": 0.001963,
+   "passed": false,
+   "score": 77.13,
+   "reasons": [
+    "REJECT lp locked 0.0% < 90%"
+   ]
+  },
+  {
+   "mint": "9ZmkKpVR3NdUcCmG5NByMHBzvjuqGnYpCPYu4zSSBtJv",
+   "symbol": "TERMINAL",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1333,
+   "liquidity_usd": 41726.35,
+   "volume_24h_usd": 8279880.95,
+   "holder_count": 12604,
+   "top10_holder_pct": 36.4304,
+   "price_usd": 0.0001424,
+   "passed": false,
+   "score": 70.93,
+   "reasons": [
+    "REJECT liquidity 41,726 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "8t1dA3q8ybEE3eLKr1jj8cF8es6mAjSYMVsXabshpump",
+   "symbol": "FOMOWEEN",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 163,
+   "liquidity_usd": 19689.7,
+   "volume_24h_usd": 57236.36,
+   "holder_count": 754,
+   "top10_holder_pct": 65.6968,
+   "price_usd": 5.578e-05,
+   "passed": false,
+   "score": 52.38,
+   "reasons": [
+    "REJECT top10 holders 65.70%",
+    "REJECT liquidity 19,690 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "F4635H9HFAzYjpyM3coGMtW8pMmEYRtwrgz5mgfHpump",
+   "symbol": "WHIPCAT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 2130,
+   "liquidity_usd": 26270.74,
+   "volume_24h_usd": 554081.37,
+   "holder_count": 3853,
+   "top10_holder_pct": 32.1358,
+   "price_usd": 8.414e-05,
+   "passed": false,
+   "score": 69.83,
+   "reasons": [
+    "REJECT liquidity 26,271 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "7bC8ugu1ZJn21MhA4ht483nX8brLNesa8R7XLimpFyhq",
+   "symbol": "SPLICE",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1709,
+   "liquidity_usd": 81346.28,
+   "volume_24h_usd": 5369142.73,
+   "holder_count": 13016,
+   "top10_holder_pct": 22.86,
+   "price_usd": 0.0005293,
+   "passed": true,
+   "score": 78.6,
+   "reasons": [
+    "OK score 78.6"
+   ]
+  },
+  {
+   "mint": "2rFNkrUaPdTFSCNu5KJoGL2Aiq7YZDE8DYZGZzAJCoKc",
+   "symbol": "king",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 305,
+   "liquidity_usd": 9744.62,
+   "volume_24h_usd": 110348.1,
+   "holder_count": 752,
+   "top10_holder_pct": 66.9325,
+   "price_usd": 1.653e-05,
+   "passed": false,
+   "score": 50.86,
+   "reasons": [
+    "REJECT top10 holders 66.93%",
+    "REJECT liquidity 9,745 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "7VertkgF9KLhxxJXHX6uaWuoYZTP9LdGj2bWmVXVpump",
+   "symbol": "Agency",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 3987,
+   "liquidity_usd": 743915.34,
+   "volume_24h_usd": 3905302.74,
+   "holder_count": 37464,
+   "top10_holder_pct": 25.2248,
+   "price_usd": 0.01524,
+   "passed": false,
+   "score": 77.96,
+   "reasons": [
+    "REJECT lp locked 0.0% < 90%"
+   ]
+  },
+  {
+   "mint": "CZJfrAmMs5Cz4H22PWzfqTJu5FkP7Q2Vvx1oPVL9pump",
+   "symbol": "AGENTCAT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1714,
+   "liquidity_usd": 449021.94,
+   "volume_24h_usd": 4509669.48,
+   "holder_count": 4632,
+   "top10_holder_pct": 3.415,
+   "price_usd": 0.02075,
+   "passed": true,
+   "score": 97.32,
+   "reasons": [
+    "OK score 97.32"
+   ]
+  },
+  {
+   "mint": "CbcyNo7m1amFWqEQm2m4PLv1UNvpcL3C1Ujm6AkzpKoU",
+   "symbol": "e/acc",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 13332,
+   "liquidity_usd": 590526.21,
+   "volume_24h_usd": 3653642.52,
+   "holder_count": 76996,
+   "top10_holder_pct": 15.3121,
+   "price_usd": 0.0103,
+   "passed": true,
+   "score": 94.92,
+   "reasons": [
+    "OK score 94.92"
+   ]
+  },
+  {
+   "mint": "68AGsjomsgTtiTaDhF6XGCeVJDnFeh415ngYYgVxGzns",
+   "symbol": "OWL",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 985,
+   "liquidity_usd": 78413.27,
+   "volume_24h_usd": 6639709.86,
+   "holder_count": 11574,
+   "top10_holder_pct": 19.5297,
+   "price_usd": 0.0005313,
+   "passed": true,
+   "score": 78.89,
+   "reasons": [
+    "OK score 78.89"
+   ]
+  },
+  {
+   "mint": "Xs3oZwbHvqis4NYcf4YKWmEia2eC84wSiVrcYcTqpH8",
+   "symbol": "SPCXx",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 164842,
+   "liquidity_usd": 2451733.28,
+   "volume_24h_usd": 808987.14,
+   "holder_count": 133467,
+   "top10_holder_pct": 89.3367,
+   "price_usd": 159.56,
+   "passed": false,
+   "score": 42.43,
+   "reasons": [
+    "REJECT honeypot status unknown (no scanner result)",
+    "REJECT lp locked 0.0% < 90%",
+    "REJECT top10 holders 89.34%"
+   ]
+  },
+  {
+   "mint": "GAwhcphCqCv5bKHmCiN4VDdNWfbXJL4npmkc8L3Q9S9H",
+   "symbol": "www",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 4324,
+   "liquidity_usd": 98700.69,
+   "volume_24h_usd": 2198759.61,
+   "holder_count": 28525,
+   "top10_holder_pct": 26.8353,
+   "price_usd": 0.0005271,
+   "passed": true,
+   "score": 79.97,
+   "reasons": [
+    "OK score 79.97"
+   ]
+  },
+  {
+   "mint": "88oNFQZTqo7yBxu4HT22uiuaEErbgJxA8iKpT7SmF5Ek",
+   "symbol": "AGENT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1347,
+   "liquidity_usd": 12723.84,
+   "volume_24h_usd": 622724.47,
+   "holder_count": 1606,
+   "top10_holder_pct": 55.8451,
+   "price_usd": 2.43e-05,
+   "passed": false,
+   "score": 63.42,
+   "reasons": [
+    "REJECT top10 holders 55.85%",
+    "REJECT liquidity 12,724 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "89NkZ8NNGm8fCwG8iVDkXpDRR66hQommsJATspSUrDd",
+   "symbol": "DOREL",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 885,
+   "liquidity_usd": 26671.76,
+   "volume_24h_usd": 3159076.74,
+   "holder_count": 6422,
+   "top10_holder_pct": 42.5231,
+   "price_usd": 7.557e-05,
+   "passed": false,
+   "score": 67.83,
+   "reasons": [
+    "REJECT top10 holders 42.52%",
+    "REJECT liquidity 26,672 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "CpRkPw9M2iMDUozQFvkEeAjGJWucbLCJw3m3vZqdpump",
+   "symbol": "BRIDGE",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1797,
+   "liquidity_usd": 35276.51,
+   "volume_24h_usd": 3301547.52,
+   "holder_count": 6712,
+   "top10_holder_pct": 39.5736,
+   "price_usd": 0.0001193,
+   "passed": false,
+   "score": 69.49,
+   "reasons": [
+    "REJECT liquidity 35,277 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "GJAFwWjJ3vnTsrQVabjBVK2TYB1YtRCQXRDfDgUnpump",
+   "symbol": "ACT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1030551,
+   "liquidity_usd": 1632649.9,
+   "volume_24h_usd": 2259513.7,
+   "holder_count": 137335,
+   "top10_holder_pct": 82.3629,
+   "price_usd": 0.01132,
+   "passed": false,
+   "score": 73.52,
+   "reasons": [
+    "REJECT honeypot status unknown (no scanner result)",
+    "REJECT top10 holders 82.36%"
+   ]
+  },
+  {
+   "mint": "H4KUxsEgCp2yDpFvyDuGM5k6XevSKKrrKUxZ3Zr6nyJc",
+   "symbol": "COCKROACH",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 8028,
+   "liquidity_usd": 153996.66,
+   "volume_24h_usd": 922796.13,
+   "holder_count": 12220,
+   "top10_holder_pct": 23.2626,
+   "price_usd": 0.001215,
+   "passed": true,
+   "score": 87.6,
+   "reasons": [
+    "OK score 87.6"
+   ]
+  },
+  {
+   "mint": "5tCju6YNxHq5zrA6tGndr6F7TK42mpUFmeE31cSFpump",
+   "symbol": "swordcat",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 9735,
+   "liquidity_usd": 150134.98,
+   "volume_24h_usd": 2458386.67,
+   "holder_count": 22343,
+   "top10_holder_pct": 22.2862,
+   "price_usd": 0.001442,
+   "passed": true,
+   "score": 87.31,
+   "reasons": [
+    "OK score 87.31"
+   ]
+  },
+  {
+   "mint": "3Dgwn5E7H5a8k6iGrz3qirkaJqUaJrKHEZ2xPcLRpump",
+   "symbol": "knightcat",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1971,
+   "liquidity_usd": 132459.87,
+   "volume_24h_usd": 1099806.39,
+   "holder_count": 13680,
+   "top10_holder_pct": 27.5724,
+   "price_usd": 0.001281,
+   "passed": false,
+   "score": 69.04,
+   "reasons": [
+    "REJECT lp locked 0.0% < 90%"
+   ]
+  },
+  {
+   "mint": "BgNZw6VxzYoS6AHjhpv2S54wGUv5MWeANPkoU2KPTM1G",
+   "symbol": "DIT",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 1237,
+   "liquidity_usd": 22981.31,
+   "volume_24h_usd": 1476743.8,
+   "holder_count": 3018,
+   "top10_holder_pct": 44.4125,
+   "price_usd": 6.421e-05,
+   "passed": false,
+   "score": 66.99,
+   "reasons": [
+    "REJECT top10 holders 44.41%",
+    "REJECT liquidity 22,981 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "AXC2XcQiVx6UfCgLHjpRBU4nupF4WdsptydKQCvxsRuU",
+   "symbol": "AI",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 2926,
+   "liquidity_usd": 17102.38,
+   "volume_24h_usd": 487216.6,
+   "holder_count": 5167,
+   "top10_holder_pct": 48.7521,
+   "price_usd": 3.338e-05,
+   "passed": false,
+   "score": 65.39,
+   "reasons": [
+    "REJECT top10 holders 48.75%",
+    "REJECT liquidity 17,102 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "eyfwpQxwtUgC8Vmvk1daRxeLe3RTA9FrpK1HHrFpump",
+   "symbol": "PLAGUE",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 259,
+   "liquidity_usd": 52044.49,
+   "volume_24h_usd": 46832.21,
+   "holder_count": 498,
+   "top10_holder_pct": 52.1968,
+   "price_usd": 0.0003439,
+   "passed": false,
+   "score": 54.7,
+   "reasons": [
+    "REJECT top10 holders 52.20%"
+   ]
+  },
+  {
+   "mint": "6hTLdzZaaCjmqtn7RtaEMQsCbXT5Pg8q76tRViEGpump",
+   "symbol": "ABU",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 3161,
+   "liquidity_usd": 85657.43,
+   "volume_24h_usd": 921062.94,
+   "holder_count": 4799,
+   "top10_holder_pct": 30.4195,
+   "price_usd": 0.0007361,
+   "passed": true,
+   "score": 77.62,
+   "reasons": [
+    "OK score 77.62"
+   ]
+  },
+  {
+   "mint": "9dSMwFfPezQ8WPcW1uZV7ns4rcviEj2LssSAg75WBLXd",
+   "symbol": "Aiden",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 2049,
+   "liquidity_usd": 67051.06,
+   "volume_24h_usd": 3767245.64,
+   "holder_count": 17287,
+   "top10_holder_pct": 29.4849,
+   "price_usd": 0.0003441,
+   "passed": true,
+   "score": 75.48,
+   "reasons": [
+    "OK score 75.48"
+   ]
+  },
+  {
+   "mint": "AXxRj2uiUPq8ggiRPD8EdYzbj1vKQxuxtFDAQHPkpump",
+   "symbol": "Build",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 863,
+   "liquidity_usd": 27285.71,
+   "volume_24h_usd": 806248.82,
+   "holder_count": 2145,
+   "top10_holder_pct": 42.3492,
+   "price_usd": 9.225e-05,
+   "passed": false,
+   "score": 67.94,
+   "reasons": [
+    "REJECT top10 holders 42.35%",
+    "REJECT liquidity 27,286 < 50,000 USD"
+   ]
+  },
+  {
+   "mint": "CbyTNf7UPzvewHh4Zp6umogM2RWahhmGRJWLJnPwpump",
+   "symbol": "biketyson",
+   "source": "data/onchain/watchlist.json",
+   "age_minutes": 45312,
+   "liquidity_usd": 185449.2,
+   "volume_24h_usd": 360211.12,
+   "holder_count": 45290,
+   "top10_holder_pct": 26.048,
+   "price_usd": 0.001547,
+   "passed": true,
+   "score": 90.97,
+   "reasons": [
+    "OK score 90.97"
+   ]
+  }
+ ]
+}

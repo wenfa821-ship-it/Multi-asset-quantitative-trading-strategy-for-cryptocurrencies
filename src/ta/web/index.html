@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trading-agent · 运营看板</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
+    --fg:#e6edf3; --dim:#8b949e; --up:#3fb950; --down:#f85149;
+    --warn:#d29922; --accent:#58a6ff; --crit:#ff7b72;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  a{color:var(--accent)}
+  header{position:sticky;top:0;z-index:10;background:rgba(14,17,22,.94);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+    padding:14px 20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px}
+  .badge{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid}
+  .ok{color:var(--up);border-color:#1f6f36;background:#0f2417}
+  .bad{color:var(--crit);border-color:#7a2621;background:#2a1312}
+  .warnb{color:var(--warn);border-color:#6b5216;background:#241d0c}
+  .muted{color:var(--dim);font-size:12px}
+  main{max-width:1400px;margin:0 auto;padding:20px;display:grid;
+    grid-template-columns:repeat(12,1fr);gap:16px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  section h2{font-size:13px;margin:0 0 10px;color:var(--dim);font-weight:600;
+    text-transform:uppercase;letter-spacing:.6px}
+  .span12{grid-column:span 12}
+  .span8{grid-column:span 8} .span6{grid-column:span 6}
+  .span4{grid-column:span 4} .span3{grid-column:span 3}
+  @media(max-width:1000px){.span8,.span6,.span4,.span3{grid-column:span 12}}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .kpi .v{font-size:21px;font-weight:650;font-variant-numeric:tabular-nums}
+  .kpi .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+  .kpi .s{font-size:11px;color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;
+    text-transform:uppercase;letter-spacing:.4px;padding:4px 6px;border-bottom:1px solid var(--line)}
+  td{padding:5px 6px;border-bottom:1px solid #1d242c;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .up{color:var(--up)} .down{color:var(--down)} .dim{color:var(--dim)}
+  .chip{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--dim)}
+  .chip.bug{color:var(--crit);border-color:#7a2621}
+  .chip.decision{color:var(--accent);border-color:#1f4b7a}
+  .chip.research{color:#d2a8ff;border-color:#4b3a6b}
+  .chip.ops{color:var(--warn);border-color:#6b5216}
+  .chip.strategy{color:var(--up);border-color:#1f6f36}
+  .scroll{max-height:420px;overflow:auto}
+  .flag{padding:8px 10px;border-radius:8px;margin-bottom:8px;border-left:3px solid}
+  .flag.critical{border-color:var(--crit);background:#2a1312}
+  .flag.warn{border-color:var(--warn);background:#241d0c}
+  .flag.info{border-color:var(--accent);background:#0d1a2a}
+  .flag b{display:block;font-size:12px}
+  .tl{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #1d242c;font-size:12.5px}
+  .tl .t{color:var(--dim);font-variant-numeric:tabular-nums;flex:0 0 108px}
+  .tl .ty{flex:0 0 62px;color:var(--dim)}
+  .tl .x{flex:1}
+  .tl.error .x,.tl.critical .x{color:var(--crit)}
+  .tl.warning .x{color:var(--warn)}
+  .bar{height:8px;border-radius:4px;background:var(--panel2);position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+  .strat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2)}
+  .strat h3{margin:0 0 4px;font-size:13.5px}
+  .strat p{margin:0 0 8px;color:var(--dim);font-size:12.5px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px}
+  .kv div:nth-child(odd){color:var(--dim)}
+  footer{max-width:1400px;margin:0 auto;padding:8px 20px 40px;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>trading-agent · 运营看板</h1>
+  <span id="health" class="badge ok">加载中…</span>
+  <span id="venue" class="muted"></span>
+  <span id="updated" class="muted"></span>
+  <span id="freshness" class="muted"></span>
+  <span style="margin-left:auto" class="muted">只读 · 不写入状态 · 不下单</span>
+  <button id="refresh" class="chip" style="cursor:pointer">立即刷新</button>
+</header>
+
+<main>
+  <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis"></div></section>
+  <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
+  <section class="span12"><h2>常驻服务与告警看门狗</h2>
+    <div id="services"></div>
+    <div id="thresholds" style="margin-top:12px"></div>
+  </section>
+
+  <section class="span8"><h2>权益曲线</h2><div id="chart"></div></section>
+  <section class="span4"><h2>风控限额（实时的美元口径）</h2><div id="risk" class="kv"></div>
+    <h2 style="margin-top:14px">分层限额</h2><div id="tiers" class="kv"></div></section>
+
+  <section class="span6"><h2>策略与参数</h2><div id="strategies"></div></section>
+  <section class="span6"><h2>已平仓交易（按持仓配对，净额已扣双边手续费）</h2>
+    <div class="muted" style="margin-bottom:6px">只含机器人自己的成交；你在 OKX 手动下的单不会出现在这里，所以笔数/盈亏与 OKX 的历史记录本来就不相等。</div>
+    <div class="scroll"><table id="trades"><thead><tr>
+      <th>平仓时间</th><th>标的</th><th class="num">成本</th><th class="num">净额</th>
+      <th class="num">手续费</th><th class="num">收益%</th><th>出场</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="span8"><h2>运行时间线（订单 / 成交 / 风控拦截 / 告警）</h2>
+    <div id="timeline" class="scroll"></div>
+  </section>
+  <section class="span4"><h2>链上研究</h2><div id="onchain"></div></section>
+
+  <section class="span12"><h2>资金费率中性（carry）：唯一未被随机对照证伪的方向</h2>
+    <div id="carry"></div>
+  </section>
+
+  <section class="span12"><h2>环境监测（六维）：只观察，不接仓位刹车</h2>
+    <div id="monitor"></div>
+  </section>
+
+  <section class="span12"><h2>留痕：bug 修复 · 策略调整 · 决策 · 研究结论</h2>
+    <div id="audit-filter" style="margin-bottom:10px"></div>
+    <div class="scroll"><table id="audit"><thead><tr>
+      <th>时间</th><th>类型</th><th>标题</th><th>说明</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="span6"><h2>参数迭代记录（refit，含 ACCEPT / REJECT 判据）</h2>
+    <div class="scroll"><table id="refit"><thead><tr>
+      <th>策略</th><th>决策</th><th class="num">改善</th><th>原因</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+  <section class="span6"><h2>原始留痕文件（报告 / 归档账本 / 日志）</h2>
+    <div class="scroll"><table id="artifacts"><thead><tr>
+      <th>分组</th><th>文件</th><th class="num">大小</th><th>修改时间</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+<footer>数据源：data/ledger.*.jsonl、logs/alerts.jsonl、logs/metrics(:9101)、docs/changelog.jsonl、config/*.toml、reports/、archive/。OKX Demo 为模拟盘。</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+// This file lives in src/ta/web/ where it is very easy to double-click. Opened as
+// file://, a relative fetch('/api/...') resolves to file:///api/... and fails -
+// which looked like a broken dashboard rather than a page opened the wrong way.
+// The service now answers CORS for `Origin: null`, so a file:// page can talk to
+// it directly; we just have to address it absolutely.
+const SERVED = location.protocol === 'http:' || location.protocol === 'https:';
+const DASHBOARD_URL = 'http://127.0.0.1:9200';
+const API_BASE = SERVED ? '' : DASHBOARD_URL;
+function showNotServed() {
+  document.querySelector('main').outerHTML = `
+    <main><section class="span12">
+      <h2>这个页面需要从看板服务打开</h2>
+      <p>你现在是从磁盘直接打开 HTML 文件（地址栏是 <code>file://</code>），
+         页面无法访问数据接口。请改用下面这个地址：</p>
+      <p style="font-size:20px"><a href="${DASHBOARD_URL}">${DASHBOARD_URL}</a></p>
+      <p class="muted">如果打不开，说明看板服务没在跑，用下面的命令启动：</p>
+      <pre style="background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto">cd /Users/wenfa/Documents/Codex/2026-09-28/rh/outputs/trading-agent
+./scripts/install_dashboard_service.sh install     # 常驻（开机自启）
+# 或临时前台运行：
+python3 -m ta dashboard --port 9200</pre>
+      <p class="muted">看板是只读的：不写入任何状态，也不会下单。</p>
+    </section></main>`;
+  const el = $('#health');
+  el.className = 'badge warnb';
+  el.textContent = '需要用 http 打开';
+  $('#freshness').textContent = '';
+}
+const n = (v, d = 2) => (v === null || v === undefined || isNaN(v)) ? '-' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const money = (v, d = 2) => (v >= 0 ? '+$' : '-$') + Math.abs(Number(v)).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const usd = (v, d = 0) => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const ts = (ms) => { if (!ms) return '-'; const d = new Date(Number(ms)); return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); };
+const cls = (v) => v > 0 ? 'up' : (v < 0 ? 'down' : 'dim');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const KIND = {bug:'缺陷', decision:'决策', research:'研究', ops:'运维', strategy:'策略'};
+
+  let AUDIT = [], FILTER = 'all';
+  // Set from services.jobs before the summary renders. Distinguishes a loop that
+  // was *deliberately* taken down (launchd job unloaded - e.g. the 2026-10-07
+  // suspension recorded in README 23.7) from one that is loaded but whose
+  // metrics port is not answering, which is a real fault.
+  let RUNNER_LOADED = null;
+
+function renderSummary(s) {
+  const el = $('#health');
+  // Three states, not two: running / deliberately suspended / faulted. A closed
+  // metrics port alone cannot tell the last two apart - see README 23.7.
+  const suspended = !s.metrics_live && RUNNER_LOADED === false;
+  el.className = 'badge ' + (s.kill_switch ? 'bad' : (s.metrics_live ? 'ok' : (suspended ? 'ok' : 'warnb')));
+  el.textContent = s.kill_switch ? '熔断已触发'
+    : (s.metrics_live ? '运行中'
+    : (suspended ? '已挂起（按指示）' : '指标端口未连接'));
+  $('#venue').textContent = s.venue + (s.metrics_live ? '' : '（数据来自账本）');
+  const live = s.live || {};
+  const tickNote = s.age_seconds == null ? '—'
+    : `机器人账面（上一 tick，${Math.round(s.age_seconds)} 秒前）`;
+  const kpis = [
+    live.available
+      ? ['权益（交易所实时）', usd(live.equity),
+         `${tickNote} ${usd(s.equity)}｜差 ${money(live.equity - s.equity)}`]
+      : ['权益', usd(s.equity), tickNote],
+    ['累计盈亏', money(s.equity_delta),
+     `${n(s.return_pct,3)}% ｜ 自本次账本基线 ${usd(s.equity_start)} 起（非交易所开户至今）`],
+    ['当前回撤', n(s.drawdown_pct,3) + '%', `峰值 ${usd(s.peak_equity)}`],
+    ['持仓 / heat',
+     live.available ? `${live.position_count}（实时）/ ${s.open_positions}（账面）`
+                    : `${s.open_positions}`,
+     `heat ${n(s.heat_pct,3)}% = 所有止损同时打到的损失`],
+    ['成交笔数', s.fills, `ticks ${s.ticks}`],
+    ['累计手续费', usd(s.fees),
+     `有效费率 ${n(s.fee_rate_pct,3)}%（对成交额 ${usd(s.traded_notional,0)}）`
+     + (s.fees_pct_of_loss ? ` ｜ 占亏损 ${n(s.fees_pct_of_loss,1)}%` : '')],
+    ['非托管敞口', '$' + Number(s.unmanaged_notional).toFixed(4), '不属于机器人的仓位'],
+    ['灰尘', '$' + Number(s.dust_notional).toFixed(6), '卖不掉的残渣，不占仓位额度'],
+  ];
+  $('#kpis').innerHTML = kpis.map(([k, v, sub]) =>
+    `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${esc(sub)}</div></div>`).join('');
+  $('#freshness').textContent = live.available
+    ? `实时直读交易所 · 账面数据 ${s.age_seconds == null ? '—' : Math.round(s.age_seconds) + 's'} 前`
+      + (live.dust_count ? ` · 交易所另有 ${live.dust_count} 笔灰尘（$${Number(live.dust_notional).toFixed(4)}）` : '')
+    : `账面数据 ${s.age_seconds == null ? '—' : Math.round(s.age_seconds) + 's'} 前（未能直读交易所：${esc(live.error || '未知')}）`;
+}
+
+function renderFlags(flags) {
+  const sec = $('#flags-section');
+  if (!flags || !flags.length) { sec.hidden = true; return; }
+  sec.hidden = false;
+  $('#flags').innerHTML = flags.map(f =>
+    `<div class="flag ${f.level}"><b>${esc(f.title)}</b><span class="muted">${esc(f.detail)}</span></div>`).join('');
+}
+
+function renderChart(eq) {
+  const pts = eq.points || [];
+  if (pts.length < 2) { $('#chart').innerHTML = '<div class="muted">还没有权益记录</div>'; return; }
+  const W = 900, H = 220, P = 34;
+  const xs = pts.map(p => p.ts), ys = pts.map(p => p.equity);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.15 || 1;
+  const X = t => P + (W - 2*P) * (x1 === x0 ? 0.5 : (t - x0) / (x1 - x0));
+  const Y = v => H - P - (H - 2*P) * ((v - (lo - pad)) / ((hi + pad) - (lo - pad)));
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.ts).toFixed(1)},${Y(p.equity).toFixed(1)}`).join(' ');
+  const area = `${line} L${X(pts[pts.length-1].ts).toFixed(1)},${H-P} L${X(pts[0].ts).toFixed(1)},${H-P} Z`;
+  const start = ys[0], end = ys[ys.length-1], colour = end >= start ? 'var(--up)' : 'var(--down)';
+  const grid = [0,.25,.5,.75,1].map(f => {
+    const v = lo - pad + f * ((hi+pad) - (lo-pad));
+    return `<line x1="${P}" x2="${W-P}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#2a323d" stroke-width="1"/>
+            <text x="4" y="${(Y(v)+4).toFixed(1)}" fill="#8b949e" font-size="10">${usd(v)}</text>`;
+  }).join('');
+  $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="权益曲线">
+    ${grid}
+    <path d="${area}" fill="${colour}" opacity="0.10"/>
+    <path d="${line}" fill="none" stroke="${colour}" stroke-width="2"/>
+    <text x="${P}" y="${H-10}" fill="#8b949e" font-size="10">${ts(x0)}</text>
+    <text x="${W-P}" y="${H-10}" fill="#8b949e" font-size="10" text-anchor="end">${ts(x1)}</text>
+  </svg><div class="muted">${pts.length} / ${eq.count} 个权益点 · 区间 ${usd(lo)} – ${usd(hi)}</div>`;
+}
+
+function renderRisk(r) {
+  const cap = r.absolute_order_cap > 0 ? usd(r.absolute_order_cap) : '未设上限';
+  const rows = [
+    ['单笔上限', `${cap}（majors 实际 ${usd(r.in_usd.max_order_majors)}）`],
+    ['最大持仓数', r.max_positions],
+    ['组合总敞口（=两腿之和）', `${r.max_gross_pct}% = ${usd(r.in_usd.gross)}`],
+    ['组合 heat 上限（=两腿之和）', `${r.max_heat_pct}% = ${usd(r.in_usd.heat)}`],
+    ['每日开仓预算（=两腿之和）', `${r.max_trades_per_day} 笔`],
+    ['现金缓冲', `${r.min_cash_buffer_pct}%`],
+    ['单日停止开仓', `-${r.daily_stop_open_pct}% = -${usd(r.in_usd.daily_stop_open)}`],
+    ['单日全部平仓', `-${r.daily_flatten_pct}% = -${usd(r.in_usd.daily_flatten)}`],
+    ['峰值回撤熔断', `-${r.max_drawdown_kill_pct}% = -${usd(r.in_usd.kill_switch)}`],
+    ['接管已有仓位', r.adopt_existing ? '开' : '关（不会卖手动底仓）'],
+  ];
+  $('#risk').innerHTML = rows.map(([k, v]) => `<div>${k}</div><div>${esc(v)}</div>`).join('');
+  const legs = Object.entries(r.legs || {});
+  if (legs.length) {
+    const zh = { spot: '现货', derivatives: '永续', tradfi: 'TradFi', options: '期权' };
+    const text = legs.map(([name, l]) =>
+      `${zh[name] || name} ${l.max_gross_pct}% = ${usd(l.max_gross_usd)} · 最多 ${l.max_positions} 仓 · heat ${l.max_heat_pct}% · 每日 ${l.max_trades_per_day} 笔`
+    ).join('；');
+    $('#risk').innerHTML += `<div>四腿分账</div><div>${esc(text)}</div>`;
+  }
+  const tiers = Object.entries(r.tier_stops || {});
+  $('#tiers').innerHTML = tiers.map(([name, t]) =>
+    `<div>${esc(name)}</div><div>止损 ${t.stop_atr ?? '-'}×ATR（上限 ${t.max_stop_pct ?? '-'}%） ·
+      最多 ${t.max_positions ?? '-'} 仓 · 每日 ${t.max_trades_per_day ?? '-'} 笔</div>`).join('');
+}
+
+function renderStrategies(list) {
+  $('#strategies').innerHTML = list.map(s => {
+    const pct = s.partial_fraction ? `${Math.round(s.partial_fraction*100)}%` : '—';
+    return `<div class="strat">
+      <h3>${esc(s.name)} <span class="chip">${s.enabled ? '启用' : '停用'}</span></h3>
+      <p>${esc(s.description || '')}</p>
+      <div class="kv">
+        <div>周期</div><div>${esc(s.timeframe || '-')}${s.confirm ? ' · 确认 ' + esc(s.confirm) : ''}</div>
+        <div>标的</div><div>${esc((s.symbols || []).join(', ') || '-')}</div>
+        <div>止损 / 止盈</div><div>${s.stop_atr ? s.stop_atr + '×ATR' : '按层级（见右侧分层限额）'} · ${s.take_profit_r ? s.take_profit_r + 'R' : '无硬止盈，移动止损接管'}</div>
+        <div>分批 / 保本</div><div>${pct} @1R · 保本 ${s.breakeven_at_r ?? '-'}R</div>
+        <div>边缘/成本门槛</div><div>${s.edge_cost_multiple ?? '-'}× 成本</div>
+      </div></div>`;
+  }).join('');
+}
+
+function renderTrades(t) {
+  const rows = (t.closed || []).map(x => `<tr>
+    <td class="dim">${ts(x.closed_ts)}</td><td>${esc(x.symbol)}</td>
+    <td class="num">${usd(x.cost, 2)}</td>
+    <td class="num ${cls(x.net)}">${money(x.net)}</td>
+    <td class="num dim">${n(x.fees, 2)}</td>
+    <td class="num ${cls(x.ret_pct)}">${n(x.ret_pct, 2)}%</td>
+    <td><span class="chip">${esc(x.tag || '-')}</span></td></tr>`).join('');
+  $('#trades tbody').innerHTML = rows || '<tr><td colspan="7" class="dim">还没有已平仓的交易</td></tr>';
+}
+
+function renderTimeline(rows) {
+  $('#timeline').innerHTML = (rows || []).map(r => `<div class="tl ${esc(r.level)}">
+    <span class="t">${ts(r.ts)}</span><span class="ty">${esc(r.type)}</span>
+    <span class="x">${r.symbol ? '<b>' + esc(r.symbol) + '</b> ' : ''}${esc(r.text)}
+    ${r.detail ? '<span class="dim"> · ' + esc(String(r.detail).slice(0, 150)) + '</span>' : ''}</span></div>`).join('')
+    || '<div class="muted">没有事件</div>';
+}
+
+function renderOnchain(o) {
+  $('#onchain').innerHTML = `<div class="kv" style="margin-bottom:10px">
+      <div>候选数</div><div>${o.candidate_count}</div>
+      <div>快照行数</div><div>${o.store_rows.toLocaleString()}</div>
+      <div>最近扫描</div><div>${ts(o.store_mtime)}</div></div>
+    <table><thead><tr><th>代币</th><th class="num">池子</th><th class="num">1h量/池</th><th class="num">1h笔数</th></tr></thead>
+    <tbody>${(o.candidates || []).slice(0, 10).map(c => `<tr>
+      <td>${esc(c.symbol || c.mint?.slice(0, 8))}</td>
+      <td class="num">${usd(c.liquidity_usd)}</td>
+      <td class="num">${n(c.h1_turnover, 2)}</td>
+      <td class="num dim">${c.txns_h1 ?? '-'}</td></tr>`).join('')}</tbody></table>
+    <div class="muted" style="margin-top:8px">能进清单只说明池子够深、此刻有人在交易，不代表值得买。</div>`;
+}
+
+function renderMonitor(m) {
+  if (!m || !(m.dimensions || []).length) {
+    $('#monitor').innerHTML = '<div class="muted">没有可用的 1h 历史样本</div>';
+    return;
+  }
+  const ageDays = m.as_of ? (Date.now() - m.as_of) / 86400000 : null;
+  const stale = ageDays != null && ageDays > 1;
+  const dims = m.dimensions.map(d => {
+    const colour = d.red ? 'var(--crit)' : (d.score >= 4 ? 'var(--up)' : 'var(--dim)');
+    const v = d.value == null ? '—' : (Math.abs(d.value) < 10 ? n(d.value, 2) : n(d.value, 1));
+    return `<tr><td>${esc(d.name)}</td>
+      <td class="num" style="color:${colour}">${d.score} / 5</td>
+      <td class="num">${v}</td>
+      <td class="dim">${esc(d.detail)}</td></tr>`;
+  }).join('');
+  $('#monitor').innerHTML = `
+    <div class="kv" style="margin-bottom:10px">
+      <div>综合评分</div><div><b>${m.score}</b> / ${m.max_score} · ${esc(m.label)}</div>
+      <div>红灯维度</div><div>${m.reds} 个（≥3 即框架定义的 risk-off）</div>
+      <div>框架给的仓位系数</div><div>${n(m.multiplier, 2)}×（未接线）</div>
+      <div>样本</div><div>${m.symbols} 个标的</div>
+      <div>数据截至</div><div>${ts(m.as_of)}${stale ? ' <span style="color:var(--crit)">（已 ' + n(ageDays, 1) + ' 天未刷新）</span>' : ''}</div>
+    </div>
+    <table><thead><tr><th>维度</th><th class="num">评分</th><th class="num">读数</th><th>口径</th></tr></thead>
+    <tbody>${dims}</tbody></table>
+    <div class="muted" style="margin-top:8px">${esc(m.verdict)}
+      ——详见 README §29 与 scripts/monitor_study.py。</div>`;
+}
+
+function renderCarry(c) {
+  if (!c || !(c.symbols || []).length) {
+    $('#carry').innerHTML = '<div class="muted">没有资金费率历史（data/history/funding）</div>';
+    return;
+  }
+  const venue = c.swap_venue_configured
+    ? '<span style="color:var(--up)">已配置永续 venue</span>'
+    : '<span class="dim">当前 config 未配置永续 venue（实验在 config-exp）</span>';
+  $('#carry').innerHTML = `
+    <div class="kv" style="margin-bottom:10px">
+      <div>实测往返成本</div><div>${n(c.round_trip_bps, 1)} bps</div>
+      <div>近 ${c.window_days} 天正资金费率</div><div>${c.positive} / ${c.symbols.length}</div>
+      <div>执行工具</div><div class="dim">${esc(c.tool)} open / status / close</div>
+      <div>永续 venue</div><div>${venue}</div>
+    </div>
+    <table><thead><tr><th>合约</th><th class="num">bps/天</th><th class="num">年化%</th>
+      <th class="num">回本天数</th><th class="num dim">样本</th></tr></thead>
+    <tbody>${c.symbols.map(r => `<tr>
+      <td>${esc(r.symbol)}</td>
+      <td class="num">${n(r.bps_per_day, 2)}</td>
+      <td class="num">${n(r.annual_pct, 2)}</td>
+      <td class="num">${r.breakeven_days == null ? 'n/a' : n(r.breakeven_days, 1)}</td>
+      <td class="num dim">${r.samples}</td></tr>`).join('')}</tbody></table>
+    <div class="muted" style="margin-top:8px">只做资金费率、不预测方向：现货多头 + 永续空头，价格相互抵消。
+      回本天数 = 实测往返成本 ÷ 每天收到的资金费率，所以短于它的持有期一定亏。
+      未计入的尾部风险：费率翻转，以及空头腿在急涨中被强平。</div>`;
+}
+
+function renderServices(s) {
+  if (!s || !s.jobs) { $('#services').innerHTML = '<div class="muted">没有服务信息</div>'; return; }
+  const rows = s.jobs.map(j => {
+    const dot = j.alive ? 'var(--up)' : 'var(--crit)';
+    const pid = j.listening_pid || j.pid_file_pid || j.launchd_pid || '-';
+    const state = j.launchd_pid ? 'running' : (j.loaded ? 'idle' : '未安装');
+    return `<tr>
+      <td><span style="color:${dot}">●</span> ${esc(j.name)}</td>
+      <td class="dim">${esc(j.label)}</td>
+      <td>${esc(state)}</td>
+      <td class="num dim">${esc(String(pid))}</td>
+      <td class="num dim">${j.port ? ':' + j.port : '—'}</td>
+    </tr>`;
+  }).join('');
+  const w = s.watchdog || {};
+  const webhook = w.webhook_configured
+    ? '<span class="chip strategy">已配置推送</span>'
+    : '<span class="chip">未配置推送（只在页面显示）</span>';
+  $('#services').innerHTML = `
+    <table><thead><tr><th>服务</th><th>label</th><th>launchd 状态</th><th class="num">pid</th><th class="num">端口</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div style="margin-top:8px">看门狗：每 ${w.period_seconds || 60} 秒评估一次，当前越界
+      <b class="${w.breach_count ? 'down' : 'up'}">${w.breach_count || 0}</b> 项 ${webhook}
+      <span class="muted">（只在状态变化时推送；同一组越界值不重复发）</span></div>`;
+}
+
+function renderThresholds(s) {
+  const w = (s && s.watchdog) || {};
+  const t = w.thresholds || {};
+  const breached = new Set((w.breaches || []).map(b => b.key));
+  const rows = [
+    ['max_drawdown_pct', '最大回撤', '%'],
+    ['daily_loss_pct', '单日亏损', '%'],
+    ['fees_pct_of_loss', '手续费占亏损比', '%'],
+    ['unmanaged_notional_usd', '非托管敞口', ' USD'],
+    ['onchain_zero_change_pct', '链上零变动占比', '%'],
+  ].map(([k, label, unit]) => {
+    const hit = breached.has(k);
+    return `<tr><td>${label}</td><td class="num">${t[k] ?? '-'}${unit}</td>
+      <td>${hit ? '<span class="chip bug">已越界</span>' : '<span class="chip strategy">正常</span>'}</td></tr>`;
+  }).join('');
+  $('#thresholds').innerHTML = `
+    <div class="muted" style="margin-bottom:6px">阈值写在 config/alerts.json，改完无需重启；文件损坏则退回默认值。</div>
+    <table><thead><tr><th>阈值</th><th class="num">设定</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderAudit() {
+  const rows = AUDIT.filter(r => FILTER === 'all' || r.kind === FILTER);
+  $('#audit tbody').innerHTML = rows.map(r => `<tr>
+    <td class="dim">${esc(String(r.ts).slice(0, 16).replace('T', ' '))}</td>
+    <td><span class="chip ${esc(r.kind)}">${esc(KIND[r.kind] || r.kind)}</span>
+        ${r.severity ? '<span class="chip">' + esc(r.severity) + '</span>' : ''}</td>
+    <td>${esc(r.title)}</td>
+    <td class="dim">${esc(r.detail)}${r.verdict ? '<br><b>结论：</b>' + esc(r.verdict) : ''}${r.evidence ? '<br><span class="muted">证据：' + esc(r.evidence) + '</span>' : ''}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="dim">无</td></tr>';
+}
+
+function renderAuditFilter() {
+  const counts = AUDIT.reduce((a, r) => (a[r.kind] = (a[r.kind] || 0) + 1, a), {});
+  const keys = ['all', ...Object.keys(KIND).filter(k => counts[k])];
+  $('#audit-filter').innerHTML = keys.map(k =>
+    `<button class="chip ${k !== 'all' ? k : ''}" data-k="${k}" style="cursor:pointer;margin-right:6px">
+      ${k === 'all' ? '全部' : KIND[k]}${k !== 'all' ? ' ' + counts[k] : ' ' + AUDIT.length}</button>`).join('');
+  $('#audit-filter').querySelectorAll('button').forEach(b => b.onclick = () => { FILTER = b.dataset.k; renderAudit(); });
+}
+
+function renderRefit(list) {
+  $('#refit tbody').innerHTML = (list || []).map(r => `<tr>
+    <td>${esc(r.strategy)}</td>
+    <td><span class="chip ${r.decision === 'ACCEPT' ? 'strategy' : 'bug'}">${esc(r.decision)}</span></td>
+    <td class="num">${n(r.mean_delta_pp, 3)}pp</td>
+    <td class="dim">${esc((r.reasons || []).join('；'))}</td></tr>`).join('')
+    || '<tr><td colspan="4" class="dim">还没有参数迭代记录</td></tr>';
+}
+
+function renderArtifacts(list) {
+  const size = (b) => b > 1048576 ? n(b/1048576,1)+' MB' : (b > 1024 ? n(b/1024,0)+' KB' : b+' B');
+  $('#artifacts tbody').innerHTML = (list || []).map(a => `<tr>
+    <td><span class="chip">${esc(a.group)}</span></td><td>${esc(a.name)}</td>
+    <td class="num dim">${size(a.bytes)}</td><td class="dim">${ts(a.mtime)}</td></tr>`).join('');
+}
+
+async function refresh() {
+  try {
+    // Cache-buster in the query string rather than a Cache-Control request
+    // header: a header would trigger a CORS preflight, a query param does not.
+    const r = await fetch(API_BASE + '/api/snapshot?t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const runnerJob = ((d.services && d.services.jobs) || [])
+      .find(j => String(j.label || '').endsWith('.runner'));
+    RUNNER_LOADED = runnerJob ? !!runnerJob.loaded : null;
+    renderSummary(d.summary);
+    renderFlags(d.redflags);
+    renderChart(d.equity);
+    renderRisk(d.risk);
+    renderStrategies(d.strategies);
+    renderTrades(d.trades);
+    renderTimeline(d.timeline);
+    renderOnchain(d.onchain);
+    renderCarry(d.carry);
+    renderMonitor(d.monitor);
+    renderServices(d.services);
+    renderThresholds(d.services);
+    renderRefit(d.refit);
+    renderArtifacts(d.artifacts);
+    if (AUDIT.length !== d.audit.length) { AUDIT = d.audit; renderAuditFilter(); }
+    renderAudit();
+    $('#updated').textContent = '更新于 ' + new Date(d.generated_at).toLocaleTimeString('zh-CN');
+    if (!SERVED) $('#freshness').textContent = '(从磁盘打开的页面 · 数据来自 ' + DASHBOARD_URL + ') ' + $('#freshness').textContent;
+  } catch (e) {
+    if (!SERVED) { showNotServed(); return; }
+    const el = $('#health'); el.className = 'badge bad'; el.textContent = '看板取数失败';
+    $('#updated').textContent = String(e);
+  }
+}
+refresh();
+setInterval(refresh, 15000);
+// Browsers throttle timers in background tabs, so a tab left alone can show a
+// stale snapshot when you come back to it. Refresh the moment it becomes visible.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+$('#refresh').onclick = refresh;
+</script>
+</body>
+</html>

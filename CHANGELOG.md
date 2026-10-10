@@ -1,0 +1,85 @@
+# Changelog
+
+当前版本：**v0.4.6**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+
+版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段（五步路径）完成**；1.0 之后按语义化版本 —— MAJOR 表示架构/配置模式不兼容，MINOR 表示新增能力（新腿、新策略），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## Unreleased（自 2026-10-10T11:46 起，7 条留痕）
+
+- `2026-10-10T11:50` **research** carry 收入高度集中且量级可疑：CRV 占两日收入 97%，费率 1,290 bps/天＝池子中位的 400 倍 —— 不建议据此校准 notional
+- `2026-10-10T12:00` **decision** carry 名额决策简报（给用户拍板用）：预算其实只用了 22.9%，真正的约束是『三处配置互相矛盾』
+- `2026-10-10T12:15` **ops** 把『场馆此刻到底供不供数据』变成每日自动记录：新增 venue_availability（09:10 在美股时段外、21:10 在时段内）
+- `2026-10-10T12:40` **research** 用今天的资金费历史重跑选标：榜单前列全是『没有现货腿』的合约，唯一比我们好的可做标的是 WLFI
+- `2026-10-10T13:00` **research** 用真实成交检验 carry 的成本模型：三对实际入场 basis 是 −15.7 / −130.6 / −18.3 bps —— **今天的新规则会把这三对全部拒掉**；而当下 basis 反而全是正的（含 WLFI +951 bps）
+- `2026-10-10T13:20` **research** 更正我自己上一条的论断：『min_hold_hours 必须 ≥ 回本周期』**是错的** —— 它对轮换成立，对『论点破产的退出』不成立
+- `2026-10-10T13:50` **bug** 按用户决定扩名额（v0.4.6）：改到第 5 处时才发现真凶 —— 引擎把 tier 的持仓上限拿**整个账户的持仓数**去比，顺带锁死了 TradFi 腿与所有方向性入场
+
+## v0.4.6 — 2026-10-10T11:46
+
+- 测试 **290** 绿 · 权益 $101,598.81 · 记录时的包版本 0.2.0
+
+按用户决定扩名额 + 修掉引擎的 tier 持仓计数缺陷：spot/derivatives 上限 3→5、2→5（每日笔数 3→5）、account 12→17（每日笔数 14→16）；carry tier max_positions 5→10（引擎数持仓，一对=两条腿）；RiskEngine 的 tier 上限改为只计本 tier 持仓（此前拿全账户持仓数去比，锁死了 TradFi 腿与所有方向性入场）。效果：重启后 SUI 与 NEAR 两对在同一 tick 开成，账面 5 对逐腿对冲相等。+2 测试（290 全绿）。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.5 — 2026-10-10T10:42
+
+- 测试 **286** 绿 · 权益 $101,578.97 · 记录时的包版本 0.2.0
+
+永续盈亏补上合约面值：Position.ct_val（默认 1.0）+ unrealized 乘面值；CcxtVenue.contract_size() 并用于 get_account；runner 重建资金簿后为永续持仓补齐 ct_val。ACT（ctVal 10）盈亏不再被低估 10 倍；现货默认 1.0 零影响。+3 测试（286 全绿）。config 与 v0.4.4 相同。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.4 — 2026-10-10T09:53
+
+- 测试 **283** 绿 · 权益 $101,625.29 · 记录时的包版本 0.2.0
+
+断网三级韧性修复：connect() 不再因 load_markets 失败而退出（此前启动即崩 → KeepAlive 每 10 秒重启 → 142 次启动横幅）；_markets_loaded 派生自 ccxt（自愈）；prime() 连续 5 个标的全失败提前返回且不抛；refresh() 连续 5 个失败整 pass 判 degraded（此前一个 pass 磨 42 分钟）。+5 测试（283 全绿）。config 与 v0.4.3 完全相同。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.3 — 2026-10-10T09:25
+
+- 测试 **278** 绿 · 权益 $101,625.29 · 记录时的包版本 0.2.0
+
+看门狗新增『交易循环停摆』判据：runner_stale_minutes=15.0，按账本最新 equity 事件时间戳判活，超时 critical；阈值取 15 覆盖最慢 12 分钟的预热。+3 测试（278 全绿）。已在 2026-10-10 代理上游中断事故中实时验证（看板报 25.50 分钟 critical）。config 与 v0.4.2 完全相同；本轮只重启只读看板。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.2 — 2026-10-09T23:23
+
+- 测试 **275** 绿 · 权益 $101,556.19 · 记录时的包版本 0.2.0
+
+权益口径统一：新增 portfolio.marked_value（现货名义 + 永续未实现盈亏），PositionBook.equity 与 runner._prepare_risk_account 共用同一实现，修掉『开一对新 carry 被风控当成日亏 -2% 并暂停入场、名义再大会触发 flatten_all』的定时炸弹，并把 sizing 基数从低估 4.7% 纠正回真实值。新增 2 条测试（275 全绿），含『开对冲腿不改变 risk_equity』回归。config 与 v0.4.1 完全相同。遗留：Position.unrealized 未乘 ctVal（ACT 盈亏被低估 10 倍，已单列）。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.1 — 2026-10-09T23:10
+
+- 测试 **273** 绿 · 权益 $101,574.77 · 记录时的包版本 0.2.0
+
+v0.4.0 + 被动入场致命修复：新增 CcxtVenue.order_state/OMS.order_state（读订单自身记录 state+accFillSz 作为唯一权威），删除『不在挂单列表=已撤销』的启发式，查不到→拒绝市价回退。起因：LTC 第一对真仓把现货买成两倍（约 ,977 裸露 33 分钟，净成本 ~.3）。另含 order_state 两条回归测试（273 tests）与 BAND 裸多处置（已平掉并去掉 seeded 配对记录）。config 与 v0.4.0 完全相同。
+its config/ and manifest.json rather than against memory.
+
+## v0.4.0 — 2026-10-09T22:37
+
+- 测试 **268** 绿 · 权益 $101,605.15 · 记录时的包版本 0.2.0
+
+carry 被动入场（第一条改变**执行方式**的策略改动）：现货腿先挂 post-only 于买一 → 等 6s → 撤单并确认终态 → 未成交才回退市价。撤单无法确认时拒绝回退（现货腿翻倍风险）。新增 OMS.cancel / OMS+venue.open_order_ids（None=查不到）/ paired._passive_spot / runner._passive_entry_price；config 新增 passive_entry=true、passive_wait_seconds=6.0。对照 v0.3.x：这是 carry 第一次不再无条件市价入场，目标是把单腿 12.6-72.6 bps 的入场价差降到 0。真实交易所验证：cancelSource=31（被交易所杀掉，零成交）与 cancelSource=1（我们撤的）。
+its config/ and manifest.json rather than against memory.
+
+## v0.3.1 — 2026-10-09T21:52
+
+- 测试 **263** 绿 · 权益 $101,565.86 · 记录时的包版本 0.2.0
+
+v0.3.0 + 深度闸门修复（sizing.depth_refusal + runner._entry_depth_refused，覆盖所有入场而非仅 carry）+ ccxt_venue 的 post-only 语义注释更正 + 新增 scripts/cancel_path_check.py。**无策略改动**：配置与 v0.3.0 完全相同，变的只是风险代码与测试（257→263）。post-only 与撤单两条前置已在真交易所验证（cancelSource=31 / 1）。
+its config/ and manifest.json rather than against memory.
+
+## v0.3.0 — 2026-10-09T21:21
+
+- 测试 **257** 绿 · 权益 $101,572.80 · 记录时的包版本 0.2.0
+
+TradFi 腿通电（第一条策略优化）：新增 tradfi tier 13 标的 + [strategies.trend_breakout_daily] 短 warmup(10/20) + [tiers.tradfi] 全库最紧档位 + universe 加 1d timeframe。实测订单往返 21bps（XMU 最小额往返）。对照基线 v0.2.0：这是第一条真正改变交易行为的策略改动。注意：该策略回测 28 笔/-0.14%/PF 0.34，启用目的是按用户要求承风险收执行数据，不是已证实的边缘。
+its config/ and manifest.json rather than against memory.
+
+## v0.2.0 — 2026-10-09T20:41
+
+- 测试 **253** 绿 · 权益 $101,575.88 · 记录时的包版本 0.1.0
+
+四腿分仓（现货30/永续20/TradFi30/期权20）+ carry 四道选标闸门（资金费/深度/基差/实测成本）+ 下单路径复核 + 对账口径(cashBal) + funding 入账。这是策略优化开始前的基线：期权策略与 TradFi 腿尚未产出成交。
+its config/ and manifest.json rather than against memory.

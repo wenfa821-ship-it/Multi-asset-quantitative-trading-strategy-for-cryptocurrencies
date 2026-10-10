@@ -1,0 +1,26 @@
+################ trend_breakout
+backtest trend_breakout  symbols=BTC/USDT,ETH/USDT,SOL/USDT,OKB/USDT,DOGE/USDT,XRP/USDT,ADA/USDT,AVAX/USDT,LINK/USDT,SUI/USDT,NEAR/USDT,APT/USDT,INJ/USDT,TIA/USDT,PEPE/USDT  bars=17174  timeframe=15m
+  total_return_pct     -1.08
+  max_drawdown_pct     1.82
+  trades               114
+  win_rate_pct         47.0
+  profit_factor        0.57
+  expectancy           -1.3854
+  fees_paid            33.41
+  exposure_pct         35.1
+  exits                {'stop_loss': 35, 'partial_win': 18, 'stop_win': 13}
+  out-of-sample at 3x costs: -1.75% (decay 0.67 pp)
+  !! out-of-sample is not profitable: do not trade this configuration
+################ new_listing_breakout
+backtest new_listing_breakout  symbols=JUP/USDT,PYTH/USDT,ONDO/USDT,W/USDT,PENGU/USDT  bars=17255  timeframe=15m
+  total_return_pct     -0.6
+  max_drawdown_pct     0.65
+  trades               279
+  win_rate_pct         37.0
+  profit_factor        0.51
+  expectancy           -0.2604
+  fees_paid            39.88
+  exposure_pct         3.8
+  exits                {'stop_loss': 35, 'partial_win': 29, 'time_loss': 62, 'time_win': 27, 'stop_win': 1}
+  out-of-sample at 3x costs: -1.39% (decay 0.79 pp)
+  !! out-of-sample is not profitable: do not trade this configuration

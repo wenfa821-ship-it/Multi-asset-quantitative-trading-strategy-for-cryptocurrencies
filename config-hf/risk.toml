@@ -1,0 +1,84 @@
+# Same framework as production, sized for 1m: smaller risk per trade because the
+# number of trades per day is an order of magnitude larger.
+
+default_tier = "majors"
+
+[account]
+max_leverage_pct            = 100.0
+max_gross_exposure_pct      = 40.0
+max_open_positions          = 4
+min_cash_buffer_pct         = 20.0
+cash_buffer_basis           = "cash"
+max_heat_pct                = 2.0
+max_trades_per_day          = 40
+count_unmanaged_exposure    = false
+
+[per_trade]
+risk_per_trade_pct          = 0.10
+max_order_notional_pct      = 4.0
+max_order_notional_usd      = 500.0
+min_order_notional_usd      = 20.0
+max_price_deviation_pct     = 0.5
+max_orders_per_minute       = 10
+max_spread_bps              = 5.0
+
+[positions]
+max_position_pct_per_symbol = 8.0
+stop_atr_multiple           = 1.5
+take_profit_r_multiple      = 1.5
+trailing_stop_enabled       = true
+trailing_stop_atr_multiple  = 2.0
+atr_target_pct              = 0.35
+vol_target_min_scale        = 0.30
+vol_target_max_scale        = 1.50
+
+[circuit_breakers]
+daily_loss_stop_open_pct    = 0.8
+daily_loss_flatten_pct      = 1.5
+max_drawdown_kill_pct       = 8.0
+consecutive_losses_pause    = 8
+streak_cooldown_minutes     = 60
+cooldown_minutes_after_stop = 20
+cooldown_after_stop_minutes = 10
+stale_data_bars             = 3
+max_tick_errors             = 10
+
+[symbols]
+whitelist = []
+blacklist = []
+max_trades_per_symbol_per_day = 10
+min_quote_volume_24h          = 20000000.0
+
+[clusters]
+majors   = ["BTC/USDT", "ETH/USDT"]
+beta     = ["SOL/USDT", "DOGE/USDT", "XRP/USDT"]
+max_cluster_exposure_pct = 20.0
+
+[tiers.majors]
+risk_per_trade_pct        = 0.10
+max_position_pct          = 8.0
+max_order_notional_pct    = 4.0
+max_orders_per_minute     = 10
+max_trades_per_day        = 30
+max_positions             = 2
+max_spread_bps            = 3.0
+cooldown_after_stop_minutes = 10
+stop_atr_multiple         = 1.5
+take_profit_r_multiple    = 1.5
+atr_target_pct            = 0.35
+max_stop_pct              = 0.8
+
+[tiers.alts]
+risk_per_trade_pct        = 0.08
+max_position_pct          = 5.0
+max_order_notional_pct    = 3.0
+max_orders_per_minute     = 6
+max_trades_per_day        = 20
+max_positions             = 2
+max_spread_bps            = 6.0
+cooldown_after_stop_minutes = 15
+stop_atr_multiple         = 1.5
+take_profit_r_multiple    = 1.5
+atr_target_pct            = 0.5
+max_stop_pct              = 1.0
+

@@ -1,0 +1,175 @@
+# Strategy parameters. `enabled` + CLI --strategy decide what actually runs.
+# Symbol lists accept `tier:<name>` so the universe stays defined in one place.
+
+# ---------------------------------------------------------------------------
+# Slow trend following on 1h, confirmed on 4h. Few trades, widest stops.
+# ---------------------------------------------------------------------------
+[strategies.trend_breakout]
+enabled                = true
+description            = "Donchian breakout + EMA regime + 4h agreement + volume + retest confirmation."
+timeframe              = "1d"
+confirm_timeframe      = "1w"
+confirm_ema            = 50
+entry_lookback         = 55
+exit_lookback          = 20
+ema_fast               = 20
+ema_slow               = 100
+atr_period             = 14
+volume_period          = 20
+# require stronger volume on the breakout bar (1.1 admitted too many fake-outs)
+min_volume_multiple    = 1.3
+regime_filter          = true
+min_edge_cost_multiple = 4.0
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank half at 1R, move stop to breakeven, then let the
+# ATR trailing stop carry the runner. A 2R cap was reached in <8% of trades
+# and only truncated the winners that did work. (Same idea as trend_pullback.)
+take_profit_r_multiple = 0
+# retest confirmation: after a breakout registers, wait for a pullback that
+# holds the level, then enter with a stop below the pullback low. This filters
+# false breakouts (the main source of stop-outs) and tightens risk per trade.
+# Set retest_window_bars = 0 to restore the original "buy the breakout bar".
+# Window/tolerance are calibrated to 1h crypto vol (ATR ~0.5-1%): 15 bars ~1
+# day is a normal retest window, 1.0% tolerance ~1 ATR is "back at the level".
+retest_window_bars     = 15
+retest_tolerance_pct   = 1.0
+retest_stop_atr_multiple = 0.5
+max_stop_pct           = 4.0
+symbols                = ["tier:majors", "tier:alts"]
+
+# ---------------------------------------------------------------------------
+# The frequency workhorse: buy the dip inside an uptrend on 15m, 1h agreement.
+# ---------------------------------------------------------------------------
+[strategies.trend_pullback]
+enabled                = true
+description            = "Uptrend + RSI pullback pivot + strong reclaim candle, ATR/swing stop."
+timeframe              = "1d"
+confirm_timeframe      = "1w"
+confirm_ema            = 50
+# the higher timeframe must be advancing: 1h EMA50 now > 1h EMA50 N bars ago.
+# A flat/declining EMA with price above it is a weak trend that does not resume
+# after a pullback - the main source of the old 25.6% win rate.
+confirm_slope_lookback = 5
+ema_fast               = 21
+ema_slow               = 55
+rsi_period             = 14
+rsi_entry_max          = 42.0
+# the pullback must have made a local pivot and started back up; no falling
+# knives. RSI(now) > RSI(prev bar) confirms the dip has turned.
+require_rsi_up         = true
+# reclaim candle must close in the upper half of its range, not merely above
+# the prior close - filters weak/doji reclaims that immediately fail.
+require_strong_reclaim = true
+# only buy pullbacks inside a genuine trend_up regime (20/100 EMA), never in a
+# range. A pullback in a range is counter-trend mean reversion against you.
+require_trend_up       = true
+atr_period             = 14
+swing_lookback         = 10
+stop_buffer_pct        = 0.25
+max_stop_pct           = 4.0
+volume_period          = 20
+# a real pullback-resumption has demand behind it. 0.8 admitted any random
+# candle; 1.3 matches trend_breakout's proven floor.
+min_volume_multiple    = 1.3
+min_edge_cost_multiple = 3.0
+max_holding_bars       = 64
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank half at 1R, let the trailing stop carry the runner.
+# Measured: a 1.6R target was reached in ~0% of 15m trades, so a hard cap only
+# truncates winners. Set 1.6 back if you prefer a deterministic exit.
+take_profit_r_multiple = 0
+regime_filter          = true
+symbols                = ["tier:majors", "tier:alts"]
+
+# ---------------------------------------------------------------------------
+# Mean reversion, majors only, and only when the tape is genuinely ranging.
+# ---------------------------------------------------------------------------
+[strategies.mean_reversion]
+enabled                = true
+description            = "Z-score dip on 15m inside a range, exits back at the mean."
+timeframe              = "1d"
+confirm_timeframe      = "1w"
+confirm_ema            = 50
+sma_period             = 50
+z_entry                = -1.5
+z_exit                 = 0.0
+atr_period             = 14
+max_vol_percentile     = 90.0
+min_edge_cost_multiple = 3.0
+take_profit_r_multiple = 2.5
+partial_fraction       = 0.5
+breakeven_at_r         = 0.8
+regime_filter          = true
+symbols                = ["tier:majors"]
+
+# ---------------------------------------------------------------------------
+# New listings only: tightest tier, tightest stop, hard time stop.
+# `trust_venue_history` also treats "venue returned less history than asked for"
+# as a young listing, so a fresh coin is picked up without editing config.
+# ---------------------------------------------------------------------------
+[strategies.perp_trend_funding]
+# Perp leg (README §21). Written fresh for swaps - deliberately NOT a port of the
+# spot book, because the spot strategies were already shown to be negative out of
+# sample and leverage would only multiply that.
+#
+# DISABLED ON PURPOSE. It must not trade until:
+#   1. CcxtVenue supports market_type = "swap" (not written yet), and
+#   2. this strategy has been backtested WITH REAL FUNDING HISTORY.
+# Point 2 is the important one: our OHLCV history carries no funding, so the
+# strategy falls back to funding_rate_bps (default 0) and its funding gate is
+# effectively wide open. A backtest run on price data alone measures the
+# trend-pullback skeleton only, never the gate - which is the one mechanism this
+# project has actually measured as non-negative.
+enabled                 = false
+description             = "Trend pullback gated by funding rate (swap leg, disabled pending integration)"
+timeframe               = "1h"
+confirm_timeframe       = ""
+symbols                 = ["tier:majors"]
+ema_fast                = 21
+ema_slow                = 55
+atr_period              = 14
+pullback_atr            = 1.0
+stop_atr_multiple       = 2.0
+max_stop_pct            = 3.0
+max_funding_long_bps    = 3.0
+min_funding_short_bps   = -3.0
+partial_fraction        = 0.5
+breakeven_at_r          = 1.0
+# 0 = no time cap (2026-10-07 structural test). The 48-bar cap was the dominant
+# exit (72% of out-of-sample exits were time_loss vs 20% time_win), so it was
+# cutting trend trades before they could develop. This is the ONE change that
+# targets the main failure mode rather than a parameter sweep.
+max_holding_bars        = 0
+min_edge_cost_multiple  = 3.0
+
+[strategies.new_listing_breakout]
+enabled                = true
+description            = "New-listing breakout: tight stop, bank at 1R, trail the runner."
+timeframe              = "15m"
+entry_lookback         = 20
+exit_lookback          = 10
+ema_period             = 20
+atr_period             = 14
+rsi_period             = 14
+rsi_max                = 88.0
+volume_period          = 20
+# stronger volume gate: a real new-listing breakout prints 2x+ volume; the
+# weakest breakouts (vol ~1.5x) were concentrated in the time-stop bucket.
+min_volume_multiple    = 1.8
+# tighter stop than majors: stops are rarely hit here (<6% of trades), so the
+# main effect is raising R-multiples on the winners, not adding stop-outs.
+stop_atr_multiple      = 1.2
+max_stop_pct           = 4.0
+max_holding_bars       = 64
+partial_fraction       = 0.6
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank 60% at 1R, move stop to breakeven, then let the
+# 10-bar-low trailing exit carry the runner. A 2.5R cap was reached in <10% of
+# 15m new-listing trades, so it only trapped the runner 40% into a time stop at
+# ~breakeven. (Same idea that lifted trend_breakout OOS from -0.22% to +0.52%.)
+take_profit_r_multiple = 0
+trust_venue_history    = true
+min_edge_cost_multiple = 3.0
+symbols                = ["tier:new"]

@@ -1,0 +1,22 @@
+{
+ "note": "渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。",
+ "updated": "2026-10-09",
+ "rows": [
+  {"id": "path-1", "item": "回放改「并集时间轴 + 按标的可用性」", "state": "done", "gate": "README §35", "next": "—"},
+  {"id": "path-2", "item": "carry 提升为受风控管理的永续策略", "state": "done", "gate": "README §37/38，§43–59 大幅加固", "next": "—"},
+  {"id": "path-3", "item": "补齐现货 272 / 永续 155 历史", "state": "done", "gate": "README §47：4h/1h 167→388；顺带查出 21 个 live-only + 18 个僵尸条目", "next": "—"},
+  {"id": "path-4", "item": "期权数据层", "state": "done", "gate": "README §45：已接进每日任务", "next": "—"},
+  {"id": "path-5", "item": "期权策略（买权利金的有限风险结构）", "state": "gated", "gate": "需 IV/RV 的每日样本，自 10-08 起累积，5–7 天", "next": "约 10-13/10-14 评估 IV−RV 符号是否稳定"},
+  {"id": "leg-tradfi-1", "item": "TradFi 腿 · 第 1 步：先把「哪些 X* 真的是 TradFi」定下来", "state": "done", "gate": "README §62：三个判别法里两个被证伪（contTdSwTime 非空 122 个含 2Z/ACT；「代币化股票只在模拟盘」假）；`instCategory` 才是资产类别（live: 1 币 / 3 股 / 4 商品币），但**模拟盘那份不可用** —— 它与实盘在 8 个 id 上不一致，把 XRP 标成股票。无法从名称/元数据可靠判定，故回到显式名单：XPO(2024-07-24)/XUC(2024-11-04) 早于 2026-07-15 的股票计划 → 钉现货腿；XCU 有实盘永续且归 4（商品币）→ 留在 TradFi", "next": "已新增 scripts/leg_identity.py（实盘目录 vs 模拟盘目录，逐行判定+失败即 rc=1）并接进每日任务；配置改动随**下次 runner 进程启动**生效 —— 当前无持仓、无 universe 成员受影响，故本轮不重启"},
+  {"id": "leg-tradfi-book", "item": "TradFi 腿 · 第 2 步：这条腿到底能不能交易（台面/时段/标的质量）", "state": "done", "gate": "README §63：① **交易所拒绝下单**，sCode **54092**『请先在 Web/App 的 TradFi 页面确认免责声明，主/子账户需分别确认后才能用 API 交易』（加密现货路径不受影响，故非我方代码问题）；② 20 条路由标的里**只有 3 条有双边报价**（XMU 0.9bps、XNVDA 50.3bps、XINTC 4591bps），其余 17 条**只有买盘没有卖盘**，原始接口复核同样（XTSM bids=5/asks=0，XAMD 两边皆空）；③ 原来的 7 个标的是按『有没有 K 线文件』挑的，**6/7 是死线**（收盘价从不变化：XSPCX 100%、XMSTR 100%、XQQQ 98.3%、XMRVL 98.6%、XINTC 90.1%、XNVDA 85.1%）；④ 时段结构：XMU 真 7×24（765/900 根 1h 有成交），XNVDA 只有 33/900 且集中在美股开收盘", "next": "已把 config-tradfi 的池子换成按『日线真实成交≥80% 且零变动<10%』筛出的 13 个，并删掉落在 [venues.binance_testnet] 下的重复 tradfi 块"},
+  {"id": "leg-tradfi", "item": "TradFi 腿（30% 额度）", "state": "in_progress", "gate": "README §63/64：免责声明生效后**订单路径已打通** —— 最小额往返实测 **21 bps**（两笔各 10 bps taker + 每边 0.5 bp 价差）；配置已接：tradfi tier 13 标的 + [strategies.trend_breakout_daily]（短 warmup 10/20，长 warmup 在 85 根日线上永远不出信号）+ [tiers.tradfi] 全库最紧档位，runner 已重启（87062→89479）", "next": "攒真实成交：13 个标的里当前只有 1–3 个有双边报价，其余信号会被深度闸门挡掉，所以数据会稀疏 —— 这是设计不是故障"},
+  {"id": "tradfi-fills", "item": "TradFi 第一批真实成交（执行成本是否真是 21 bps）", "state": "waiting_data", "gate": "策略回测 28 笔 / -0.14% / PF 0.34 —— 启用理由是用户要求承风险收数据，不是已证实的边缘；真实成交几乎都只会落在有双边报价的 XMU（XNVDA 50bps、XINTC 4591bps 都不可用）", "next": "有成交后逐笔对比：实际成交价 vs 当时中间价、手续费、是否被深度闸门误挡；若执行本身有问题（例如滑点远大于 0.5bp）先修执行，而不是调参数"},
+  {"id": "leg-options", "item": "期权腿（20% 额度）", "state": "blocked", "gate": "无 venue 适配、无策略；数据层在跑", "next": "依赖 path-5"},
+  {"id": "carry-postonly", "item": "carry 被动入场（post-only 现货腿）", "state": "in_progress", "gate": "README §66：**两个前置都已在真交易所验证** —— post-only 不是『下单即拒』而是『接受后由交易所杀掉』（cancelSource=31、零成交），撤单路径可用（cancelSource=1）；新增 scripts/cancel_path_check.py 做可复现验证", "next": "接进 paired.open_pair（挂单→有界等待→必须撤单→回退市价），**判断是否挂上必须读订单终态而不是 submit 的 status**（否则会把被交易所杀掉的单当成已挂上）"},
+  {"id": "depth-gate-all-entries", "item": "把深度闸门（max_entry_impact_bps）从 carry 专属提升为**所有入场**", "state": "done", "gate": "README §67：新增 sizing.depth_refusal() + runner._entry_depth_refused()，carry 分支改为调用同一实现，非 carry 入场提交前也调用；『查不到深度』= 拒绝，cap=0 关闭（纸面/回测不受影响）", "next": "已随重启生效（runner 89479→90224）；新增 6 条测试（257→263），含一条真跑 _handle_signal 的覆盖测试：单边簿 session_orders=0 / 深簿 session_orders=1"},
+  {"id": "carry-notional", "item": "calibrate carry_notional_pct（现为刻意保守的 2%）", "state": "waiting_data", "gate": "需要已实现收入序列", "next": "data/funding/income.jsonl 累积几天后按实测收入校准"},
+  {"id": "carry-spike", "item": "验证「资金费尖峰会回落」（20 倍于稳态）", "state": "waiting_data", "gate": "10-09 观测：CRV 1,149 bps/天 vs ACT 3.2 bps/天", "next": "几天后看 CRV 日均是否回落到 $2–3 量级"},
+  {"id": "housekeeping-status", "item": "changelog 的 status 字段回填（多处修好未更新，导致进度判断出错）", "state": "not_started", "gate": "工程债", "next": "一次性回填；之后把状态更新写进每轮收尾清单"}
+  ,{"id": "version-archive", "item": "版本号归档机制（策略优化放进版本里做）", "state": "done", "gate": "scripts/version_snapshot.py → archive/versions/<v>/（manifest + config + changelog + progress + NOTES）；已冻结 v0.2.0（基线）与 **v0.3.0（TradFi 通电，tests=257 / equity $101,572.80 / 14 行进度表）**；重复冻结会被拒绝", "next": "后续每条策略改动都对比 v0.3.0 的 config/manifest，而不是对比记忆"}
+ ]
+}

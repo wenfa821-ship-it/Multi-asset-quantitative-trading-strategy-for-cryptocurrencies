@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-agent"
+version = "0.4.6"
+description = "Spot + on-chain low/mid frequency trading agent skeleton (OKX Demo / Binance Testnet ready)"
+requires-python = ">=3.11"
+# Core runtime is standard-library only, so the skeleton runs with zero installs.
+dependencies = []
+
+[project.optional-dependencies]
+# Live/demo execution against OKX or Binance (demo/testnet endpoints).
+live = ["ccxt>=4.3.0"]
+# Research, data wrangling and storage for the backtest notebook workflow.
+research = ["pandas>=2.0", "numpy>=1.26", "pyarrow>=15", "duckdb>=1.0"]
+# On-chain execution stack (Jupiter/Raydium routing, wallet signing).
+onchain = ["solders>=0.21", "solana>=0.34", "base58>=2.1", "web3>=6.0"]
+dev = ["pytest>=8.0", "ruff>=0.5", "mypy>=1.10"]
+
+[project.scripts]
+ta = "ta.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+

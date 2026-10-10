@@ -1,0 +1,113 @@
+# Global application / venue wiring.
+# Secrets are NEVER stored here - only the NAME of the environment variable that holds them.
+
+[app]
+mode            = "demo"           # paper | demo | live
+base_currency   = "USDT"
+data_dir        = "data"
+log_dir         = "logs"
+timezone        = "Asia/Shanghai"
+kill_switch_file = "KILL_SWITCH"
+
+# ---------------------------------------------------------------------------
+# Universe: decision frequency + the tiered symbol pool.
+#
+# timeframe  = the base clock. In paper mode one loop tick = one base bar, so
+#              this is what actually raises trade frequency.
+# timeframes = extra frames kept warm for confirmation.
+#
+# The lists below are CANDIDATES. With your proxy up, run this once:
+#     ta symbols check --venue okx_demo          # validate what is configured
+#     ta symbols scan  --venue okx_demo --top 40 # discover by real 24h volume
+# and delete anything the venue does not actually offer.
+# ---------------------------------------------------------------------------
+[universe]
+timeframe   = "15m"
+timeframes  = ["1h", "4h", "1d"]
+bar_limit   = 300                  # per timeframe (OKX caps one request near 300)
+symbols     = []                   # tiers below are authoritative
+
+[universe.symbols_by_tier]
+majors = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "OKB/USDT"]
+
+# liquid, established, higher beta than majors
+alts = [
+  "DOGE/USDT", "XRP/USDT", "ADA/USDT", "AVAX/USDT", "LINK/USDT",
+  "SUI/USDT", "NEAR/USDT", "APT/USDT", "INJ/USDT", "TIA/USDT", "PEPE/USDT",
+]
+
+# recent listings: tightest limits, smallest size, fastest exits
+new = [
+  "JUP/USDT", "PYTH/USDT", "ONDO/USDT", "W/USDT", "PENGU/USDT",
+]
+
+# Tokenised equities/ETFs (OKX TradFi, instCategory=3). Kept out of majors on
+# purpose: they gap and print in bursts, so the 7x24 + ATR-stop assumptions the
+# crypto majors rely on do not hold here.
+#
+# 2026-10-09 (README 63): the previous list was chosen by "which symbols have
+# candle files" and it picked almost exactly the DEAD ones. Measured over the
+# 1d history - share of bars whose close changed at all:
+#   XSPCX 100% flat (1 distinct close in 84 bars), XMSTR 100% (57 bars),
+#   XQQQ 98.3%, XMRVL 98.6%, XINTC 90.1%, XNVDA 85.1%   <- all dropped
+# The list below is the opposite screen: share of bars with a real print >=80%
+# AND share of zero-return bars <10%, i.e. a market that actually trades every
+# day. XMU is kept with a flag: it prints in all 24 hours of the day (765/900
+# hourly bars) - the only 7x24 line measured - but its daily bars contain 160%+
+# single-day jumps, so its OHLCV is not trustworthy enough to size on yet.
+tradfi = [
+  "XTSM/USDT", "XGOOGL/USDT", "XASML/USDT", "XAVGO/USDT", "XCSCO/USDT",
+  "XAMD/USDT", "XDELL/USDT", "XHIMS/USDT", "XGME/USDT", "XLITE/USDT",
+  "XPLTR/USDT", "XIWM/USDT", "XMU/USDT",
+]
+
+
+# ---------------------------------------------------------------------------
+# Verified 2026-09-29 with `ta symbols check`: the OKX DEMO venue exposes
+# ~2,395 pairs while the live venue has ~4,646, so absence here is not the same
+# as absence on OKX. Removed from the lists above:
+#   live OKX only  -> ARB/USDT, ENA/USDT, MEW/USDT, EIGEN/USDT, VIRTUAL/USDT
+#                     (add them back when you move off the demo environment)
+#   not on OKX     -> TON/USDT, POPCAT/USDT   (do not re-add)
+# ---------------------------------------------------------------------------
+
+[loop]
+poll_seconds    = 60               # <= the base bar; one decision cycle per poll
+max_iterations  = 0                # 0 = run until stopped (Ctrl-C or kill switch)
+
+# ---------------------------------------------------------------------------
+# Paper venue: local simulator, no network, no keys.
+# ---------------------------------------------------------------------------
+[venues.paper]
+initial_cash    = 10000.0
+fee_bps         = 8.0              # 0.08% taker
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# OKX Demo Trading. Key must be created INSIDE the demo environment.
+# ccxt sandbox mode adds the `x-simulated-trading: 1` header.
+# ---------------------------------------------------------------------------
+[venues.okx_demo]
+exchange_id     = "okx"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"   # OKX requires an API passphrase
+fee_bps         = 10.0             # taker, measured on this account 2026-09-29 (Lv1)
+maker_fee_bps   = 8.0              # maker; no rebate at Lv1
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# Binance Spot Testnet (testnet.binance.vision).
+# For USDⓈ-M futures testnet use exchange_id = "binanceusdm".
+# ---------------------------------------------------------------------------
+[venues.binance_testnet]
+exchange_id     = "binance"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "BINANCE_TESTNET_API_KEY"
+secret_env      = "BINANCE_TESTNET_SECRET"
+password_env    = ""
+fee_bps         = 8.0
+slippage_bps    = 5.0

@@ -1,0 +1,130 @@
+{
+  "date": "2026-09-29",
+  "process": {
+    "pid": 15511,
+    "alive": true,
+    "pid_file_ok": true,
+    "restarts_today": 19,
+    "first_start_utc": "2026-09-29T03:12:12+00:00",
+    "last_start_utc": "2026-09-29T13:27:25+00:00",
+    "runner_starts": 20,
+    "venues_active": {
+      "okx_demo": 15,
+      "paper": 5
+    },
+    "current_venue": "okx_demo"
+  },
+  "overview": {
+    "baseline_equity": 102499.14,
+    "final_equity": 103907.28,
+    "final_cash": 5000.0,
+    "position_value": 0.0,
+    "pnl": 1408.1399999999994,
+    "return_pct": 1.373806648524075,
+    "max_drawdown_pct": 90.97872721681121,
+    "current_drawdown_pct": 0.9691477128954539,
+    "open_positions": 0,
+    "positions": {},
+    "marks": {
+      "ADA/USDT": 0.2437,
+      "APT/USDT": 0.811,
+      "AVAX/USDT": 11.196,
+      "BTC/USDT": 84249.9,
+      "DOGE/USDT": 0.0936,
+      "ETH/USDT": 2670.38,
+      "INJ/USDT": 7.558,
+      "JUP/USDT": 0.3254,
+      "LINK/USDT": 14.728,
+      "NEAR/USDT": 4.934,
+      "OKB/USDT": 119.87,
+      "ONDO/USDT": 0.5056,
+      "PENGU/USDT": 0.0098,
+      "PEPE/USDT": 4.24e-06,
+      "PYTH/USDT": 0.0774,
+      "SOL/USDT": 118.16,
+      "SUI/USDT": 1.1398,
+      "TIA/USDT": 5.5,
+      "W/USDT": 0.01377,
+      "XRP/USDT": 1.5139
+    }
+  },
+  "trading": {
+    "fill_count": 260,
+    "buy_fills": 130,
+    "sell_fills": 130,
+    "total_fees": 90.3934070096,
+    "realized_pnl": 0.0,
+    "closed_trades": 0,
+    "wins": 0,
+    "win_rate_pct": 0.0
+  },
+  "risk": {
+    "blocked_count": 140,
+    "blocked_reasons": {
+      "symbol_daily_cap: OKB/USDT 2/2 today": 19,
+      "daily_trade_cap: 6 entries already today": 39,
+      "symbol_daily_cap: BTC/USDT 2/2 today": 13,
+      "daily_trade_cap: 7 entries already today": 1,
+      "symbol_daily_cap: SOL/USDT 2/2 today": 6,
+      "symbol_daily_cap: ETH/USDT 2/2 today": 5,
+      "symbol_daily_cap: PEPE/USDT 2/2 today": 1,
+      "symbol_daily_cap: TIA/USDT 2/2 today": 1,
+      "max_open_positions: 2 >= 2 (tier majors)": 45,
+      "symbol_cooldown: ETH/USDT for 60m after a stop-out": 2,
+      "symbol_cooldown: ETH/USDT for 45m after a stop-out": 2,
+      "symbol_cooldown: ETH/USDT for 30m after a stop-out": 2,
+      "symbol_cooldown: ETH/USDT for 15m after a stop-out": 2,
+      "symbol_cooldown: OKB/USDT for 60m after a stop-out": 1,
+      "symbol_cooldown: OKB/USDT for 45m after a stop-out": 1
+    },
+    "risk_events": 815,
+    "kill_switch_triggered": false,
+    "kill_reason": ""
+  },
+  "alerts": {
+    "total": 830,
+    "by_level": {
+      "warning": 806,
+      "info": 22,
+      "critical": 2
+    },
+    "by_title": {
+      "reconciliation mismatch": 3,
+      "runner finished": 13,
+      "stop moved to breakeven": 4,
+      "partial take profit": 5,
+      "venue degraded - new entries suspended": 2,
+      "protective exit": 67,
+      "order rejected": 736
+    }
+  },
+  "stability": {
+    "log_lines": 136,
+    "traceback_count": 4,
+    "exception_count": 17,
+    "network_error_count": 0,
+    "reconnect_count": 0,
+    "kill_switch_mentions": 0,
+    "critical_count": 0,
+    "ssl_errors": 4,
+    "http_errors": 10
+  },
+  "live_metrics": {
+    "_alive": true,
+    "_pid": 15511,
+    "_pid_file_ok": true,
+    "ta_ticks_total": 105.0,
+    "ta_venue_degraded_total": 3.0,
+    "ta_cash": 5000.0,
+    "ta_daily_pnl_pct": 0.0,
+    "ta_drawdown_pct": 0.0,
+    "ta_entries_today": 0.0,
+    "ta_equity": 103920.40999999999,
+    "ta_fees_total": 0.0,
+    "ta_heat_pct": 0.0,
+    "ta_kill_switch": 0.0,
+    "ta_open_positions": 0.0,
+    "ta_unmanaged_notional": 98920.40999999999,
+    "ta_venue_degraded": 1.0
+  }
+}

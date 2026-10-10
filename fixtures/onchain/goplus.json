@@ -1,0 +1,95 @@
+{
+  "_comment": "Shape of GET https://api.gopluslabs.io/api/v1/solana/token_security?contract_addresses={mint}",
+  "by_mint": {
+    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+      "code": 1,
+      "message": "OK",
+      "result": {
+        "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+          "balance_mutable_authority": { "authority": [], "status": "1" },
+          "closable": { "authority": [], "status": "1" },
+          "freezable": { "authority": [], "status": "0" },
+          "mintable": { "authority": [], "status": "0" },
+          "non_transferable": "0",
+          "total_supply": "100000000000000",
+          "metadata": { "name": "Clean Sample", "symbol": "CLEAN" },
+          "holders": [
+            { "address": "H1", "balance": "6200000000000", "percent": "6.2000", "tag": "" },
+            { "address": "H2", "balance": "3100000000000", "percent": "3.1000", "tag": "" },
+            { "address": "H3", "balance": "2400000000000", "percent": "2.4000", "tag": "" },
+            { "address": "H4", "balance": "1800000000000", "percent": "1.8000", "tag": "" },
+            { "address": "H5", "balance": "1200000000000", "percent": "1.2000", "tag": "" },
+            { "address": "H6", "balance": "900000000000", "percent": "0.9000", "tag": "" },
+            { "address": "H7", "balance": "800000000000", "percent": "0.8000", "tag": "" },
+            { "address": "H8", "balance": "700000000000", "percent": "0.7000", "tag": "" },
+            { "address": "H9", "balance": "600000000000", "percent": "0.6000", "tag": "" },
+            { "address": "H10", "balance": "500000000000", "percent": "0.5000", "tag": "" }
+          ],
+          "lp_holders": [
+            { "address": "LP1", "tag": "burned", "is_locked": 1, "percent": "98.5" }
+          ],
+          "creator": [
+            { "address": "DevWalletClean11111111111111111111111111111", "pct": "2.5000" }
+          ]
+        }
+      }
+    },
+    "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+      "code": 1,
+      "message": "OK",
+      "result": {
+        "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+          "freezable": { "authority": [], "status": "1" },
+          "mintable": { "authority": [], "status": "1" },
+          "total_supply": "1000000000",
+          "holders": [
+            { "address": "T1", "balance": "300000000", "percent": "30.0000" },
+            { "address": "T2", "balance": "200000000", "percent": "20.0000" }
+          ],
+          "lp_holders": [],
+          "creator": [{ "address": "DevWalletThin1111111111111111111111111111111", "pct": "30.0000" }]
+        }
+      }
+    },
+    "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+      "code": 1,
+      "message": "OK",
+      "result": {
+        "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+          "freezable": { "authority": ["FreezeAuthority111111111111111111111111111111"], "status": "1" },
+          "mintable": { "authority": ["MintAuthority1111111111111111111111111111111"], "status": "1" },
+          "total_supply": "1000000000000000",
+          "holders": [
+            { "address": "R1", "balance": "820000000000000", "percent": "82.0000" },
+            { "address": "R2", "balance": "90000000000000", "percent": "9.0000" }
+          ],
+          "lp_holders": [],
+          "creator": [{ "address": "DevWalletRug11111111111111111111111111111111", "pct": "61.0000" }]
+        }
+      }
+    },
+    "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+      "code": 1,
+      "message": "OK",
+      "result": {
+        "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+          "freezable": { "authority": [], "status": "0" },
+          "mintable": { "authority": [], "status": "0" },
+          "total_supply": "100000000000000",
+          "holders": [
+            { "address": "I1", "balance": "5000000000000", "percent": "5.0000" },
+            { "address": "I2", "balance": "4000000000000", "percent": "4.0000" },
+            { "address": "I3", "balance": "3000000000000", "percent": "3.0000" },
+            { "address": "I4", "balance": "2000000000000", "percent": "2.0000" },
+            { "address": "I5", "balance": "1000000000000", "percent": "1.0000" }
+          ],
+          "lp_holders": [
+            { "address": "LPI", "tag": "locked", "is_locked": 1, "percent": "95.0" }
+          ],
+          "creator": [{ "address": "DevWalletImpact111111111111111111111111111111", "pct": "4.0000" }]
+        }
+      }
+    }
+  }
+}
+

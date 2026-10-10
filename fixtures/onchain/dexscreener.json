@@ -1,0 +1,81 @@
+{
+  "_comment": "Shape of GET https://api.dexscreener.com/latest/dex/tokens/{mint}. Recorded/trimmed sample.",
+  "by_mint": {
+    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+      "schemaVersion": "1.0.0",
+      "pairs": [
+        {
+          "chainId": "solana",
+          "dexId": "raydium",
+          "pairAddress": "PairAddressClean111111111111111111111111111",
+          "baseToken": { "address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", "name": "Clean Sample", "symbol": "CLEAN" },
+          "quoteToken": { "address": "So11111111111111111111111111111111111111112", "name": "Wrapped SOL", "symbol": "SOL" },
+          "priceNative": "0.000842",
+          "priceUsd": "0.1280",
+          "txns": { "m5": { "buys": 21, "sells": 13 }, "h1": { "buys": 240, "sells": 190 }, "h24": { "buys": 5100, "sells": 4400 } },
+          "volume": { "h24": 1200000.55, "h6": 310000.0, "h1": 62000.0, "m5": 4200.0 },
+          "priceChange": { "h24": 12.4, "h1": 1.1 },
+          "liquidity": { "usd": 640000.0, "base": 5000000.0, "quote": 4200.0 },
+          "fdv": 12800000.0,
+          "marketCap": 9600000.0,
+          "pairCreatedAt": 1750000000000
+        }
+      ]
+    },
+    "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+      "schemaVersion": "1.0.0",
+      "pairs": [
+        {
+          "chainId": "solana",
+          "dexId": "raydium",
+          "pairAddress": "PairAddressThin1111111111111111111111111111",
+          "baseToken": { "address": "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV", "name": "Thin Sample", "symbol": "THIN" },
+          "quoteToken": { "address": "So11111111111111111111111111111111111111112", "name": "Wrapped SOL", "symbol": "SOL" },
+          "priceNative": "0.00204",
+          "priceUsd": "0.3100",
+          "txns": { "h24": { "buys": 800, "sells": 900 } },
+          "volume": { "h24": 60000.0 },
+          "liquidity": { "usd": 12000.0, "base": 40000.0, "quote": 78.0 },
+          "pairCreatedAt": 1750000000000
+        }
+      ]
+    },
+    "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+      "schemaVersion": "1.0.0",
+      "pairs": [
+        {
+          "chainId": "solana",
+          "dexId": "pumpfun",
+          "pairAddress": "PairAddressRug11111111111111111111111111111",
+          "baseToken": { "address": "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E", "name": "Rug Sample", "symbol": "RUG" },
+          "quoteToken": { "address": "So11111111111111111111111111111111111111112", "name": "Wrapped SOL", "symbol": "SOL" },
+          "priceNative": "0.00000042",
+          "priceUsd": "0.0000640",
+          "txns": { "h24": { "buys": 400, "sells": 30 } },
+          "volume": { "h24": 9800.0 },
+          "liquidity": { "usd": 4200.0, "base": 65000000.0, "quote": 28.0 },
+          "pairCreatedAt": 1759900000000
+        }
+      ]
+    },
+    "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+      "schemaVersion": "1.0.0",
+      "pairs": [
+        {
+          "chainId": "solana",
+          "dexId": "meteora",
+          "pairAddress": "PairAddressImpact11111111111111111111111111",
+          "baseToken": { "address": "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW", "name": "Impact Sample", "symbol": "IMPACT" },
+          "quoteToken": { "address": "So11111111111111111111111111111111111111112", "name": "Wrapped SOL", "symbol": "SOL" },
+          "priceNative": "0.00051",
+          "priceUsd": "0.0770",
+          "txns": { "h24": { "buys": 1500, "sells": 1200 } },
+          "volume": { "h24": 420000.0 },
+          "liquidity": { "usd": 180000.0, "base": 2300000.0, "quote": 1200.0 },
+          "pairCreatedAt": 1752000000000
+        }
+      ]
+    }
+  }
+}
+

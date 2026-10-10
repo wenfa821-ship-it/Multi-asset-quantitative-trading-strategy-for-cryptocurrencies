@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# High-frequency research set: the SAME strategy classes as production, but
+# pointed at 1m with a 5m confirmation. config/ (production) is untouched.
+#
+# The keys must be registry names (`mean_reversion`, `trend_breakout`, ...),
+# which is why this file re-purposes them at 1m instead of inventing new names.
+# ---------------------------------------------------------------------------
+
+[strategies.mean_reversion]
+enabled                = true
+description            = "1m z-score reversion on majors, 5m agreement, tight ATR stop."
+timeframe              = "1m"
+confirm_timeframe      = "5m"
+confirm_ema            = 30
+sma_period             = 30
+z_entry                = -2.0
+z_exit                 = 0.0
+atr_period             = 14
+max_vol_percentile     = 90.0
+regime_filter          = true
+min_edge_cost_multiple = 1.5
+take_profit_r_multiple = 0
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+max_holding_bars       = 20
+symbols                = ["tier:majors"]
+
+# Directional HF variant: buy the fresh 1m breakout, no retest wait.
+[strategies.trend_breakout]
+enabled                = true
+description            = "1m micro-breakout with volume + 5m agreement (directional HF)."
+timeframe              = "1m"
+confirm_timeframe      = "5m"
+confirm_ema            = 30
+entry_lookback         = 30
+exit_lookback          = 10
+ema_fast               = 12
+ema_slow               = 48
+atr_period             = 14
+volume_period          = 30
+min_volume_multiple    = 1.5
+regime_filter          = true
+min_edge_cost_multiple = 1.5
+take_profit_r_multiple = 0
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+retest_window_bars     = 0
+symbols                = ["tier:majors"]
+

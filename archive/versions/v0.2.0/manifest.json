@@ -1,0 +1,101 @@
+{
+ "version": "v0.2.0",
+ "package_version": "0.1.0",
+ "created_at": "2026-10-09T20:41:20+08:00",
+ "tests_passed": 253,
+ "account": {
+  "equity": 101575.88,
+  "cash": 96284.32,
+  "positions": {
+   "CRV/USDT": 7387.878263,
+   "ACT/USDT": 229123.85,
+   "BAND/USDT": 2084.132066,
+   "ACT/USDT:USDT": -22912.0,
+   "CRV/USDT:USDT": -7387.0
+  },
+  "as_of_ms": 1791549638946
+ },
+ "progress": {
+  "note": "渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。",
+  "updated": "2026-10-09",
+  "rows": [
+   {
+    "id": "path-1",
+    "item": "回放改「并集时间轴 + 按标的可用性」",
+    "state": "done",
+    "gate": "README §35",
+    "next": "—"
+   },
+   {
+    "id": "path-2",
+    "item": "carry 提升为受风控管理的永续策略",
+    "state": "done",
+    "gate": "README §37/38，§43–59 大幅加固",
+    "next": "—"
+   },
+   {
+    "id": "path-3",
+    "item": "补齐现货 272 / 永续 155 历史",
+    "state": "done",
+    "gate": "README §47：4h/1h 167→388；顺带查出 21 个 live-only + 18 个僵尸条目",
+    "next": "—"
+   },
+   {
+    "id": "path-4",
+    "item": "期权数据层",
+    "state": "done",
+    "gate": "README §45：已接进每日任务",
+    "next": "—"
+   },
+   {
+    "id": "path-5",
+    "item": "期权策略（买权利金的有限风险结构）",
+    "state": "gated",
+    "gate": "需 IV/RV 的每日样本，自 10-08 起累积，5–7 天",
+    "next": "约 10-13/10-14 评估 IV−RV 符号是否稳定"
+   },
+   {
+    "id": "leg-tradfi",
+    "item": "TradFi 腿（30% 额度）",
+    "state": "not_started",
+    "gate": "121 个日线文件 min 30 / 中位 71 / max 900 根，仅 18 个 ≥100；120 根 warmup 的日线策略出不了信号",
+    "next": "取那 18 个接一个短 warmup 日线策略，最小仓位开跑收集真实成交"
+   },
+   {
+    "id": "leg-options",
+    "item": "期权腿（20% 额度）",
+    "state": "blocked",
+    "gate": "无 venue 适配、无策略；数据层在跑",
+    "next": "依赖 path-5"
+   },
+   {
+    "id": "carry-postonly",
+    "item": "carry 被动入场（post-only 现货腿）",
+    "state": "in_progress",
+    "gate": "券底层已支持 ordType=post_only 且默认不启用；未接线",
+    "next": "接进 paired.open_pair（挂单→等→必须撤单→回退市价）并先做撤单路径的受控验证"
+   },
+   {
+    "id": "carry-notional",
+    "item": "calibrate carry_notional_pct（现为刻意保守的 2%）",
+    "state": "waiting_data",
+    "gate": "需要已实现收入序列",
+    "next": "data/funding/income.jsonl 累积几天后按实测收入校准"
+   },
+   {
+    "id": "carry-spike",
+    "item": "验证「资金费尖峰会回落」（20 倍于稳态）",
+    "state": "waiting_data",
+    "gate": "10-09 观测：CRV 1,149 bps/天 vs ACT 3.2 bps/天",
+    "next": "几天后看 CRV 日均是否回落到 $2–3 量级"
+   },
+   {
+    "id": "housekeeping-status",
+    "item": "changelog 的 status 字段回填（多处修好未更新，导致进度判断出错）",
+    "state": "not_started",
+    "gate": "工程债",
+    "next": "一次性回填；之后把状态更新写进每轮收尾清单"
+   }
+  ]
+ }
+}

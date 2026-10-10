@@ -1,0 +1,151 @@
+# ---------------------------------------------------------------------------
+# Risk rules. This file is the ONLY source of truth for what the bot may do.
+# The strategy can propose; the risk engine decides. Nothing here is advisory.
+#
+# Frequency went UP (15m entries), so every limit below went DOWN. That is the
+# only honest way to trade more often: tighter per-trade risk, more gates.
+# ---------------------------------------------------------------------------
+
+default_tier = "alts"
+
+[account]
+max_leverage_pct            = 100.0    # 100 = spot, no leverage. Never raise this for spot.
+# 2026-10-07: the book is now split 50/50 (see [legs] below), so this level is
+# the SUM of the legs rather than a single binding number. The legs are what
+# actually bind; this is the backstop if a leg is ever removed by mistake.
+max_gross_exposure_pct      = 100.0    # = spot 50 + derivatives 50
+max_open_positions          = 6        # = spot 4 + derivatives 2
+min_cash_buffer_pct         = 15.0     # keep >=15% of AVAILABLE CASH unspent
+cash_buffer_basis           = "cash"   # cash | equity
+max_heat_pct                = 4.0      # = spot 2.5 + derivatives 1.5
+max_trades_per_day          = 12       # portfolio-wide entry budget (UTC day)
+# A demo account ships with 1 BTC / 100 OKB / 1 ETH / 5000 USDT. Those are not
+# strategy exposure. Set true only if manual coins should consume your limits.
+count_unmanaged_exposure    = false
+# Should the bot take ownership of positions it did NOT open? Turning this on
+# arms stops/targets on them and WILL SELL THEM when hit - only do it when you
+# deliberately hand the bot an existing bag to protect. Default off: deposits
+# and manual holdings stay untouched and outside every limit.
+adopt_existing_positions    = false
+
+[per_trade]
+risk_per_trade_pct          = 0.25     # fallback; tiers override per symbol
+max_order_notional_pct      = 6.0      # single order / equity
+# 0 = no absolute cap; the relative caps below govern (equity x pct, per tier).
+# Set 2026-09-30 at the user's instruction ("取消上限"). Consequence: a single
+# order is now bounded by 6% of equity (~$6.2k on a $103k book) instead of $600,
+# and `max_position_pct` per tier becomes the real per-symbol ceiling again.
+# The portfolio-level limits (gross exposure 45%, heat 3.5%, 5 positions,
+# 12 entries/day) are unchanged and still bind.
+max_order_notional_usd      = 0.0
+min_order_notional_usd      = 20.0     # below this we do not bother
+max_price_deviation_pct     = 0.8      # reject limit orders too far from mark
+max_orders_per_minute       = 6        # runaway-loop protection
+max_spread_bps              = 25.0     # fallback; tiers override
+
+[positions]
+max_position_pct_per_symbol = 10.0     # fallback; tiers override
+stop_atr_multiple           = 2.0
+take_profit_r_multiple      = 1.8
+trailing_stop_enabled       = true
+trailing_stop_atr_multiple  = 2.5
+atr_target_pct              = 1.5
+vol_target_min_scale        = 0.30
+vol_target_max_scale        = 1.50
+
+[circuit_breakers]
+daily_loss_stop_open_pct    = 1.5      # stop opening new risk for the day
+daily_loss_flatten_pct      = 3.0      # flatten everything
+max_drawdown_kill_pct       = 12.0     # from peak equity -> permanent kill switch
+consecutive_losses_pause    = 5
+streak_cooldown_minutes     = 360      # per-symbol bench after that streak
+cooldown_minutes_after_stop = 120      # global pause after a stop-out
+cooldown_after_stop_minutes = 90       # per-symbol cooldown (tiers override)
+stale_data_bars             = 2        # refuse to trade on a stale feed
+max_tick_errors             = 10       # give up only after this many broken ticks
+
+[symbols]
+whitelist = []                         # tiers are authoritative when defined
+blacklist = []
+max_trades_per_symbol_per_day = 2      # no revenge-trading the same coin
+min_quote_volume_24h          = 5000000.0
+
+# Correlation / sector buckets: a bucket's combined notional may not exceed the cap.
+[clusters]
+majors     = ["BTC/USDT", "ETH/USDT"]
+layer1     = ["SOL/USDT", "AVAX/USDT", "SUI/USDT", "NEAR/USDT", "APT/USDT", "ADA/USDT"]
+meme       = ["DOGE/USDT", "PEPE/USDT", "PENGU/USDT"]
+defi       = ["LINK/USDT", "JUP/USDT", "ONDO/USDT", "INJ/USDT"]
+max_cluster_exposure_pct = 20.0
+
+# ---------------------------------------------------------------------------
+# The 50/50 book (user decision 2026-10-07; README sections 20 and 28).
+#
+# A symbol with a ":" (e.g. SOL/USDT:USDT) is a derivative; everything else is
+# spot. Each leg has its OWN ceiling, enforced on top of the account limits
+# above, so the split cannot degrade into "whichever leg fills first takes the
+# budget". The numbers are shares of equity, and they are additive: the account
+# level is set to their sum so that the legs are the binding constraints.
+#
+# Why notional and not margin: the engine only ever sees position notional, and
+# a 50% notional leg at 3x leverage is a ~17% margin commitment, so notional is
+# the stricter of the two readings (README 20.1). Leverage stays a venue-layer
+# parameter; no config key here pretends to cap it.
+# ---------------------------------------------------------------------------
+[legs.spot]
+max_gross_exposure_pct      = 50.0
+max_open_positions          = 4
+max_heat_pct                = 2.5
+max_trades_per_day          = 8
+
+[legs.derivatives]
+max_gross_exposure_pct      = 50.0
+max_open_positions          = 2
+max_heat_pct                = 1.5
+max_trades_per_day          = 4
+
+# ---------------------------------------------------------------------------
+# Per-tier limits - the heart of trading a wider universe safely.
+# `new` is deliberately the tightest: smallest size, shortest leash.
+# ---------------------------------------------------------------------------
+[tiers.majors]
+risk_per_trade_pct          = 0.30
+max_position_pct            = 12.0
+max_order_notional_pct      = 5.0
+max_orders_per_minute       = 4
+max_trades_per_day          = 6
+max_positions               = 2
+max_spread_bps              = 12.0
+cooldown_after_stop_minutes = 60
+stop_atr_multiple           = 2.5
+take_profit_r_multiple      = 2.0
+atr_target_pct              = 1.2
+max_stop_pct                = 3.0
+
+[tiers.alts]
+risk_per_trade_pct          = 0.20
+max_position_pct            = 8.0
+max_order_notional_pct      = 4.0
+max_orders_per_minute       = 4
+max_trades_per_day          = 8
+max_positions               = 3
+max_spread_bps              = 25.0
+cooldown_after_stop_minutes = 90
+stop_atr_multiple           = 2.0
+take_profit_r_multiple      = 1.8
+atr_target_pct              = 1.8
+max_stop_pct                = 4.0
+
+[tiers.new]
+risk_per_trade_pct          = 0.10
+max_position_pct            = 3.0
+max_order_notional_pct      = 2.0
+max_orders_per_minute       = 2
+max_trades_per_day          = 4
+max_positions               = 2
+max_spread_bps              = 45.0
+cooldown_after_stop_minutes = 180
+stop_atr_multiple           = 1.8
+take_profit_r_multiple      = 2.5
+atr_target_pct              = 3.0
+max_stop_pct                = 6.0

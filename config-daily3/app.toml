@@ -1,0 +1,99 @@
+# Global application / venue wiring.
+# Secrets are NEVER stored here - only the NAME of the environment variable that holds them.
+
+[app]
+mode            = "demo"           # paper | demo | live
+base_currency   = "USDT"
+data_dir        = "data"
+log_dir         = "logs"
+timezone        = "Asia/Shanghai"
+kill_switch_file = "KILL_SWITCH"
+
+# ---------------------------------------------------------------------------
+# Universe: decision frequency + the tiered symbol pool.
+#
+# timeframe  = the base clock. In paper mode one loop tick = one base bar, so
+#              this is what actually raises trade frequency.
+# timeframes = extra frames kept warm for confirmation.
+#
+# The lists below are CANDIDATES. With your proxy up, run this once:
+#     ta symbols check --venue okx_demo          # validate what is configured
+#     ta symbols scan  --venue okx_demo --top 40 # discover by real 24h volume
+# and delete anything the venue does not actually offer.
+# ---------------------------------------------------------------------------
+# Daily experiment (2026-10-07): the mainstream spot strategies move to 1d to
+# compress turnover and see whether the fee line drops faster than the edge.
+# Confirm frame moves up one step, 1h/4h-style: 1d -> 1w.
+[universe]
+timeframe   = "1d"
+# 1h/15m stay listed only because the two NON-mainstream strategies still declare
+# them (perp_trend_funding is disabled, new_listing_breakout is out of scope for
+# this experiment). The three mainstream strategies run on 1d + 1w.
+timeframes  = ["1w", "1h", "15m"]
+bar_limit   = 300                  # per timeframe (OKX caps one request near 300)
+symbols     = []                   # tiers below are authoritative
+
+[universe.symbols_by_tier]
+majors = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "OKB/USDT"]
+
+# liquid, established, higher beta than majors
+alts = [
+  "DOGE/USDT", "XRP/USDT", "ADA/USDT", "AVAX/USDT", "LINK/USDT",
+  "SUI/USDT", "NEAR/USDT", "APT/USDT", "INJ/USDT", "TIA/USDT", "PEPE/USDT",
+]
+
+# recent listings: tightest limits, smallest size, fastest exits
+new = [
+  "JUP/USDT", "PYTH/USDT", "ONDO/USDT", "W/USDT", "PENGU/USDT",
+]
+
+
+# ---------------------------------------------------------------------------
+# Verified 2026-09-29 with `ta symbols check`: the OKX DEMO venue exposes
+# ~2,395 pairs while the live venue has ~4,646, so absence here is not the same
+# as absence on OKX. Removed from the lists above:
+#   live OKX only  -> ARB/USDT, ENA/USDT, MEW/USDT, EIGEN/USDT, VIRTUAL/USDT
+#                     (add them back when you move off the demo environment)
+#   not on OKX     -> TON/USDT, POPCAT/USDT   (do not re-add)
+# ---------------------------------------------------------------------------
+
+[loop]
+poll_seconds    = 60               # <= the base bar; one decision cycle per poll
+max_iterations  = 0                # 0 = run until stopped (Ctrl-C or kill switch)
+
+# ---------------------------------------------------------------------------
+# Paper venue: local simulator, no network, no keys.
+# ---------------------------------------------------------------------------
+[venues.paper]
+initial_cash    = 10000.0
+fee_bps         = 8.0              # 0.08% taker
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# OKX Demo Trading. Key must be created INSIDE the demo environment.
+# ccxt sandbox mode adds the `x-simulated-trading: 1` header.
+# ---------------------------------------------------------------------------
+[venues.okx_demo]
+exchange_id     = "okx"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"   # OKX requires an API passphrase
+fee_bps         = 10.0             # taker, measured on this account 2026-09-29 (Lv1)
+maker_fee_bps   = 8.0              # maker; no rebate at Lv1
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# Binance Spot Testnet (testnet.binance.vision).
+# For USDⓈ-M futures testnet use exchange_id = "binanceusdm".
+# ---------------------------------------------------------------------------
+[venues.binance_testnet]
+exchange_id     = "binance"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "BINANCE_TESTNET_API_KEY"
+secret_env      = "BINANCE_TESTNET_SECRET"
+password_env    = ""
+fee_bps         = 8.0
+slippage_bps    = 5.0

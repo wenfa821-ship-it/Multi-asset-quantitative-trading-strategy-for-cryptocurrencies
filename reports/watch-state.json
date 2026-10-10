@@ -1,0 +1,19 @@
+{
+  "last_check": "2026-10-07T20:58:00+08:00",
+  "ledger_lines": {
+    "okx_demo": 7268,
+    "paper": 6596
+  },
+  "alert_lines": 50,
+  "degraded_streak": 0,
+  "last_date": "2026-10-07",
+  "one_pager_generated": "2026-10-06T23:55:28+08:00",
+  "refit_lines": 1,
+  "services": {
+    "runner": "running",
+    "dashboard": "running",
+    "watcher": "running",
+    "newlisting": "exited"
+  },
+  "note": "2026-10-07 20:58 巡检 CRITICAL 维持：当日拒单 5≥3 本窗口零新增；F3 升级——reconcile_repeat_total 3→5 证明同一 cash mismatch 五次对账复现、未自愈。runner ✅ pid=4500 无新重启（18:07 sizing.py 变更仍未加载）；dash ✅ pid=10136 / watcher ✅ pid=747 / newlisting ❌ exited（F7）。metrics 17 项（ticks=189/bars=522），equity/cash 103,027.58，空仓，kill switch 0，degraded 0（streak 0）。看板 ✅ :9200。增量 okx_demo +52（全 equity 心跳 19:51–21:00 CST）/ paper +0；order/fill/blocked/risk/拒单 全 0。当日 blocked 6 全 OKB symbol_daily_cap 正常拦截。alerts 50 无新增；无新 Traceback/ERROR。config|src|scripts|README 无新变更；refit 1 条；链上 snapshots 46141（+129），evaluate 未跑 → 样本不足以判定。建议：①人工 ta reconcile（需导出 OKX_DEMO_API_KEY）核对 venue 端 2.25 流出根因；②决定 runner 重启加载 sizing 变更；③TradFi 免责声明；④修 entries_today CST 日边界；⑤修 newlisting plist。"
+}

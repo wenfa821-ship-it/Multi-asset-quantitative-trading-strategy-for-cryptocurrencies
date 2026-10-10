@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job for the new-listing accumulator (README 18.5).
+
+  Why this exists: the candidate factor in 18.4 rests on 5 positive samples out
+  of 23. OKX adds only ~2-5 real crypto listings a month, so the sample only
+  grows if something records it unattended for months. A one-off script cannot
+  answer the question; a daily job can.
+
+  It is deliberately NOT part of the other three services:
+    * runner    - places orders, must never be restarted casually
+    * watcher   - 300s loop over on-chain snapshots
+    * dashboard - read-only UI
+  This job is a once-a-day, read-only market-data pull. It writes exactly one
+  file: data/new_listings/records.jsonl (append-only, idempotent by instId).
+
+  KeepAlive is FALSE on purpose: this is a batch job, not a daemon. It is
+  retried once during the day (09:10 and 21:10) so a transient network failure
+  cannot silently skip a day, and it is idempotent, so running twice is free.
+
+  RunAtLoad is true so a fresh install produces evidence immediately instead of
+  waiting for the next calendar slot.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingagent.newlisting</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>-u</string>
+        <string>scripts/daily_research.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>src</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/anaconda3/bin</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>TA_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>9</integer>
+            <key>Minute</key>
+            <integer>10</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>21</integer>
+            <key>Minute</key>
+            <integer>10</integer>
+        </dict>
+    </array>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/ta-newlisting-service.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/ta-newlisting-service.err.log</string>
+</dict>
+</plist>

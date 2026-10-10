@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job for the on-chain snapshot watcher.
+
+  Read-only research: it reads public market feeds and appends snapshots to
+  data/onchain/snapshots.jsonl. No keys, no orders, no venue. Safe to keep alive.
+
+  KeepAlive=true on purpose here (unlike the trading loop): this job has no
+  meaningful "clean exit" state - if it stops, the research series simply stops,
+  and silently losing samples was the exact failure of the last few days.
+
+  --reload-every 12 re-reads the candidate list every 12 rounds (~1 hour at a
+  300s cadence). Loading the list once and never again is how the scanner ended
+  up sampling tokens that had already stopped trading.
+
+  --discover-every 24 re-runs the discovery layer itself every 24 rounds (~2
+  hours): the candidate list is rebuilt from the public feeds rather than only
+  being re-read. Discovery and observation used to be two manual steps, which is
+  why the list silently went stale whenever nobody remembered to refresh it.
+
+  --discover-limit 40 is a measured ceiling, not a preference. A round costs
+  about 4.5s per token: 40 tokens finished in 181s (fits the 300s cadence), while
+  80 tokens took 628s (does not, and would push the cadence past the +5m
+  horizon's tolerance). Widening the universe and sampling fast are in direct
+  competition; 40 is where both still work.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingagent.watcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>-u</string>
+        <string>-m</string>
+        <string>ta</string>
+        <string>scan</string>
+        <string>watch</string>
+        <string>--mints-from</string>
+        <string>data/onchain/watchlist.json</string>
+        <string>--interval</string>
+        <string>__INTERVAL__</string>
+        <string>--reload-every</string>
+        <string>12</string>
+        <string>--discover-every</string>
+        <string>24</string>
+        <string>--discover-limit</string>
+        <string>40</string>
+        <string>--min-liquidity</string>
+        <string>10000</string>
+        <string>--store</string>
+        <string>data/onchain/snapshots.jsonl</string>
+        <string>--config-dir</string>
+        <string>config</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>src</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/anaconda3/bin:/Users/wenfa/.workbuddy/binaries/python/current/bin</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/ta-watch-service.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/ta-watch-service.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,101 @@
+{
+  "_comment": "GMGN internal endpoint shape (undocumented, can change). Recording of /defi/quotation/v1/tokens/sol/{mint}",
+  "by_mint": {
+    "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU": {
+      "code": 0,
+      "msg": "success",
+      "data": {
+        "token": {
+          "address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+          "symbol": "CLEAN",
+          "price": 0.128,
+          "liquidity": 640000.0,
+          "volume_24h": 1200000.55,
+          "holder_count": 5200,
+          "top_10_holder_rate": 0.185,
+          "dev_team_hold_rate": 0.025,
+          "is_lp_locked": true,
+          "is_honeypot": false,
+          "open_timestamp": 1750000000000,
+          "creator": "DevWalletClean11111111111111111111111111111",
+          "smart_degen_count": 12,
+          "renowned_count": 3,
+          "sniper_count": 2,
+          "bundler_rate": 0.04,
+          "rat_trader_amount_rate": 0.01,
+          "rug_ratio": 0.01
+        }
+      }
+    },
+    "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV": {
+      "code": 0,
+      "msg": "success",
+      "data": {
+        "token": {
+          "address": "3xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV",
+          "symbol": "THIN",
+          "price": 0.31,
+          "liquidity": 12000.0,
+          "volume_24h": 60000.0,
+          "holder_count": 900,
+          "top_10_holder_rate": 0.52,
+          "dev_team_hold_rate": 0.3,
+          "is_lp_locked": true,
+          "is_honeypot": false,
+          "open_timestamp": 1750000000000,
+          "smart_degen_count": 0,
+          "sniper_count": 18,
+          "bundler_rate": 0.42,
+          "rug_ratio": 0.31
+        }
+      }
+    },
+    "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E": {
+      "code": 0,
+      "msg": "success",
+      "data": {
+        "token": {
+          "address": "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E",
+          "symbol": "RUG",
+          "price": 0.000064,
+          "liquidity": 4200.0,
+          "volume_24h": 9800.0,
+          "holder_count": 41,
+          "top_10_holder_rate": 0.82,
+          "dev_team_hold_rate": 0.61,
+          "is_lp_locked": false,
+          "is_honeypot": true,
+          "open_timestamp": 1759900000000,
+          "smart_degen_count": 0,
+          "sniper_count": 64,
+          "bundler_rate": 0.88,
+          "rug_ratio": 0.91
+        }
+      }
+    },
+    "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW": {
+      "code": 0,
+      "msg": "success",
+      "data": {
+        "token": {
+          "address": "4mKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW",
+          "symbol": "IMPACT",
+          "price": 0.077,
+          "liquidity": 180000.0,
+          "volume_24h": 420000.0,
+          "holder_count": 3100,
+          "top_10_holder_rate": 0.15,
+          "dev_team_hold_rate": 0.04,
+          "is_lp_locked": true,
+          "is_honeypot": false,
+          "open_timestamp": 1752000000000,
+          "smart_degen_count": 5,
+          "sniper_count": 4,
+          "bundler_rate": 0.06,
+          "rug_ratio": 0.04
+        }
+      }
+    }
+  }
+}
+

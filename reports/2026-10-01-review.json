@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-01",
+  "process": {
+    "pid": 1477,
+    "alive": true,
+    "pid_file_ok": true,
+    "restarts_today": 3,
+    "first_start_utc": "2026-09-30T23:01:25+00:00",
+    "last_start_utc": "2026-10-01T13:13:11+00:00",
+    "runner_starts": 4,
+    "venues_active": {
+      "okx_demo": 4
+    },
+    "current_venue": "okx_demo"
+  },
+  "overview": {
+    "baseline_equity": 103295.598254,
+    "final_equity": 103247.525739,
+    "final_cash": 103247.525623,
+    "position_value": 0.0,
+    "pnl": -48.07251499999256,
+    "return_pct": -0.046538783658316256,
+    "max_drawdown_pct": 0.04896754049202723,
+    "current_drawdown_pct": 0.04896753952394791,
+    "open_positions": 0,
+    "positions": {},
+    "marks": {
+      "ADA/USDT": 0.2468,
+      "APT/USDT": 0.768,
+      "AVAX/USDT": 10.9,
+      "BTC/USDT": 84220.4,
+      "DOGE/USDT": 0.0944,
+      "ETH/USDT": 2683.71,
+      "INJ/USDT": 7.502,
+      "JUP/USDT": 0.3187,
+      "LINK/USDT": 14.294,
+      "NEAR/USDT": 4.92,
+      "OKB/USDT": 121.54,
+      "ONDO/USDT": 0.4917,
+      "PENGU/USDT": 0.0093,
+      "PEPE/USDT": 4.44e-06,
+      "PYTH/USDT": 0.07457,
+      "SOL/USDT": 117.44,
+      "SUI/USDT": 1.1508,
+      "TIA/USDT": 5.5,
+      "W/USDT": 0.01331,
+      "XRP/USDT": 1.4872
+    }
+  },
+  "trading": {
+    "fill_count": 11,
+    "buy_fills": 5,
+    "sell_fills": 6,
+    "total_fees": 39.21117247361,
+    "realized_pnl": 0.0,
+    "closed_trades": 0,
+    "wins": 0,
+    "win_rate_pct": 0.0
+  },
+  "risk": {
+    "blocked_count": 1,
+    "blocked_reasons": {
+      "paused: daily loss -2.00% (31m left)": 1
+    },
+    "risk_events": 12,
+    "kill_switch_triggered": true,
+    "kill_reason": "kill switch file present on disk"
+  },
+  "alerts": {
+    "total": 11,
+    "by_level": {
+      "warning": 4,
+      "info": 3,
+      "critical": 4
+    },
+    "by_title": {
+      "protective exit": 2,
+      "stop moved to breakeven": 1,
+      "partial take profit": 1,
+      "kill switch": 1,
+      "flattened": 1,
+      "runner finished": 1,
+      "order rejected": 2,
+      "venue degraded - new entries suspended": 2
+    }
+  },
+  "stability": {
+    "log_lines": 20,
+    "traceback_count": 0,
+    "exception_count": 0,
+    "network_error_count": 0,
+    "reconnect_count": 0,
+    "kill_switch_mentions": 0,
+    "critical_count": 0,
+    "ssl_errors": 0,
+    "http_errors": 0
+  },
+  "live_metrics": {
+    "_alive": true,
+    "_pid": 1477,
+    "_pid_file_ok": true,
+    "ta_ticks_total": 122.0,
+    "ta_venue_degraded_total": 1.0,
+    "ta_cash": 103247.52562338139,
+    "ta_daily_pnl_pct": 0.0,
+    "ta_drawdown_pct": 0.0,
+    "ta_dust_notional": 4.356757e-05,
+    "ta_entries_paused": 0.0,
+    "ta_entries_today": 0.0,
+    "ta_equity": 103247.52573898522,
+    "ta_fees_total": 69.29999778084999,
+    "ta_heat_pct": 0.0,
+    "ta_kill_switch": 0.0,
+    "ta_open_positions": 0.0,
+    "ta_unmanaged_notional": 7.203962e-05,
+    "ta_venue_degraded": 0.0
+  }
+}

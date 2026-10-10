@@ -1,0 +1,9 @@
+{
+  "_comment": "Thresholds the dashboard watchdog checks every minute. Read by ta dashboard; the page highlights breaches and, when TA_ALERT_WEBHOOK_URL is set, a JSON payload is POSTed on state CHANGE only (never repeatedly). Reversible by editing this file - no restart needed.",
+  "max_drawdown_pct": 5.0,
+  "daily_loss_pct": 2.0,
+  "fees_pct_of_loss": 60.0,
+  "unmanaged_notional_usd": 1.0,
+  "onchain_zero_change_pct": 80.0,
+  "webhook_min_interval_seconds": 1800
+}

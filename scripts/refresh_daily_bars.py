@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Top up the daily bars the research scripts read, without truncating them.
+
+The problem this closes
+-----------------------
+`ta data fetch` writes the series it just downloaded - it REPLACES the file. So
+the only way to keep `data/history/okx_demo/*__1d.jsonl` current was to re-fetch
+the whole window, and nobody did: measured 2026-10-09, every 1d file ended at
+2026-10-05. The live runner is unaffected (it pulls bars from the venue), but the
+research side is not:
+
+  * `scripts/options_cost.py` computes the 30-day realized vol from those files,
+    so its `variance_premium_pp` was IV minus a FROZEN RV - identical on the
+    10-08 and 10-09 rows while IV moved. That is the number the options gate
+    (path-5) is waiting on.
+  * every backtest run on disk (`ta backtest --source history`) ended 4 days ago.
+
+So this fetches a short recent window and MERGES it, which is the shape a daily
+job needs: cheap, idempotent, and it cannot shrink history.
+
+    python3 scripts/refresh_daily_bars.py --write                # option underlyings
+    python3 scripts/refresh_daily_bars.py --write --symbols BTC/USDT,ETH/USDT
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT / "src"))
+
+from ta.config import Config  # noqa: E402
+from ta.history import fetch_symbol, history_path, merge_bars, read_bars  # noqa: E402
+from ta.venues import build_venue  # noqa: E402
+
+# The families scripts/options_cost.py reads daily closes for. Keeping this list
+# here (rather than reading the surface file) means the refresh still runs on a
+# day when the surface fetch failed.
+DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config-dir", default="config")
+    ap.add_argument("--venue", default="okx_demo")
+    ap.add_argument("--symbols", default=",".join(DEFAULT_SYMBOLS))
+    ap.add_argument("--timeframe", default="1d")
+    ap.add_argument("--bars", type=int, default=60, help="recent window to fetch and merge")
+    ap.add_argument("--write", action="store_true")
+    args = ap.parse_args()
+
+    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+    config = Config.load(args.config_dir)
+    venue = build_venue(config, args.venue)
+    venue.connect()
+    print(f"venue={args.venue} timeframe={args.timeframe} bars={args.bars} symbols={len(symbols)}")
+
+    updated = 0
+    for symbol in symbols:
+        # config.data_dir / "history" is the layout `ta data fetch` uses
+        # (history_dir() itself only appends the venue), and getting this wrong is
+        # silent in the worst way: the first version of this script pointed at
+        # <project>/<venue>/ and cheerfully created a parallel copy of the series
+        # there while the files the research reads stayed four days stale.
+        path = history_path(config.data_dir / "history", args.venue, symbol, args.timeframe)
+        try:
+            bars = fetch_symbol(venue.ex, symbol, args.timeframe, args.bars)
+        except Exception as exc:  # noqa: BLE001 - one symbol must not kill the step
+            print(f"  {symbol}: fetch failed ({type(exc).__name__}: {str(exc)[:80]})")
+            continue
+        if not bars:
+            print(f"  {symbol}: no bars returned (not written)")
+            continue
+        before = read_bars(path)
+        last_before = before[-1].ts if before else 0
+        last_new = bars[-1].ts
+        if not args.write:
+            print(f"  {symbol}: would merge {len(bars)} bars "
+                  f"(have {len(before)}, newest now {last_new}, newest on disk {last_before})")
+            continue
+        total = merge_bars(path, bars)
+        gained = sum(1 for b in bars if b.ts > last_before)
+        if gained:
+            updated += 1
+        print(f"  {symbol}: merged -> {total} bars (+{gained} new)")
+
+    venue.close()
+    if not args.write:
+        print("DRY RUN - re-run with --write")
+        return 0
+    print(f"refreshed {updated}/{len(symbols)} symbol(s) with new daily bars")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
