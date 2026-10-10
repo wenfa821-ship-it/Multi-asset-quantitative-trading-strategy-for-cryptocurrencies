@@ -97,8 +97,15 @@
    "id": "leg-options",
    "item": "期权腿（20% 额度）",
    "state": "next_phase",
-   "gate": "**移至 1.1**（随 path-5）：无 venue 适配、无策略；数据层（期权面 + IV−RV 每日行）已在每日任务里跑",
-   "next": "1.1 时先做 venue 适配与最小仓位结构，再谈策略；在此之前期权 20% 额度保持空置（这是设计，不是故障）"
+   "gate": "**1.1 的前置已经全部就位，主工程还没开工**（2026-10-10 更新）：venue 适配 ✓（ctMult/最小单/单向持仓参数/instId↔ccxt 映射）、币本位权利金 ✓（0.0011070525 BTC ≈ $92，够 1 张最小单）、盘口 ✓（±10% × 13–48d，中位 2.16% / 平值 1.5%，全部双边）、结构说明书 ✓（docs/options-sleeve-spec.md）、参数开关 ✓（config/options_premium.json，enabled=false）、闸门每天自判 ✓。**未做的两件**：① runner 还没有期权腿的执行接线（没有『持有/买入/平掉一张期权』的路径——适配器只到『能报价、能映射符号』）；② 没有策略类，也没有下过一张真实期权单验证路径",
+   "next": "顺序已经确定（见下一条 `options-leg-wiring` 与 `options-minimal-structure`）：先接线 → 再用 1 张最小单跑通全流程 → 闸门开（BTC 最早 10-12）且用户点头后才真正按说明书 §4 交易。在此之前 20% 额度保持空置——这是设计，不是故障"
+  },
+  {
+   "id": "options-leg-wiring",
+   "item": "1.1 · 让 runner 真的能持有一张期权（执行接线：买/持/平/记账）",
+   "state": "next_phase",
+   "gate": "现状：`[venues.okx_demo_option]`、单位换算（1 张 = ctVal×ctMult = 0.01 BTC）、单向持仓参数、符号映射都已就绪并有测试，但**runner 没有期权腿的执行路径** —— 它按「现货/永续」两种腿设计（paired carry、方向性现货、深度闸门），期权既不是现货也不是永续：权利金以币支付、到期会变成币本位现货敞口、没有 posSide/reduceOnly。这一块是 1.1 剩下的**主要工程量**",
+   "next": "① 先做**最小可验证路径**：用 `scripts/options_fund_premium.py` 式的单笔脚本买 1 张、查持仓、再平掉，把『下单→成交→记录价差/费用→平仓』跑通（不下策略、不接 runner）；② 拿到真实成交价与费用后，再决定 runner 侧的接入方式（新增一条『期权腿』还是复用现有腿的记账）；③ 记账必须让这份权利金**进入账本**，否则它永远是非托管库存（今天为此专门加了 reserved_inventory 兜底）"
   },
   {
    "id": "carry-postonly",
