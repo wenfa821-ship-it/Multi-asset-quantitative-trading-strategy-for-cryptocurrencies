@@ -4470,5 +4470,115 @@ class TradFiTierTests(unittest.TestCase):
         self.assertEqual(report["in_session_runs"], 1)
 
 
+class SpotTdModeTests(unittest.TestCase):
+    """A spot venue that cannot read `acctLv` rejects every order it sends.
+
+    Measured 2026-10-10: three `51000 Parameter tdMode error` rejections in one day
+    (two OKB/USDT buys at 04:43 and 04:45, one BTC/USDT sell at 11:16) against a
+    probe that traded the same shape fine - because the probe HAD read the account
+    level and the loop had not. `cash` is the fallback, and this account refuses it.
+    """
+
+    class _Exchange:
+        def __init__(self, failures: int, level: str = "3") -> None:
+            self.failures = failures
+            self.level = level
+            self.calls: list[dict] = []
+            self.config_calls = 0
+
+        def create_order(self, symbol, type, side, amount, price, params):
+            self.calls.append(dict(params))
+            if self.failures > 0:
+                self.failures -= 1
+                raise RuntimeError('okx {"sCode":"51000","sMsg":"Parameter tdMode error "}')
+            return {"id": "ok", "status": "open"}
+
+        def privateGetAccountConfig(self):
+            self.config_calls += 1
+            return {"data": [{"acctLv": self.level}]}
+
+    def _venue(self, failures: int = 0, level: str = "3"):
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        template = self._Exchange(failures, level)
+
+        class Fake:
+            market_type = "spot"
+            spot_td_mode = "cash"
+            td_mode_resolved = False
+            account_level = 0
+            last_td_mode_error = ""
+            ex = template
+
+            def _venue_symbol(self, symbol: str) -> str:
+                return symbol
+
+            resolve_spot_td_mode = CcxtVenue.resolve_spot_td_mode
+            _create_order = CcxtVenue._create_order
+
+        return Fake()
+
+    @staticmethod
+    def _request():
+        from ta.models import OrderRequest
+
+        return OrderRequest("c1", "BTC/USDT", "sell", 0.001, reduce_only=True)
+
+    def test_the_account_level_decides_the_mode(self) -> None:
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        margin = self._venue(level="3")
+        self.assertEqual(CcxtVenue.resolve_spot_td_mode(margin), "cross")
+        self.assertTrue(margin.td_mode_resolved)
+        self.assertEqual(margin.account_level, 3)
+
+        simple = self._venue(level="1")
+        self.assertEqual(CcxtVenue.resolve_spot_td_mode(simple), "cash")
+        self.assertTrue(simple.td_mode_resolved)
+
+    def test_a_failed_probe_is_recorded_not_hidden(self) -> None:
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        venue = self._venue()
+
+        def boom():
+            raise RuntimeError("proxy down")
+
+        venue.ex.privateGetAccountConfig = boom
+        self.assertEqual(CcxtVenue.resolve_spot_td_mode(venue), "cash")
+        self.assertFalse(venue.td_mode_resolved)
+        self.assertIn("proxy down", venue.last_td_mode_error)
+
+    def test_a_tdmode_rejection_is_repaired_once_with_the_real_level(self) -> None:
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        venue = self._venue(failures=1)
+        raw = CcxtVenue._create_order(venue, self._request(), 0.001, {"tdMode": "cash"})
+        self.assertEqual(raw["id"], "ok")
+        self.assertEqual(len(venue.ex.calls), 2)
+        self.assertEqual(venue.ex.calls[0]["tdMode"], "cash")
+        self.assertEqual(venue.ex.calls[1]["tdMode"], "cross")   # repaired, not repeated
+        self.assertEqual(venue.ex.config_calls, 1)
+
+    def test_any_other_rejection_is_not_retried(self) -> None:
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        venue = self._venue(failures=1)
+        venue.ex.create_order = lambda *a, **k: (_ for _ in ()).throw(
+            RuntimeError("insufficient balance")
+        )
+        with self.assertRaises(RuntimeError):
+            CcxtVenue._create_order(venue, self._request(), 0.001, {"tdMode": "cash"})
+        self.assertEqual(venue.ex.config_calls, 0)
+
+    def test_a_swap_venue_never_takes_the_spot_repair(self) -> None:
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        venue = self._venue(failures=1)
+        venue.market_type = "swap"
+        with self.assertRaises(RuntimeError):
+            CcxtVenue._create_order(venue, self._request(), 0.001, {"tdMode": "cross"})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

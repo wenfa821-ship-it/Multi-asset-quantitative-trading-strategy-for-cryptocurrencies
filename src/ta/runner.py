@@ -278,6 +278,20 @@ class TradingRunner:
 
         raw_venue = build_venue(config, venue_name, dry_run=dry_run)
         raw_venue.connect()
+        # A spot venue whose tdMode probe failed would reject EVERY spot order it
+        # sends (sCode 51000) while looking perfectly healthy - measured
+        # 2026-10-10: three such rejections in one day, two of them entries. Say so
+        # at startup instead of letting it be discovered by reading the log later.
+        if (getattr(raw_venue, "market_type", "") == "spot"
+                and not getattr(raw_venue, "td_mode_resolved", True)):
+            logger.warning(
+                "spot tdMode was NOT resolved - every spot order will be rejected "
+                "until the account level can be read",
+                extra={"extra_fields": {
+                    "spot_td_mode": getattr(raw_venue, "spot_td_mode", ""),
+                    "error": getattr(raw_venue, "last_td_mode_error", ""),
+                }},
+            )
         venue: Venue = raw_venue
         if not raw_venue.simulated:
             venue = ResilientVenue(raw_venue, logger=logger)

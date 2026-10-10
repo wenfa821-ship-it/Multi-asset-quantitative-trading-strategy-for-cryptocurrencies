@@ -115,7 +115,34 @@ class CcxtVenue(Venue):
         # the real level off the venue; "cash" remains the fallback so a Simple-mode
         # account keeps behaving exactly as before.
         self.spot_td_mode = "cash"
+        # Whether the level was actually READ (as opposed to falling back to the
+        # default above). A failed probe used to be invisible; three rejections on
+        # 2026-10-10 came from exactly that, so the state is now explicit.
+        self.td_mode_resolved = False
+        self.account_level = 0
+        self.last_td_mode_error = ""
         self.last_connect_error = ""
+
+    def resolve_spot_td_mode(self) -> str:
+        """Read `acctLv` and set the spot `tdMode` it requires.
+
+        Returns the mode in force. `td_mode_resolved` says whether the probe
+        SUCCEEDED: without that bit, "the account is Simple mode" and "the probe
+        failed" both look like `cash`, and the second one rejects every spot order
+        the process will ever send (see `_create_order`).
+        """
+        try:
+            config = self.ex.privateGetAccountConfig()
+            level = int(((config.get("data") or [{}])[0]).get("acctLv") or 0)
+        except Exception as exc:  # noqa: BLE001 - never block startup on a probe
+            self.td_mode_resolved = False
+            self.last_td_mode_error = f"{type(exc).__name__}: {exc}"
+            return str(getattr(self, "spot_td_mode", "") or "")
+        self.account_level = level
+        self.spot_td_mode = "cross" if level >= 2 else "cash"
+        self.td_mode_resolved = True
+        self.last_td_mode_error = ""
+        return self.spot_td_mode
 
     # ---- lifecycle ---------------------------------------------------------
     def connect(self) -> None:
@@ -133,14 +160,7 @@ class CcxtVenue(Venue):
         except Exception as exc:  # noqa: BLE001 - start degraded, do not exit
             self.last_connect_error = f"{type(exc).__name__}: {exc}"
         if self.market_type == "spot":
-            try:
-                cfg = self.ex.privateGetAccountConfig()
-                row = (cfg.get("data") or [{}])[0]
-                level = int(row.get("acctLv") or 0)
-            except Exception:  # noqa: BLE001 - never block startup on a probe
-                level = 0
-            if level >= 2:
-                self.spot_td_mode = "cross"
+            self.resolve_spot_td_mode()
 
     @property
     def _markets_loaded(self) -> bool:
@@ -460,6 +480,50 @@ class CcxtVenue(Venue):
         return float(free) if free is not None else None
 
     # ---- trading -----------------------------------------------------------
+    def _create_order(self, request: OrderRequest, qty: float, params: dict) -> dict:
+        """Submit, and repair `tdMode` once if the venue rejects it.
+
+        Why this exists (2026-10-10). `spot_td_mode` is resolved in `connect()` from
+        the account's `acctLv`, but that probe is allowed to fail - it falls back to
+        the field's default, `"cash"`, silently. On an acctLv>=2 account OKX rejects
+        `cash` with `51000 Parameter tdMode error`, so a process that missed the
+        probe rejects EVERY spot order it sends, while a process that caught it
+        trades normally. The evidence is three rejections in one day that looked
+        unrelated: two OKB/USDT BUYS (04:43, 04:45, `tag=mean_reversion`) and one
+        BTC/USDT sell (11:16, `tag=mean_reversion:exit`) - same sCode as the
+        2026-10-07 incident whose root cause was exactly `cash` on this account.
+
+        So: on that specific rejection, re-read the account level and try once more.
+        One retry, spot only, and only for the tdMode error - anything else keeps
+        its original failure path.
+        """
+        try:
+            return self.ex.create_order(
+                self._venue_symbol(request.symbol),
+                request.type,
+                request.side,
+                qty,
+                request.price,
+                params,
+            )
+        except Exception as exc:  # noqa: BLE001 - re-raised unless it is repairable
+            text = str(exc)
+            if self.market_type != "spot" or "tdMode" not in text:
+                raise
+            before = str(getattr(self, "spot_td_mode", "") or "")
+            after = self.resolve_spot_td_mode()
+            if not after or after == before:
+                raise
+            params = {**params, "tdMode": after}
+            return self.ex.create_order(
+                self._venue_symbol(request.symbol),
+                request.type,
+                request.side,
+                qty,
+                request.price,
+                params,
+            )
+
     def place_order(self, request: OrderRequest) -> Order:
         params: dict[str, Any] = {"clientOrderId": request.client_order_id}
         # Make-or-kill. Measured 2026-10-09 (scripts/cancel_path_check.py): OKX does
@@ -631,14 +695,7 @@ class CcxtVenue(Venue):
                 self._orders[order.client_order_id] = order
                 return order
         try:
-            raw = self.ex.create_order(
-                self._venue_symbol(request.symbol),
-                request.type,
-                request.side,
-                qty,
-                request.price,
-                params,
-            )
+            raw = self._create_order(request, qty, params)
         except Exception as exc:
             order = Order(
                 client_order_id=request.client_order_id,
