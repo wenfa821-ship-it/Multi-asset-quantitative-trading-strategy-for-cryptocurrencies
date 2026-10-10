@@ -4299,5 +4299,71 @@ class DashboardDailyJobTests(unittest.TestCase):
             self.assertIsNone(self._data(root).daily_job())
 
 
+class OptionsGateTests(unittest.TestCase):
+    """The 1.1 gate is one inequality, so it should be evaluated, not eyeballed.
+
+    `data/options/cost_history.jsonl` stores `variance_premium_pp = IV - RV`; a buyer
+    is paid when the sign is the other way and the gap clears the ~1.3 vol points of
+    round-trip cost. Measured 2026-10-10: BTC cleared it on all three days it has
+    (5.54 / 12.41 / 7.65), ETH flipped sign twice - reading that off a series by hand
+    is how a 3-day run gets mistaken for a 5-day one.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "options_gate", PROJECT / "scripts" / "options_gate.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _rows(self, values: dict[str, list[float]], family: str = "BTC-USD") -> list[dict]:
+        rows = []
+        for index, value in enumerate(values.get(family, [])):
+            rows.append({
+                "date": f"2026-10-{8 + index:02d}",
+                "family": family,
+                "variance_premium_pp": value,   # IV - RV, as stored
+            })
+        return rows
+
+    def test_the_stored_sign_is_flipped_once(self) -> None:
+        module = self._module()
+        # IV 36.2 against RV 41.7 => the file stores -5.5, and the buyer sees +5.5.
+        self.assertAlmostEqual(module.rv_minus_iv({"variance_premium_pp": -5.54}), 5.54)
+        self.assertIsNone(module.rv_minus_iv({}))
+
+    def test_only_the_current_streak_counts(self) -> None:
+        module = self._module()
+        rows = self._rows({"BTC-USD": [-5.0, -12.0, 3.0]})
+        info = module.gate_runs(rows, ["BTC-USD"], days=5, min_edge_pp=1.5)["BTC-USD"]
+        self.assertEqual(info["run_days"], 0)
+        self.assertFalse(info["open"])
+
+    def test_a_short_streak_is_not_an_open_gate(self) -> None:
+        module = self._module()
+        rows = self._rows({"BTC-USD": [-5.0, -12.0, -7.65]})
+        info = module.gate_runs(rows, ["BTC-USD"], days=5, min_edge_pp=1.5)["BTC-USD"]
+        self.assertEqual(info["run_days"], 3)
+        self.assertFalse(info["open"])
+        self.assertTrue(module.gate_runs(rows, ["BTC-USD"], days=3, min_edge_pp=1.5)["BTC-USD"]["open"])
+
+    def test_the_threshold_is_applied_not_rounded_towards_opening(self) -> None:
+        module = self._module()
+        rows = self._rows({"BTC-USD": [1.49, 1.49, 1.49]})
+        info = module.gate_runs(rows, ["BTC-USD"], days=3, min_edge_pp=1.5)["BTC-USD"]
+        self.assertEqual(info["run_days"], 0)
+
+    def test_families_do_not_leak_into_each_other(self) -> None:
+        module = self._module()
+        rows = self._rows({"BTC-USD": [-5.0, -12.0]}) + self._rows({"ETH-USD": [6.5]}, "ETH-USD")
+        runs = module.gate_runs(rows, ["BTC-USD", "ETH-USD"], days=2, min_edge_pp=1.5)
+        self.assertTrue(runs["BTC-USD"]["open"])
+        self.assertFalse(runs["ETH-USD"]["open"])
+        self.assertEqual(runs["ETH-USD"]["run_days"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -160,6 +160,10 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # paying" into a daily series instead of a memory. Acting on it is a separate
     # user-approved step; this only records what the rule WOULD do.
     ("carry_rotation.py", ["--write"]),
+    # 1.1's gate (docs/options-sleeve-spec.md 4.1) evaluated daily instead of
+    # remembered: RV(30d) - IV >= 1.5pp for 5 consecutive days. One row per day, so
+    # the day the gate opens is a timestamp rather than someone's recollection.
+    ("options_gate.py", ["--write"]),
     # The release hygiene checks (docs/RELEASING.md): the version number lives in
     # three files and the release notes are generated, so both are verified here
     # rather than remembered. A drift shows up as a failed step instead of as a

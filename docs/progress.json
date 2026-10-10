@@ -234,6 +234,13 @@
    "next": "唯一开放项是方向过滤器（日线 EMA20），已注明是最弱一环，1.1.1 用『平值跨式 + 永续对冲 delta』替代；执行仍卡在 `options-fund-premium-coin`（换 ~$100 USDT→BTC）"
   },
   {
+   "id": "options-gate-evaluator",
+   "item": "1.1 前置 · 闸门每天自动判决（把 §4.1 的不等式变成可执行脚本）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T16:47：`scripts/options_gate.py` 每天按 family 算『当前连续达标天数』（今天坏就归零），追加 `data/options/gate.jsonl`，已接进每日任务。首判：**BTC 连 3/5 天**（5.54 / 12.41 / 7.65），**ETH 连 0/5**（最新 −6.79，符号相反）→ 闸门关闭",
+   "next": "每天继续累积：BTC 若保持，最早 10-12/13 达到 5 天；ETH 要先让 RV−IV 连续为正。开闸那天 gate.jsonl 会留下时间戳，再按说明书 §4 开门（前置仍是换 ~$100 USDT→BTC）"
+  },
+  {
    "id": "carry-rotation-rule",
    "item": "1.2 · carry 换腿规则（名额 5/5 满，轮换是唯一进场方式）",
    "state": "done",
