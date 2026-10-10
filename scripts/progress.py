@@ -32,6 +32,10 @@ STATE_LABEL = {
     "waiting_data": "⏳ 等数据",
     "blocked": "⛔ 阻塞",
     "not_started": "⬜ 未开始",
+    # Out of the CURRENT milestone on purpose: the row is real work, but it is
+    # scheduled for a later version (2026-10-10 the user moved the options
+    # strategy to 1.1 so 1.0 could be sealed and start running).
+    "next_phase": "🔜 下一版本",
 }
 
 

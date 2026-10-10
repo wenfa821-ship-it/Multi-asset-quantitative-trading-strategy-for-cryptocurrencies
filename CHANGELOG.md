@@ -1,10 +1,10 @@
 # Changelog
 
-当前版本：**v0.4.7**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.0**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
-版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段（五步路径）完成**；1.0 之后按语义化版本 —— MAJOR 表示架构/配置模式不兼容，MINOR 表示新增能力（新腿、新策略），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T11:50 起，7 条留痕）
+## Unreleased（自 2026-10-10T11:58 起，8 条留痕）
 
 - `2026-10-10T12:00` **decision** carry 名额决策简报（给用户拍板用）：预算其实只用了 22.9%，真正的约束是『三处配置互相矛盾』
 - `2026-10-10T12:15` **ops** 把『场馆此刻到底供不供数据』变成每日自动记录：新增 venue_availability（09:10 在美股时段外、21:10 在时段内）
@@ -13,6 +13,14 @@
 - `2026-10-10T13:20` **research** 更正我自己上一条的论断：『min_hold_hours 必须 ≥ 回本周期』**是错的** —— 它对轮换成立，对『论点破产的退出』不成立
 - `2026-10-10T13:50` **bug** 按用户决定扩名额（v0.4.6）：改到第 5 处时才发现真凶 —— 引擎把 tier 的持仓上限拿**整个账户的持仓数**去比，顺带锁死了 TradFi 腿与所有方向性入场
 - `2026-10-10T14:20` **ops** 建立专业化的版本与代码管理（v0.4.7）：VERSION 单一来源 + 生成式 CHANGELOG.md + RELEASING 规则 + git 仓库；并明确『1.0.0 = 第一阶段完成』
+- `2026-10-10T15:00` **decision** 第一阶段封板 1.0：期权策略移入 1.1（用户决定），四条腿 + 风控/对账/数据/发布管理全部就位
+
+## v1.0.0 — 2026-10-10T11:58
+
+- 测试 **290** 绿 · 权益 $101,603.55 · 记录时的包版本 1.0.0
+
+第一阶段封板。范围：四腿系统（现货/永续/carry/TradFi）接入实盘配置并运行 + 四道选标闸门（funding/深度/基差/成本）落在下单路径 + 对账（永续逐腿 + cashBal 口径）+ funding 入账 + 数据管道（每日任务含历史刷新、期权数据层、可交易性记录、版本/进度校验）+ 发布管理（VERSION/CHANGELOG/RELEASING/归档/git）。运行态：五对 carry 全部对冲（CRV/ACT/LTC/SUI/NEAR）、权益约 $101.6k、290 tests 全绿。期权策略与期权腿按用户决定移入 1.1（门槛：IV−RV 满 5–7 天新鲜样本且符号稳定）。
+its config/ and manifest.json rather than against memory.
 
 ## v0.4.7 — 2026-10-10T11:50
 
