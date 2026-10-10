@@ -453,7 +453,14 @@ class CcxtVenue(Venue):
         # order - which means NO position could ever be closed. On spot a sell is
         # inherently reducing, so the flag is simply omitted.
         market = (self.ex.markets or {}).get(request.symbol) or {}
-        supports_reduce_only = bool(market.get("contract")) or self.market_type != "spot"
+        # Options are one-way: a sell closes the long, so `reduceOnly` and
+        # `posSide` are not accepted on them (the same class of rejection as
+        # reduceOnly-on-spot, sCode 51205). Measured 2026-10-10 while wiring the
+        # 1.1 adapter: options would otherwise inherit the swap branch below.
+        is_option = self.market_type == "option"
+        supports_reduce_only = (
+            bool(market.get("contract")) or self.market_type != "spot"
+        ) and not is_option
         if request.reduce_only and supports_reduce_only:
             params["reduceOnly"] = True
 
@@ -483,26 +490,30 @@ class CcxtVenue(Venue):
             from .swap_orders import SwapOrderError, pos_side_for
 
             params["tdMode"] = str(getattr(self, "swap_td_mode", "cross"))
-            try:
-                params["posSide"] = pos_side_for(
-                    request.side,
-                    reduce_only=bool(request.reduce_only),
-                    current=str(getattr(self, "default_pos_side", "long")),
-                )
-            except SwapOrderError as exc:
-                order = Order(
-                    client_order_id=request.client_order_id,
-                    symbol=request.symbol,
-                    side=request.side,
-                    qty=request.qty,
-                    type=request.type,
-                    price=request.price,
-                    status="rejected",
-                    reason=f"swap order rejected: {exc}",
-                    ts=now_ms(),
-                )
-                self._orders[order.client_order_id] = order
-                return order
+            # tdMode=cross applies to coin-margined options too, but the POSITION
+            # SIDE does not: an option position is long the contract, full stop, and
+            # OKX refuses `posSide` on one-way option books.
+            if not is_option:
+                try:
+                    params["posSide"] = pos_side_for(
+                        request.side,
+                        reduce_only=bool(request.reduce_only),
+                        current=str(getattr(self, "default_pos_side", "long")),
+                    )
+                except SwapOrderError as exc:
+                    order = Order(
+                        client_order_id=request.client_order_id,
+                        symbol=request.symbol,
+                        side=request.side,
+                        qty=request.qty,
+                        type=request.type,
+                        price=request.price,
+                        status="rejected",
+                        reason=f"swap order rejected: {exc}",
+                        ts=now_ms(),
+                    )
+                    self._orders[order.client_order_id] = order
+                    return order
 
         qty = float(request.qty)
         # Swap: OKX takes an integer number of CONTRACTS, not base units. The

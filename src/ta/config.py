@@ -739,11 +739,19 @@ class Config:
             # swap positions (fetch_positions) and contract sizing. The spot path
             # is untouched: every swap branch is guarded by market_type/`contract`
             # checks and 158 tests (including the spot ones) stay green.
-            # Anything that is neither spot nor swap is still rejected - the guard
-            # narrows, it does not disappear.
-            if venue.market_type not in ("spot", "swap"):
+            # 2026-10-10 (1.1): "option" is accepted too. OKX options are
+            # coin-margined contracts: CcxtVenue already takes the contract qty
+            # branch, and the swap order params were narrowed so an option order
+            # carries tdMode but neither posSide nor reduceOnly (both are refused on
+            # a one-way option book). The measured facts behind the decision live in
+            # scripts/options_probe.py; nothing trades this venue yet, the strategy
+            # still waits on the IV/RV gate.
+            # Anything else is still rejected - the guard narrows, it does not
+            # disappear.
+            if venue.market_type not in ("spot", "swap", "option"):
                 problems.append(
-                    f"venue {name} market_type={venue.market_type}; only 'spot' and 'swap' are supported"
+                    f"venue {name} market_type={venue.market_type}; "
+                    f"only 'spot', 'swap' and 'option' are supported"
                 )
             if name != "paper":
                 missing = [

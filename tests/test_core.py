@@ -3056,6 +3056,45 @@ class DepthGateTests(unittest.TestCase):
         self.assertGreater(config.risk.per_trade.max_entry_impact_bps, 0.0)
 
 
+class OptionContractUnitsTests(unittest.TestCase):
+    """The 1.1 adapter's unit facts, measured 2026-10-10 with options_probe.py.
+
+    A BTC-USD option returns ctVal=1 AND ctMult=0.01: one contract is 0.01 BTC of
+    underlying, the premium is quoted in BTC, and minSz is 1 contract. The swap
+    path read ctVal only - invisible for swaps (ctMult=1) and 100x wrong for
+    options, either oversizing every order or flooring a correct 0.01 BTC target to
+    zero contracts and refusing to trade at all.
+    """
+
+    OPTION = {
+        "instId": "BTC-USD-261127-82000-C", "ctVal": "1", "ctValCcy": "BTC",
+        "ctMult": "0.01", "lotSz": "1", "minSz": "1", "tickSz": "0.0001",
+        "state": "live",
+    }
+
+    def test_one_option_contract_is_ctval_times_ctmult(self) -> None:
+        from ta.venues.swap_math import ContractSpec, base_to_contracts, contracts_to_base
+
+        spec = ContractSpec.from_okx(self.OPTION)
+        self.assertAlmostEqual(spec.base_per_contract, 0.01, places=12)
+        # 0.01 BTC of underlying is exactly one contract - not 0.01 of a contract.
+        self.assertEqual(base_to_contracts(spec, 0.01), 1.0)
+        self.assertAlmostEqual(contracts_to_base(spec, 1.0), 0.01, places=12)
+        # ...and a target below one contract still fails loudly.
+        with self.assertRaises(Exception):
+            base_to_contracts(spec, 0.005)
+
+    def test_swaps_are_unaffected(self) -> None:
+        from ta.venues.swap_math import ContractSpec, base_to_contracts
+
+        swap = ContractSpec.from_okx({
+            "instId": "ACT-USDT-SWAP", "ctVal": "10", "ctValCcy": "ACT",
+            "ctMult": "1", "lotSz": "1", "minSz": "1", "state": "live",
+        })
+        self.assertEqual(swap.base_per_contract, 10.0)
+        self.assertEqual(base_to_contracts(swap, 1000.0), 100.0)
+
+
 class ReconcileSwapUnitsTests(unittest.TestCase):
     """The reconciler must speak the SAME unit the ledger does: contracts (张).
 

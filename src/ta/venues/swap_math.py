@@ -44,6 +44,17 @@ class ContractSpec:
     min_sz: float           # smallest order, in contracts
     tick_sz: float = 0.0
     state: str = "live"
+    # OKX options carry the contract multiplier separately: a BTC-USD option has
+    # ctVal=1 AND ctMult=0.01, so one contract is 0.01 BTC of underlying. Swaps are
+    # ctMult=1, which is why ignoring this field went unnoticed until the 1.1
+    # options adapter - where ignoring it would size every order 100x too large (or
+    # floor a correct 0.01 BTC target to zero contracts and refuse to trade).
+    ct_mult: float = 1.0
+
+    @property
+    def base_per_contract(self) -> float:
+        """Underlying (base-currency) size of ONE contract."""
+        return self.ct_val * self.ct_mult
 
     @classmethod
     def from_okx(cls, row: dict[str, Any]) -> "ContractSpec":
@@ -65,12 +76,13 @@ class ContractSpec:
             min_sz=num("minSz", 1.0) or 1.0,
             tick_sz=num("tickSz"),
             state=str(row.get("state") or "live"),
+            ct_mult=num("ctMult", 1.0) or 1.0,
         )
 
 
 def contracts_to_base(spec: ContractSpec, contracts: float) -> float:
     """Base-currency size represented by `contracts` perpetual contracts."""
-    return contracts * spec.ct_val
+    return contracts * spec.base_per_contract
 
 
 def base_to_contracts(spec: ContractSpec, base_qty: float) -> float:
@@ -85,14 +97,15 @@ def base_to_contracts(spec: ContractSpec, base_qty: float) -> float:
     if spec.ct_val <= 0:
         raise SwapMathError(f"{spec.inst_id}: invalid ctVal {spec.ct_val}")
 
-    raw = base_qty / spec.ct_val
+    raw = base_qty / spec.base_per_contract
     lots = math.floor(raw / spec.lot_sz + 1e-9) * spec.lot_sz
     lots = _round_to(lots, spec.lot_sz)
 
     if lots < spec.min_sz - 1e-12:
         raise SwapMathError(
             f"{spec.inst_id}: {base_qty} {spec.ct_val_ccy} -> {lots} contracts "
-            f"is below minSz {spec.min_sz} (1 contract = {spec.ct_val} {spec.ct_val_ccy})"
+            f"is below minSz {spec.min_sz} "
+            f"(1 contract = {spec.base_per_contract} {spec.ct_val_ccy})"
         )
     return lots
 

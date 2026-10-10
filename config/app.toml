@@ -170,6 +170,24 @@ fee_bps         = 5.0
 maker_fee_bps   = 2.0
 slippage_bps    = 5.0
 
+# Options (1.1). Coin-margined: the premium, the minimum size and the settlement
+# are all in the UNDERLYING's coin, which is why this sleeve cannot start until
+# the account actually holds some of that coin - measured 2026-10-10 the account
+# holds no BTC and no ETH at all (only the carry legs' coins + USDT). The contract
+# facts come from scripts/options_probe.py: ctVal=1, ctMult=0.01, minSz=1,
+# tickSz=0.0001, settleCcy=BTC, and the smallest possible order costs ~0.0006 BTC
+# (~$50). Nothing trades this venue yet - the strategy waits on the IV/RV gate.
+[venues.okx_demo_option]
+exchange_id     = "okx"
+market_type     = "option"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"
+fee_bps         = 5.0
+maker_fee_bps   = 2.0
+slippage_bps    = 5.0
+
 [venues.binance_testnet]
 exchange_id     = "binance"
 market_type     = "spot"

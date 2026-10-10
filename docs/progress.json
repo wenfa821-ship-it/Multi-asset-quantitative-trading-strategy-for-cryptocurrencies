@@ -215,9 +215,9 @@
   {
    "id": "options-venue-adapter",
    "item": "1.1 · 期权腿 venue 适配（下单路径）",
-   "state": "next_phase",
-   "gate": "**探测已完成（2026-10-10）**：`scripts/options_probe.py` 量清合约事实 —— 币本位 `BTC-USD-YYMMDD-STRIKE-C/P`，ctVal=1、**ctMult=0.01**、minSz=1、tick 0.0001、settleCcy 为标的币；ATM 附近盘口 5x5 双边正常；**最小一单权利金 = 价钱 × ctVal × ctMult × minSz ≈ $38–50（BTC）/ $2–18（ETH）**。另有美元结算的 `BTC-USD_UM-…` 平行家族，报价与币本位对不上，暂不采用",
-   "next": "据此写适配器：期权 id 映射（`BTC-USD-261127-82000-C`）+ 币本位保证金/结算处理（账户需持足额 BTC/ETH）+ 最小单下单路径 + 带重试（探测中遇到一次瞬时 URLError）。**仍不接策略** —— 策略要等 IV−RV 样本闸门"
+   "state": "in_progress",
+   "gate": "**已做（2026-10-10）**：`[venues.okx_demo_option]`（market_type=option）+ `validate()` 白名单放开；`place_order` 对期权不下发 posSide/reduceOnly（单向持仓）但仍带 tdMode=cross；`ContractSpec` 补 `ctMult`（BTC 期权 1 张 = ctVal 1 × ctMult 0.01 = **0.01 BTC**，此前差 100 倍）；+2 测试（294 全绿）",
+   "next": "剩两块，都已量清：① **symbol 映射** —— 内部沿用 okx `instId`（`BTC-USD-261127-82000-C`），ccxt 要 `BTC/USD:BTC-261010-72000-C`（直接用 instId 会 BadSymbol 51001），在 venue 层加翻译（按 markets[].id 反查）；② **交权利金的币** —— 账户没有 BTC/ETH（只有 USDT 与 carry 腿的币），最小单约 0.0006 BTC ≈ $50 拿不出币付，要么先换 ~$100 USDT→BTC（现货、可逆），要么评估美元结算的 `_UM` 家族"
   },
   {
    "id": "options-minimal-structure",
