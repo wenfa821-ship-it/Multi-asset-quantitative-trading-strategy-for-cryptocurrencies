@@ -1734,6 +1734,71 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class OptionsRoundTripSelectionTests(unittest.TestCase):
+    """The contract choice is a rule, so it is testable without a venue.
+
+    1.1's spec picks by (expiry nearest the target, then strike nearest the money)
+    because the measured spread falls with both. The chain changes daily; the rule
+    must not.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "options_round_trip", PROJECT / "scripts" / "options_round_trip.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @staticmethod
+    def _market(inst_id: str, strike: float, family: str = "BTC-USD") -> dict:
+        return {
+            "symbol": inst_id.replace("BTC-USD-", "BTC/USD:BTC-"),
+            "info": {"instId": inst_id, "uly": family, "stk": str(strike)},
+        }
+
+    def test_it_prefers_the_target_expiry_then_the_money(self) -> None:
+        import datetime
+
+        module = self._module()
+        today = datetime.date(2026, 10, 10)
+        markets = [
+            self._market("BTC-USD-261023-80000-C", 80_000),   # 13d, out of window
+            self._market("BTC-USD-261110-80000-C", 80_000),   # 31d, ATM
+            self._market("BTC-USD-261110-90000-C", 90_000),   # 31d, away
+            self._market("BTC-USD-261230-80000-C", 80_000),   # 81d, out of window
+        ]
+        picked = module.pick_contract(markets, "BTC-USD", today, 30, 25, 45, "C", 80_000)
+        self.assertEqual(picked["inst_id"], "BTC-USD-261110-80000-C")
+        self.assertEqual(picked["dte"], 31)
+        self.assertAlmostEqual(picked["offset_pct"], 0.0)
+
+    def test_puts_are_not_mistaken_for_calls(self) -> None:
+        import datetime
+
+        module = self._module()
+        today = datetime.date(2026, 10, 10)
+        markets = [
+            self._market("BTC-USD-261110-80000-C", 80_000),
+            self._market("BTC-USD-261110-80000-P", 80_000),
+        ]
+        self.assertTrue(module.pick_contract(markets, "BTC-USD", today, 30, 25, 45,
+                                             "P", 80_000)["inst_id"].endswith("-P"))
+        self.assertTrue(module.pick_contract(markets, "BTC-USD", today, 30, 25, 45,
+                                             "C", 80_000)["inst_id"].endswith("-C"))
+
+    def test_an_empty_window_returns_nothing_rather_than_a_bad_contract(self) -> None:
+        import datetime
+
+        module = self._module()
+        today = datetime.date(2026, 10, 10)
+        markets = [self._market("SOL-USD_UM-261011-100-C", 100, family="SOL-USD")]
+        self.assertIsNone(module.pick_contract(markets, "BTC-USD", today, 30, 25, 45, "C", 80_000))
+        self.assertIsNone(module.pick_contract([], "BTC-USD", today, 30, 25, 45, "C", 80_000))
+
+
 class DashboardBatchJobsTests(unittest.TestCase):
     """Batch jobs are invisible to a port/pid check, so they need their own.
 
