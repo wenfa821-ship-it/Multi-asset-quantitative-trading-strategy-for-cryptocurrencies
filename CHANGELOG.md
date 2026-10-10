@@ -4,7 +4,7 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T16:17 起，12 条留痕）
+## Unreleased（自 2026-10-10T16:17 起，13 条留痕）
 
 - `2026-10-10T16:20` **strategy** 1.2 换腿规则的检测侧落地（只读）：新增 scripts/carry_rotation.py，首次实测 5 对里没有一对『连续 3 天全部低于 1 bp/天』；但 CRV 的中位数已经转负（−0.24）
 - `2026-10-10T16:40` **bug** 期权适配器（1.1）做到单位与下单参数层：修掉 ctMult 缺失（差 100 倍）、posSide/reduceOnly 误加、以及 validate 的 market_type 白名单；剩 symbol 映射与『交权利金的币』两块
@@ -18,6 +18,7 @@
 - `2026-10-10T19:10` **ops** 新增第 5 个 launchd 任务 com.tradingagent.tradfi-session（23:10 / 01:10 CST）：只在美股时段内采集一次，给 tradfi-tier-narrow 提供盘中样本
 - `2026-10-10T19:30` **decision** 换币完成：0.00120705 BTC（$100 @ 82,843.90，费 $0.099997 ≈ 10bps）—— 但『把它记进账本』差点让策略当场卖掉这份库存
 - `2026-10-10T19:35` **bug** 第一个被真实触发的『策略现货平仓』路径是坏的：卖出带 reduce_only，OKX 以 51000 Parameter tdMode error 拒单
+- `2026-10-10T20:05` **bug** 复查『现货下单被 51000 拒』：不是 reduce_only 的锅 —— 探针证明卖出路径本身是好的，真正的嫌疑是 runner 偶尔拿着 tdMode=cash 在 acctLv=3 的账户上下单
 
 ## v1.0.3 — 2026-10-10T16:17
 

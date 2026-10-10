@@ -333,10 +333,10 @@
   },
   {
    "id": "spot-exit-reduce-only",
-   "item": "1.0.x · 策略现货平仓路径坏：卖出带 reduce_only → OKX 51000 拒单（从未被真实触发过）",
+   "item": "1.0.x · 现货下单偶发 51000：runner 偶尔拿着 tdMode=cash 在 acctLv=3 账户上下单（原判断『reduce_only 导致』已推翻）",
    "state": "not_started",
-   "gate": "changelog 2026-10-10T19:35：`runner._handle_signal` 的退出分支对现货持仓发 `reduce_only=True` 的市价卖单，OKX 回 `51000 Parameter tdMode error`（11:16:08 实测，被 $100 BTC 库存意外撞出来）。四个方向性策略至今零成交，所以这条路径此前从未在演示盘执行过；carry 腿走 `paired.py`，不受影响",
-   "next": "需要单独一轮：先定『现货上如何表达只减不增』（去掉 reduce_only + 正确 tdMode/tgtCcy，或按可用余额下单），再用 `order_path_check.py` 式的往返探针验证并补回归测试。修之前：方向性策略**一建仓就平不掉**（止损会每 tick 刷 rejected）"
+   "gate": "changelog 2026-10-10T20:05（修正 19:35 的判断）：现货**卖出路径本身是好的** —— 同形状请求（sell + reduce_only）在探针里 12:00:19 成交。真实缺陷在运行期状态：`spot_td_mode` 由 `connect()` 从 acctLv 解析，**解析不到时兜底为 `cash`**，而 cash 在 acctLv=3 账户上被 OKX 拒（51000）—— 同一 sCode 今天出现三次：04:43:18 / 04:45:54（OKB/USDT **buy**）与 11:16:08（BTC/USDT sell）",
+   "next": "修法（下一轮做，带真实验证）：① 启动时把『解析不到 acctLv』从静默兜底改成显式失败/重试并写进日志；② 收到 51000『Parameter tdMode error』时重新解析 acctLv 并用正确值重试一次；③ 探针覆盖『进程内先失败后恢复』。修之前：**偶发的整进程现货下单失败**（建仓与平仓都中），表现为零散的 rejected"
   }
 ]
 }
