@@ -56,7 +56,7 @@
    "item": "TradFi 腿（30% 额度）",
    "state": "done",
    "gate": "**1.0 范围内完成**：腿已接入实盘配置（13 标的 + 短 warmup 日线策略 + 全库最紧档位）、订单路径已实测（往返 21 bps）、可交易性每日两次自动记录（`venue_availability.py`）。**它至今 0 成交不是未完成，而是外部事实**：13 个标的里当前只有 XMU 同时有 K 线（95 根）与双边盘口，其余 12 个场馆此刻不供数据（磁盘上却有 84+ 根历史）",
-   "next": "成交与执行质量由 `tradfi-fills` / `venue-availability-track` 两行持续跟踪：今晚 21:10 的美股时段记录会判定那 12 个标的是\"时段受限\"还是\"彻底不供数据\"；若确认不供数据，1.0.1 里把 tier 收窄到真正能交易的标的"
+   "next": "成交与执行质量由 `tradfi-fills` 一行持续跟踪。**池子的问题已结案（v1.0.6）**：盘中样本证明那 12 个标的在两个时段都不供数据，tier 已收窄到 XMU/USDT；换言之这条腿现在只剩『XMU 何时出第一笔』一个未知数"
   },
   {
    "id": "tradfi-fills",
@@ -189,7 +189,7 @@
    "item": "『场馆此刻供不供数据』的每日自动记录（选标的不能只看磁盘）",
    "state": "done",
    "gate": "changelog 2026-10-10T12:15：新增 scripts/venue_availability.py（tradable/one-sided/quote-only/absent/bars-only 五态）并接进每日任务（09:10 时段外 / 21:10 时段内）；基线 tradable=1（XMU）、quote-only=11、absent=1（XAMD）；+2 测试（288）",
-   "next": "看今晚 21:10 那一行：若 12 个标的在美股时段内仍无 K 线/卖盘 → 把 tradfi tier 收窄到真正供数据的标的；若恢复 → 按『时段受限』设计（跳过非交易时段的信号）"
+   "next": "**已给出答案（v1.0.6）**：盘中那一行（13:46Z）与盘外完全一致 → 12 个标的是『不供数据』，tier 已收窄。这条记录继续每天跑，其价值变成『场馆哪天重新供数据，第一天就知道』"
   },
   {
    "id": "release-tooling",
@@ -344,6 +344,13 @@
    "state": "done",
    "gate": "changelog 2026-10-10T21:45：21:30 那次 86 分钟停摆里**一次失败都没有** —— 每个符号都在第二次尝试（~40s 超时）成功，所以 `consecutive_failure_limit` 永远不触发，pass 走完 63 个符号用掉 86 分钟。新增 `LiveFeed.pass_budget_seconds`（默认 120s，0=不限）：refresh 进入每个符号前检查墙钟，超预算即 `VenueDegraded`（复用既有降级路径，暂停新入场）",
    "next": "已上线（runner 24658 重启后单 tick ~1 分钟）。仍待观察：预算触发时会否与 carry 被动入场的 6 秒等待叠加成『假降级』；若频繁触发，下一步是把预算做成配置项并按实测调（当前 120s 是从 63 符号 × 单符号最坏 40s 推出来的）"
+  },
+  {
+   "id": "dashboard-batch-job-coverage",
+   "item": "1.0.x · 看板只登记 3 个常驻服务，另两个批量任务（newlisting / tradfi-session）不在看板上",
+   "state": "not_started",
+   "gate": "2026-10-10 巡检时发现：`KNOWN_SERVICES` 里只有 runner/watcher/dashboard，而今天的第 4、第 5 个 launchd 任务（`com.tradingagent.newlisting` 每日 09:10/21:10、`com.tradingagent.tradfi-session` 每日 23:10/01:10）**只在 launchctl 里可见**。批量任务不能按『端口活否』判活（它们大部分时间就是不该在跑），所以直接塞进现有 jobs 列表会让 all_alive 永久为假——这也正是当初没加它们的原因",
+   "next": "要给批量任务一个**属于它们自己的判据**：`services.batch_jobs` 独立列表，用『上次运行时间 + 最近一次退出码/摘要』表示健康（newlisting 的摘要已经在 data/daily_job_status.json 里；tradfi-session 可以从日志尾巴取），而不是复用常驻服务的 port/pid 规则。等哪天有第二个批量任务要加时一并做，避免为两个任务写一次性代码"
   }
 ]
 }
