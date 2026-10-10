@@ -160,7 +160,7 @@ class CcxtVenue(Venue):
 
     # ---- market data -------------------------------------------------------
     def fetch_bars(self, symbol: str, timeframe: str, limit: int) -> list[Bar]:
-        rows = self.ex.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        rows = self.ex.fetch_ohlcv(self._venue_symbol(symbol), timeframe=timeframe, limit=limit)
         return [
             Bar(ts=int(row[0]), open=float(row[1]), high=float(row[2]),
                 low=float(row[3]), close=float(row[4]), volume=float(row[5]))
@@ -170,14 +170,14 @@ class CcxtVenue(Venue):
     def refresh_marks(self, symbols: list[str]) -> dict[str, float]:
         marks: dict[str, float] = {}
         try:
-            tickers = self.ex.fetch_tickers(symbols)
+            tickers = self.ex.fetch_tickers([self._venue_symbol(s) for s in symbols])
             for symbol, ticker in tickers.items():
                 price = ticker.get("last") or ticker.get("close")
                 if price:
                     marks[symbol] = float(price)
         except Exception:
             for symbol in symbols:
-                ticker = self.ex.fetch_ticker(symbol)
+                ticker = self.ex.fetch_ticker(self._venue_symbol(symbol))
                 price = ticker.get("last") or ticker.get("close")
                 if price:
                     marks[symbol] = float(price)
@@ -198,8 +198,29 @@ class CcxtVenue(Venue):
             size = 0.0
         return size if size > 0 else 1.0
 
+    def _venue_symbol(self, symbol: str) -> str:
+        """Our symbol -> the CCXT client's symbol, for THIS market type.
+
+        Identity everywhere except options. We keep OKX's instId
+        (`BTC-USD-261127-82000-C`) because `leg_of` classifies options by that shape
+        and every public-API probe speaks instIds, while ccxt names the same contract
+        `BTC/USD:BTC-261127-82000-C`. The mapping is resolved through the catalogue
+        (`id` -> `symbol`) rather than by string surgery, so a new expiry or a
+        different underlying needs no code change. Measured 2026-10-10: handing the
+        instId straight to ccxt answers `BadSymbol 51001`.
+        """
+        if self.market_type != "option":
+            return symbol
+        markets = getattr(self.ex, "markets", None) or {}
+        if symbol in markets:
+            return symbol
+        for market in markets.values():
+            if str(market.get("id") or "") == symbol:
+                return str(market.get("symbol") or symbol)
+        return symbol
+
     def min_notional(self, symbol: str) -> float:
-        market = self.ex.markets.get(symbol) if self._markets_loaded else None
+        market = self.ex.markets.get(self._venue_symbol(symbol)) if self._markets_loaded else None
         if not market:
             return 10.0
         limits = (market.get("limits") or {}).get("cost") or {}
@@ -207,7 +228,7 @@ class CcxtVenue(Venue):
         return float(minimum) if minimum else 10.0
 
     def min_qty(self, symbol: str) -> float:
-        market = self.ex.markets.get(symbol) if self._markets_loaded else None
+        market = self.ex.markets.get(self._venue_symbol(symbol)) if self._markets_loaded else None
         if not market:
             return 0.0
         limits = (market.get("limits") or {}).get("amount") or {}
@@ -224,7 +245,7 @@ class CcxtVenue(Venue):
 
     def spread_bps(self, symbol: str) -> float | None:
         try:
-            book = self.ex.fetch_order_book(symbol, 5)
+            book = self.ex.fetch_order_book(self._venue_symbol(symbol), 5)
         except Exception:
             return None
         bids = book.get("bids") or []
@@ -331,7 +352,9 @@ class CcxtVenue(Venue):
             contracts = float(row.get("contracts") or 0.0)
             if not symbol or abs(contracts) < 1e-12:
                 continue
-            size = float((self.ex.markets.get(symbol) or {}).get("contractSize") or 1.0)
+            size = float(
+                (self.ex.markets.get(self._venue_symbol(symbol)) or {}).get("contractSize") or 1.0
+            )
             # CONTRACTS, not base units: the book stores whatever the fills
             # reported, and every perp fill quotes contracts (`perp_filled` in
             # paired.py multiplies by ctVal only where base units are needed).
@@ -377,7 +400,7 @@ class CcxtVenue(Venue):
         as "no maker price here", not as zero.
         """
         try:
-            book = self.ex.fetch_order_book(symbol, limit=5)
+            book = self.ex.fetch_order_book(self._venue_symbol(symbol), limit=5)
         except Exception:  # noqa: BLE001 - unreadable is not a price
             return None, None
         bids = book.get("bids") or []
@@ -397,7 +420,7 @@ class CcxtVenue(Venue):
         from ..execution.sizing import book_impact_bps
 
         try:
-            book = self.ex.fetch_order_book(symbol, limit=50)
+            book = self.ex.fetch_order_book(self._venue_symbol(symbol), limit=50)
         except Exception:  # noqa: BLE001 - a venue hiccup must not block a check
             return None
         bids = book.get("bids") or []
@@ -417,7 +440,7 @@ class CcxtVenue(Venue):
 
     def _mark_for(self, symbol: str) -> float:
         try:
-            ticker = self.ex.fetch_ticker(symbol)
+            ticker = self.ex.fetch_ticker(self._venue_symbol(symbol))
             return float(ticker.get("last") or 0.0)
         except Exception:  # pragma: no cover - network dependent
             return 0.0
@@ -609,7 +632,7 @@ class CcxtVenue(Venue):
                 return order
         try:
             raw = self.ex.create_order(
-                request.symbol,
+                self._venue_symbol(request.symbol),
                 request.type,
                 request.side,
                 qty,
@@ -774,9 +797,9 @@ class CcxtVenue(Venue):
         order = self._orders.get(client_order_id)
         try:
             if order and order.venue_order_id:
-                self.ex.cancel_order(order.venue_order_id, symbol)
+                self.ex.cancel_order(order.venue_order_id, self._venue_symbol(symbol))
             else:
-                self.ex.cancel_order(client_order_id, symbol)
+                self.ex.cancel_order(client_order_id, self._venue_symbol(symbol))
             return True
         except Exception:
             return False
@@ -841,7 +864,7 @@ class CcxtVenue(Venue):
         orders: list[Order] = []
         for symbol in symbols or [None]:  # type: ignore[list-item]
             try:
-                raw_list = self.ex.fetch_open_orders(symbol) if symbol else self.ex.fetch_open_orders()
+                raw_list = self.ex.fetch_open_orders(self._venue_symbol(symbol)) if symbol else self.ex.fetch_open_orders()
             except Exception:
                 continue
             for raw in raw_list:

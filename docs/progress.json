@@ -215,9 +215,9 @@
   {
    "id": "options-venue-adapter",
    "item": "1.1 · 期权腿 venue 适配（下单路径）",
-   "state": "in_progress",
-   "gate": "**已做（2026-10-10）**：`[venues.okx_demo_option]`（market_type=option）+ `validate()` 白名单放开；`place_order` 对期权不下发 posSide/reduceOnly（单向持仓）但仍带 tdMode=cross；`ContractSpec` 补 `ctMult`（BTC 期权 1 张 = ctVal 1 × ctMult 0.01 = **0.01 BTC**，此前差 100 倍）；+2 测试（294 全绿）",
-   "next": "剩两块，都已量清：① **symbol 映射** —— 内部沿用 okx `instId`（`BTC-USD-261127-82000-C`），ccxt 要 `BTC/USD:BTC-261010-72000-C`（直接用 instId 会 BadSymbol 51001），在 venue 层加翻译（按 markets[].id 反查）；② **交权利金的币** —— 账户没有 BTC/ETH（只有 USDT 与 carry 腿的币），最小单约 0.0006 BTC ≈ $50 拿不出币付，要么先换 ~$100 USDT→BTC（现货、可逆），要么评估美元结算的 `_UM` 家族"
+   "state": "done",
+   "gate": "**已完成（2026-10-10）**：① `[venues.okx_demo_option]` + `validate()` 放开 option；② 期权不下发 posSide/reduceOnly（单向持仓）但仍带 tdMode=cross；③ `ContractSpec` 补 `ctMult`（1 张 = ctVal×ctMult = 0.01 BTC，此前差 100 倍）；④ `_venue_symbol()` 做 instId ↔ ccxt 统一符号映射（按目录反查）并覆盖所有 ccxt 调用点；+3 测试（295 全绿）",
+   "next": "下单路径本身已就绪；**买第一张之前还有两项前置**（见下两条）：`options-book-survey`（模拟盘期权盘口极宽，抽样 59%）与 `options-fund-premium-coin`（账户没有 BTC/ETH，币本位权利金拿不出币付）"
   },
   {
    "id": "options-minimal-structure",
@@ -253,6 +253,20 @@
    "state": "done",
    "gate": "changelog 2026-10-10T16:10：新增 `scripts/options_probe.py`（公开端点、不签名不下单）。事实：BTC-USD 1336 个合约；币本位 spec ctVal=1/ctMult=0.01/minSz=1/tick 0.0001/settle=BTC；最小单 0.0006 BTC ≈ $49.52；ETH 同类 ≈ $2–18；盘口 5x5 双边。**并修掉我自己第一版把 ctVal 当乘数导致的 100 倍高估**",
    "next": "适配器按这些事实写；`_UM` 美元结算家族的报价待核"
+  },
+  {
+   "id": "options-book-survey",
+   "item": "1.1 前置 · 模拟盘期权盘口调查（宽度中位与尾部）",
+   "state": "next_phase",
+   "gate": "抽样 `BTC-USD-261030-68000-C` 的 bid/ask = 0.114/0.182（≈中值的 59%），而实盘同族约 0.8% —— 模拟盘期权**极薄**。买权利金要按 ask 成交、平仓要按 bid，价差一项就可能吞掉 1.1 的设想收益",
+   "next": "买第一张之前先量：多个标的（BTC/ETH/SOL）× 多个到期 × 多档行权价的买卖价差分布（中位/p90），据此定『可接受的入场价差』阈值；若中位价差远超模型收益，则 1.1 只交付适配+数据，不交易"
+  },
+  {
+   "id": "options-fund-premium-coin",
+   "item": "1.1 前置 · 备好币本位权利金（账户没有 BTC/ETH）",
+   "state": "next_phase",
+   "gate": "账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付",
+   "next": "**需用户拍板**：(a) 先把约 $100 的 USDT 换成 BTC（现货、可逆，推荐）；或 (b) 先查清美元结算的 `BTC-USD_UM` 家族能否用（其报价与币本位对不上，需核实）"
   }
  ]
 }

@@ -3094,6 +3094,33 @@ class OptionContractUnitsTests(unittest.TestCase):
         self.assertEqual(swap.base_per_contract, 10.0)
         self.assertEqual(base_to_contracts(swap, 1000.0), 100.0)
 
+    def test_the_venue_translates_instids_to_ccxt_option_symbols(self) -> None:
+        """Measured 2026-10-10: ccxt answers BadSymbol 51001 for the raw instId.
+
+        Our internal symbol stays the OKX instId (`leg_of` classifies options by
+        that shape, and every public-API probe speaks instIds); ccxt names the same
+        contract `BTC/USD:BTC-261127-82000-C`. Spot/swap must stay identity.
+        """
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        venue = object.__new__(CcxtVenue)
+        venue.market_type = "option"
+        venue.ex = type("Ex", (), {"markets": {
+            "BTC/USD:BTC-261127-82000-C": {
+                "id": "BTC-USD-261127-82000-C",
+                "symbol": "BTC/USD:BTC-261127-82000-C",
+            },
+        }})()
+        self.assertEqual(
+            venue._venue_symbol("BTC-USD-261127-82000-C"), "BTC/USD:BTC-261127-82000-C"
+        )
+        # An unknown instId passes through unchanged rather than inventing a symbol.
+        self.assertEqual(venue._venue_symbol("BTC-USD-999999-1-C"), "BTC-USD-999999-1-C")
+
+        venue.market_type = "spot"
+        venue.ex = type("Ex", (), {"markets": {"SOL/USDT": {"id": "SOL-USDT"}}})()
+        self.assertEqual(venue._venue_symbol("SOL/USDT"), "SOL/USDT")
+
 
 class ReconcileSwapUnitsTests(unittest.TestCase):
     """The reconciler must speak the SAME unit the ledger does: contracts (张).
