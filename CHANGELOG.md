@@ -1,18 +1,25 @@
 # Changelog
 
-当前版本：**v0.4.6**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v0.4.7**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段（五步路径）完成**；1.0 之后按语义化版本 —— MAJOR 表示架构/配置模式不兼容，MINOR 表示新增能力（新腿、新策略），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T11:46 起，7 条留痕）
+## Unreleased（自 2026-10-10T11:50 起，7 条留痕）
 
-- `2026-10-10T11:50` **research** carry 收入高度集中且量级可疑：CRV 占两日收入 97%，费率 1,290 bps/天＝池子中位的 400 倍 —— 不建议据此校准 notional
 - `2026-10-10T12:00` **decision** carry 名额决策简报（给用户拍板用）：预算其实只用了 22.9%，真正的约束是『三处配置互相矛盾』
 - `2026-10-10T12:15` **ops** 把『场馆此刻到底供不供数据』变成每日自动记录：新增 venue_availability（09:10 在美股时段外、21:10 在时段内）
 - `2026-10-10T12:40` **research** 用今天的资金费历史重跑选标：榜单前列全是『没有现货腿』的合约，唯一比我们好的可做标的是 WLFI
 - `2026-10-10T13:00` **research** 用真实成交检验 carry 的成本模型：三对实际入场 basis 是 −15.7 / −130.6 / −18.3 bps —— **今天的新规则会把这三对全部拒掉**；而当下 basis 反而全是正的（含 WLFI +951 bps）
 - `2026-10-10T13:20` **research** 更正我自己上一条的论断：『min_hold_hours 必须 ≥ 回本周期』**是错的** —— 它对轮换成立，对『论点破产的退出』不成立
 - `2026-10-10T13:50` **bug** 按用户决定扩名额（v0.4.6）：改到第 5 处时才发现真凶 —— 引擎把 tier 的持仓上限拿**整个账户的持仓数**去比，顺带锁死了 TradFi 腿与所有方向性入场
+- `2026-10-10T14:20` **ops** 建立专业化的版本与代码管理（v0.4.7）：VERSION 单一来源 + 生成式 CHANGELOG.md + RELEASING 规则 + git 仓库；并明确『1.0.0 = 第一阶段完成』
+
+## v0.4.7 — 2026-10-10T11:50
+
+- 测试 **290** 绿 · 权益 $101,591.24 · 记录时的包版本 0.4.7
+
+版本与代码管理专业化：VERSION 单一来源（version_sync --check 强制 pyproject/ta.__version__ 一致，此前三者漂移到 0.2.0）；生成式 CHANGELOG.md（changelog_md.py）；docs/RELEASING.md（1.0.0 = 第一阶段完成；之后 MAJOR/MINOR/PATCH；7 步发布清单）；git init + 首个提交 e4f4864 + tag v0.4.6；每日任务新增 3 个校验步骤。1.0.0 保留给 path-5 期权样本闸门（约 10-13/14）。
+its config/ and manifest.json rather than against memory.
 
 ## v0.4.6 — 2026-10-10T11:46
 

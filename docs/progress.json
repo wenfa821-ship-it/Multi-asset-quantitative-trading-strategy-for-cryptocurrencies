@@ -153,8 +153,8 @@
    "id": "version-archive",
    "item": "版本号归档机制（策略优化放进版本里做）",
    "state": "done",
-   "gate": "scripts/version_snapshot.py → archive/versions/<v>/（manifest + config + changelog + progress + NOTES）；已冻结 v0.2.0（基线）、**v0.3.0（TradFi 通电，策略基线）**、**v0.3.1（v0.3.0 + 深度闸门修复，配置与 v0.3.0 相同，tests 263 / equity $101,565.86）**；重复冻结会被拒绝",
-   "next": "策略对比一律以 v0.3.0 的 config/manifest 为基准；风险代码类修复（如 v0.3.1）只更新补丁版本号"
+   "gate": "**已升级为专业版本管理（v0.4.7）**：`VERSION` 单一来源（`scripts/version_sync.py --check` 强制 pyproject/`ta.__version__` 一致，此前三者漂移到 0.2.0）；生成式 `CHANGELOG.md`（scripts/changelog_md.py）；`docs/RELEASING.md` 定义版本映射与 7 步发布清单；git 仓库 `e4f4864` + tag v0.4.6；归档 archive/versions/ 保留 10 个不可改写的冻结快照",
+   "next": "**1.0.0 保留给第一阶段（五步路径）完成** —— 即 path-5 的期权样本闸门打开（约 10-13/14）；此后每个版本按 RELEASING.md 的 7 步走：测试 → 进度表 → 留痕 → VERSION → 冻结归档 → CHANGELOG → git commit+tag"
   },
   {
    "id": "perp-ctval-in-pnl",
@@ -190,6 +190,13 @@
    "state": "done",
    "gate": "changelog 2026-10-10T12:15：新增 scripts/venue_availability.py（tradable/one-sided/quote-only/absent/bars-only 五态）并接进每日任务（09:10 时段外 / 21:10 时段内）；基线 tradable=1（XMU）、quote-only=11、absent=1（XAMD）；+2 测试（288）",
    "next": "看今晚 21:10 那一行：若 12 个标的在美股时段内仍无 K 线/卖盘 → 把 tradfi tier 收窄到真正供数据的标的；若恢复 → 按『时段受限』设计（跳过非交易时段的信号）"
+  },
+  {
+   "id": "release-tooling",
+   "item": "版本与代码管理的专业化（VERSION/CHANGELOG/RELEASING/git + 每日校验）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T14:20（v0.4.7）：VERSION 单一来源 + version_sync --check；生成式 CHANGELOG.md + --check；docs/RELEASING.md（1.0.0 = 第一阶段完成；之后 MAJOR/MINOR/PATCH）；git init + e4f4864 + tag v0.4.6；每日任务新增 3 个校验步骤",
+   "next": "1.0.0 等 path-5 闸门（约 10-13/14）；之后每轮收尾按 RELEASING.md 的 7 步清单执行，不再靠记忆"
   }
  ]
 }
