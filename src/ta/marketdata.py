@@ -12,6 +12,7 @@ SyntheticFeed- deterministic random-walk market so the whole pipeline can be
 from __future__ import annotations
 
 import random
+import time
 
 from .models import Bar
 from .regime import MarketRegime, detect
@@ -117,6 +118,15 @@ class LiveFeed:
         # every symbol failing means the venue is unreachable and continuing only
         # burns the pass (see refresh()).
         self.consecutive_failure_limit: int = 5
+        # How long a whole refresh pass may take before it is declared degraded.
+        # The consecutive-failure limit cannot see a SLOW venue: measured
+        # 2026-10-10 21:30 CST, every symbol succeeded on the second attempt with a
+        # ~40s timeout, so nothing was ever "consecutive" and nothing failed - the
+        # pass simply ground through 63 symbols and took **86 minutes**, during
+        # which the loop completed no tick, checked no exit and no stop, and looked
+        # calm from the outside (the watchdog caught it only via runner staleness).
+        # A pass that cannot finish inside its budget is an unsuccessful pass.
+        self.pass_budget_seconds: float = 120.0
 
     def funding_mean(self, symbol: str, samples: int = 90) -> float | None:
         """Mean settled funding over the last `samples` prints, or None.
@@ -215,7 +225,16 @@ class LiveFeed:
         now = now_ms()
         failed: list[str] = []
         consecutive = 0
+        started = time.monotonic()
+        done = 0
         for symbol in symbols:
+            if self.pass_budget_seconds > 0 and time.monotonic() - started > self.pass_budget_seconds:
+                self.last_failed_symbols = sorted(set(failed))
+                raise VenueDegraded(
+                    f"refresh exceeded its {self.pass_budget_seconds:g}s budget after "
+                    f"{done}/{len(symbols)} symbols - a slow venue is as unusable as a "
+                    f"dead one, and finishing the pass is what stops the loop ticking"
+                )
             symbol_ok = True
             for timeframe in self.timeframes:
                 bars = self._bars.get((symbol, timeframe)) or []
@@ -236,6 +255,7 @@ class LiveFeed:
                         break
             if symbol_ok:
                 consecutive = 0
+                done += 1
                 continue
             # ...but when EVERY symbol is failing, it is not one bad symbol, it is
             # the venue (or the network in front of it). Carrying on costs the whole

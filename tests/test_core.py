@@ -1734,6 +1734,59 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class RefreshBudgetTests(unittest.TestCase):
+    """A SLOW venue has to stop the pass too, not only a dead one.
+
+    Measured 2026-10-10 21:30 CST: the proxy answered every symbol on a retry after
+    a ~40s timeout, so nothing was "consecutive" and nothing ever failed - the pass
+    simply walked 63 symbols and took **86 minutes**, in which the loop completed no
+    tick, checked no exit and checked no stop. The consecutive-failure limit cannot
+    see that shape; a wall-clock budget can.
+    """
+
+    class _Slow:
+        def __init__(self, delay: float) -> None:
+            self.delay = delay
+            self.calls = 0
+
+        def fetch_bars(self, symbol, timeframe, limit):
+            self.calls += 1
+            time.sleep(self.delay)
+            return []
+
+    def test_a_pass_that_cannot_finish_inside_its_budget_is_degraded(self) -> None:
+        from ta.marketdata import LiveFeed
+        from ta.resilience import VenueDegraded
+
+        venue = self._Slow(0.02)
+        feed = LiveFeed(venue, "15m", 10, timeframes=["15m"])
+        feed.pass_budget_seconds = 0.05
+        symbols = [f"S{i}/USDT" for i in range(20)]
+        with self.assertRaises(VenueDegraded) as caught:
+            feed.refresh(symbols, force=True)
+        self.assertIn("budget", str(caught.exception))
+        # it stopped early instead of walking all 20 symbols
+        self.assertLess(venue.calls, len(symbols))
+
+    def test_a_pass_inside_its_budget_completes(self) -> None:
+        from ta.marketdata import LiveFeed
+
+        venue = self._Slow(0.0)
+        feed = LiveFeed(venue, "15m", 10, timeframes=["15m"])
+        feed.pass_budget_seconds = 30.0
+        feed.refresh([f"S{i}/USDT" for i in range(5)], force=True)
+        self.assertEqual(venue.calls, 5)
+
+    def test_zero_means_no_budget(self) -> None:
+        from ta.marketdata import LiveFeed
+
+        venue = self._Slow(0.01)
+        feed = LiveFeed(venue, "15m", 10, timeframes=["15m"])
+        feed.pass_budget_seconds = 0.0
+        feed.refresh([f"S{i}/USDT" for i in range(5)], force=True)
+        self.assertEqual(venue.calls, 5)
+
+
 class CarryFundingStrategyTests(unittest.TestCase):
     """The carry DECISION, separated from the two legs that execute it.
 

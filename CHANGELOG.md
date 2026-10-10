@@ -1,13 +1,19 @@
 # Changelog
 
-当前版本：**v1.0.4**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.5**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T20:12 起，2 条留痕）
+## Unreleased（自 2026-10-10T21:37 起，1 条留痕）
 
-- `2026-10-10T20:35` **bug** 修掉『现货下单偶发 51000』：tdMode 解析失败不再静默退到 cash（并在被拒时自动重解析重试一次）
-- `2026-10-10T21:35` **ops** 交易循环被代理风暴卡住 86 分钟（12:04→13:30Z 无 equity 事件），看门狗第一次真的用 runner_stale_minutes 抓到它并自愈
+- `2026-10-10T21:45` **bug** 给市场数据刷新加 120 秒预算：慢场馆不再能把一个 tick 拖成 86 分钟（closes 21:35 那条卡顿）
+
+## v1.0.5 — 2026-10-10T21:37
+
+- 测试 **336** 绿 · 权益 $101,378.14 · 记录时的包版本 1.0.5
+
+1.0.5 补丁（执行路径/韧性）：行情刷新加 120 秒墙钟预算 —— 慢场馆（每次重试才成功）不再能把一个 tick 拖成 86 分钟；超预算即按既有 VenueDegraded 路径降级。336 tests。
+its config/ and manifest.json rather than against memory.
 
 ## v1.0.4 — 2026-10-10T20:12
 
