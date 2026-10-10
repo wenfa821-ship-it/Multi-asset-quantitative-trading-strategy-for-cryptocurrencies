@@ -408,12 +408,22 @@ function renderServices(s) {
   const webhook = w.webhook_configured
     ? '<span class="chip strategy">已配置推送</span>'
     : '<span class="chip">未配置推送（只在页面显示）</span>';
+  const j = s.daily_job;
+  const retried = j && j.steps_that_needed_a_retry ? Object.keys(j.steps_that_needed_a_retry) : [];
+  const jobLine = !j
+    ? '<div class="muted" style="margin-top:6px">每日任务：暂无状态文件</div>'
+    : (j.ok
+        ? `<div style="margin-top:6px">每日任务：<b class="up">全部通过</b>
+            <span class="muted">${j.steps} 步 · ${esc(String(j.generated_at))}${retried.length ? ' · 重试后成功：' + esc(retried.join('、')) : ''}</span></div>`
+        : `<div style="margin-top:6px">每日任务：<b class="down">需补跑 ${j.needs_rerun.length} 步</b>
+            <span class="muted">${esc(j.needs_rerun.join('、'))} · ${esc(String(j.generated_at))}</span></div>`);
   $('#services').innerHTML = `
     <table><thead><tr><th>服务</th><th>label</th><th>launchd 状态</th><th class="num">pid</th><th class="num">端口</th></tr></thead>
     <tbody>${rows}</tbody></table>
     <div style="margin-top:8px">看门狗：每 ${w.period_seconds || 60} 秒评估一次，当前越界
       <b class="${w.breach_count ? 'down' : 'up'}">${w.breach_count || 0}</b> 项 ${webhook}
-      <span class="muted">（只在状态变化时推送；同一组越界值不重复发）</span></div>`;
+      <span class="muted">（只在状态变化时推送；同一组越界值不重复发）</span></div>
+    ${jobLine}`;
 }
 
 function renderThresholds(s) {

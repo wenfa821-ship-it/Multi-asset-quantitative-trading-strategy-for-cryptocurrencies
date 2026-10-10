@@ -287,7 +287,14 @@
    "item": "定时步骤的凭据加载：凡 `build_venue` 的步骤必须自带 `.env` 加载器",
    "state": "done",
    "gate": "changelog 2026-10-10T15:18：launchd 单元只导出代理、不导出密钥，`venue_availability.py`（今天才进任务）与 `refresh_daily_bars.py` 因此**必然**抛 `API key is not set`。加载器统一到 `ta.config.load_env_file`，两个脚本补 `--env-file` 并在 `Config.load` 前调用；回归测试改走 `daily_research` 自己的步骤表，凡 `build_venue` 必检 `load_env_file` 且必须是同一个函数对象",
-   "next": "已实测：带 launchd 环境整轮 12/13 步首跑通过，`venue_availability` 追加一行（XMU tradable / 11 quote-only / 1 absent，当时为盘外时段）。今晚 21:10 是第一次带美股时段的记录，直接喂 `tradfi-tier-narrow`"
+   "next": "已实测：带 launchd 环境整轮 14/14 步首跑全绿（含新接入的 carry_rotation）；`venue_availability` 已追加一行（XMU tradable / 11 quote-only / 1 absent）。今晚 21:10 是第一次带美股时段的记录，直接喂 `tradfi-tier-narrow`"
+  },
+  {
+   "id": "daily-job-visibility",
+   "item": "把『需补跑清单』接进看板（v1.0.2 只写了状态文件，没有读它的一方）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T17:05：看板新增 `services.daily_job`（缺文件/坏 JSON 都退化到 None）+ 一行渲染 + redflags 的 warn『每日任务需补跑』。重启后立刻读出修复前那次运行留下的真实状态（needs_rerun=[refresh_daily_bars.py]），随后带 launchd 环境重跑 14/14 全绿、红旗消失",
+   "next": "以后任何一天只要重试后仍有失败步骤，看板会直接点名；`data/daily_job_status.json` 的 `age_hours` 也一并显示，避免把『上次运行』误读成『现在』"
   }
 ]
 }

@@ -1,20 +1,22 @@
 # Changelog
 
-当前版本：**v1.0.2**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.3**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T15:17 起，9 条留痕）
+## Unreleased（自 2026-10-10T16:17 起，4 条留痕）
 
-- `2026-10-10T15:18` **bug** 定时步骤缺 .env 加载器：venue_availability 与 refresh_daily_bars 在 launchd 下必然抛 API key is not set —— 其中一个会丢掉 TradFi tier 判定所需的 21:10 记录
-- `2026-10-10T15:30` **decision** 1.0 之后的路径规划：1.1 期权腿/期权策略（新增收益来源）、1.2 carry 轮换、1.3 链上研究，1.0.x 随修随发
-- `2026-10-10T15:50` **bug** 对账脚本的单位假差异修掉（v1.0.1）：场馆侧换算成 base 单位、账本存的是张，ACT/NEAR 因此虚报 10 倍差额
-- `2026-10-10T15:50` **research** 1.1 前置·期权盘口调查第一份（60 个报价）：BTC/ETH 在 ±10% 行权价、13–48d 上 spread/mid 中位 2.16% / p90 5.13%，全部双边 —— 早先那个『≈59%』的单点样本是 −17.7% 的深实值档，不在这个带内
-- `2026-10-10T15:55` **research** 1.1 前置·两条硬事实：美元结算的 BTC-USD_UM 家族（634 个 live）盘口是空的，SOL 期权链只到 6 天 —— 『换成 BTC 交权利金』于是成为唯一路径
-- `2026-10-10T16:10` **research** 1.1 第一步的只读探测：期权最小单其实约 $50（我先算错 100 倍），合约乘数是 ctMult 不是 ctVal
 - `2026-10-10T16:20` **strategy** 1.2 换腿规则的检测侧落地（只读）：新增 scripts/carry_rotation.py，首次实测 5 对里没有一对『连续 3 天全部低于 1 bp/天』；但 CRV 的中位数已经转负（−0.24）
 - `2026-10-10T16:40` **bug** 期权适配器（1.1）做到单位与下单参数层：修掉 ctMult 缺失（差 100 倍）、posSide/reduceOnly 误加、以及 validate 的 market_type 白名单；剩 symbol 映射与『交权利金的币』两块
+- `2026-10-10T17:05` **ops** 补上 v1.0.2 留的那半句：把『每日任务需补跑』接进看板（services.daily_job + 一条 warn 红旗），并用 launchd 同款环境跑出 14/14 步全绿
 - `2026-10-10T17:10` **bug** 期权 symbol 映射做完并在模拟盘验证；顺带量到模拟盘期权盘口极宽（抽样价差 ≈ 中值的 59%，实盘约 0.8%）
+
+## v1.0.3 — 2026-10-10T16:17
+
+- 测试 **316** 绿 · 权益 $101,577.79 · 记录时的包版本 1.0.3
+
+1.0.3 补丁（观测/工具）：把每日任务的补跑清单接进看板（services.daily_job + warn 红旗），补上 v1.0.2 只写不读的那半句；同轮新增 1.2 换腿规则的检测侧（scripts/carry_rotation.py，只读）并接进每日任务。带 launchd 同款环境实测 14/14 步首跑全绿。316 tests。
+its config/ and manifest.json rather than against memory.
 
 ## v1.0.2 — 2026-10-10T15:17
 

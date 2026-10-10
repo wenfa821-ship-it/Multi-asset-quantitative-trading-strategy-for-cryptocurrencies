@@ -4232,5 +4232,72 @@ class CarryRotationTests(unittest.TestCase):
         self.assertEqual(report["rotations"], [])
 
 
+class DashboardDailyJobTests(unittest.TestCase):
+    """A lost daily run has to be visible on the board, not only in the launchd log.
+
+    The v1.0.2 changelog promised this half in writing ("把需补跑的步骤写进留痕/看板").
+    Retries that self-heal are one thing; a day that still needs a re-run is a data
+    gap in the making, and 1.1's IV-RV gate reads exactly the series this job writes.
+    """
+
+    def _data(self, root: Path):
+        from ta.dashboard import DashboardData
+
+        data = DashboardData(CONFIG_DIR)
+        data.root = root
+        data.ledger_path = root / "ledger.jsonl"
+        data.alerts_path = root / "alerts.jsonl"
+        data.live_metrics = lambda: {}  # no metrics endpoint in a unit test
+        return data
+
+    def _status(self, root: Path, payload: dict) -> None:
+        (root / "data").mkdir(exist_ok=True)
+        (root / "data" / "daily_job_status.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+
+    def test_missing_status_file_is_not_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(self._data(Path(tmp)).daily_job())
+
+    def test_a_clean_run_reports_ok_and_the_retries_it_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._status(root, {
+                "generated_at": "2026-10-10T07:13:57+00:00",
+                "needs_rerun": [],
+                "steps": {"a": {"rc": 0, "attempts": 1}, "b": {"rc": 0, "attempts": 2}},
+            })
+            job = self._data(root).daily_job()
+        self.assertTrue(job["ok"])
+        self.assertEqual(job["needs_rerun"], [])
+        self.assertEqual(job["steps"], 2)
+        self.assertEqual(job["steps_that_needed_a_retry"], {"b": 2})
+
+    def test_a_failed_step_is_named_and_raises_a_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._status(root, {
+                "generated_at": "2026-10-10T07:13:57+00:00",
+                "needs_rerun": ["refresh_daily_bars.py"],
+                "steps": {"refresh_daily_bars.py": {"rc": 1, "attempts": 3}},
+            })
+            data = self._data(root)
+            job = data.daily_job()
+            flags = [f for f in data.redflags() if f["title"] == "每日任务需补跑"]
+        self.assertFalse(job["ok"])
+        self.assertEqual(job["needs_rerun"], ["refresh_daily_bars.py"])
+        self.assertEqual(len(flags), 1)
+        self.assertEqual(flags[0]["level"], "warn")
+        self.assertIn("refresh_daily_bars.py", flags[0]["detail"])
+
+    def test_a_corrupt_status_file_degrades_to_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "data" / "daily_job_status.json").write_text("{not json", encoding="utf-8")
+            self.assertIsNone(self._data(root).daily_job())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

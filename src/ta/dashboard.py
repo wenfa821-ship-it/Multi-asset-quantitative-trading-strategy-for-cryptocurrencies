@@ -21,6 +21,7 @@ This module serves all of that as one page. Two properties matter:
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -918,6 +919,20 @@ class DashboardData:
         if metrics.get("ta_kill_switch"):
             flags.append({"level": "critical", "title": "熔断已触发", "detail": "ta_kill_switch=1"})
 
+        # The daily research job reports on itself (bounded retries, then a named
+        # list). A day that still needs a re-run is a data gap in the making - the
+        # options IV-RV gate reads the series this job writes.
+        job = self.daily_job()
+        if job and job["needs_rerun"]:
+            flags.append(
+                {
+                    "level": "warn",
+                    "title": "每日任务需补跑",
+                    "detail": (f"重试 3 次后仍失败 {len(job['needs_rerun'])} 步："
+                               f"{'、'.join(job['needs_rerun'])}（{job['generated_at']}）"),
+                }
+            )
+
         blocked = Counter(
             str(e.get("action")) for e in ledger if e.get("kind") == "risk"
         )
@@ -1078,9 +1093,51 @@ class DashboardData:
             "jobs": jobs,
             "all_alive": all(j["alive"] for j in jobs),
             "watchdog": self.watchdog_state(),
+            "daily_job": self.daily_job(),
         }
         self._services_cache = (time.time(), payload)
         return payload
+
+    def daily_job(self) -> dict[str, Any] | None:
+        """The daily research job's verdict on itself (data/daily_job_status.json).
+
+        Written by scripts/daily_research.py since 2026-10-10: every step is retried
+        three times, and whatever is STILL failing is named here. Before that, a lost
+        day existed only in the launchd log - five steps came back rc != 0 on 10-10
+        and the first anyone knew of it was an inspection hours later. The retries
+        were only half the fix; this is the other half, because a fix nobody can see
+        is a fix nobody can act on.
+        """
+        path = self.root / "data" / "daily_job_status.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        steps = payload.get("steps") or {}
+        needs = [str(name) for name in (payload.get("needs_rerun") or [])]
+        generated = payload.get("generated_at")
+        age_hours = None
+        if isinstance(generated, str):
+            try:
+                when = datetime.datetime.fromisoformat(generated)
+                age_hours = round(
+                    (datetime.datetime.now(datetime.UTC) - when).total_seconds() / 3600, 1
+                )
+            except ValueError:
+                age_hours = None
+        retried = {
+            str(name): int((info or {}).get("attempts") or 1)
+            for name, info in steps.items()
+            if int((info or {}).get("attempts") or 1) > 1
+        }
+        return {
+            "generated_at": generated,
+            "age_hours": age_hours,
+            "needs_rerun": needs,
+            "ok": not needs,
+            "steps": len(steps),
+            "steps_that_needed_a_retry": retried,
+        }
 
     def watchdog_state(self) -> dict[str, Any]:
         limits = self.thresholds()
