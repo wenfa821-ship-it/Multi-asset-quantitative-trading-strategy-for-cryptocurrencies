@@ -544,6 +544,10 @@ class DashboardData:
                 round(100.0 * fees / abs(last - first), 1) if last < first else 0.0
             ),
             "unmanaged_notional": metrics.get("ta_unmanaged_notional", 0.0),
+            # Declared manual holdings (config/reserved_inventory.json). Reported next
+            # to the unmanaged figure so the two can be read together: the alarm uses
+            # unmanaged MINUS this, while the snapshot shows both.
+            "reserved_notional": metrics.get("ta_reserved_notional", 0.0),
             "dust_notional": metrics.get("ta_dust_notional", 0.0),
             "metrics_live": bool(metrics),
         }
@@ -1213,10 +1217,18 @@ class DashboardData:
                 summary["fees_pct_of_loss"], limits["fees_pct_of_loss"], "%",
             )
         if summary["unmanaged_notional"] >= limits["unmanaged_notional_usd"]:
-            add(
-                "unmanaged_notional_usd", "warn", "出现非托管敞口",
-                summary["unmanaged_notional"], limits["unmanaged_notional_usd"], " USD",
-            )
+            # config/reserved_inventory.json declares holdings the operator bought
+            # on purpose (the option premium coin). Those are subtracted before the
+            # comparison - an alarm that fires every cycle about a deliberate
+            # position is an alarm nobody reads - while the raw figure stays in the
+            # snapshot, so "known" never becomes "invisible".
+            reserved = float(self.live_metrics().get("ta_reserved_notional") or 0.0)
+            effective = summary["unmanaged_notional"] - reserved
+            if effective >= limits["unmanaged_notional_usd"]:
+                add(
+                    "unmanaged_notional_usd", "warn", "出现非托管敞口",
+                    effective, limits["unmanaged_notional_usd"], " USD",
+                )
         zero_change = (self.onchain().get("zero_change") or {}).get("unchanged_fraction")
         if zero_change is not None and zero_change * 100.0 >= limits["onchain_zero_change_pct"]:
             add(

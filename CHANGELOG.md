@@ -4,10 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T21:37 起，2 条留痕）
+## Unreleased（自 2026-10-10T21:37 起，3 条留痕）
 
 - `2026-10-10T21:45` **bug** 给市场数据刷新加 120 秒预算：慢场馆不再能把一个 tick 拖成 86 分钟（closes 21:35 那条卡顿）
 - `2026-10-10T22:10` **strategy** 1.2 换腿的执行侧落地为『只平旧、绝不开新』：新增 scripts/carry_rotate.py（默认 dry-run），三条防护规则写进代码
+- `2026-10-10T22:40` **ops** 加入『保留库存』：声明过的持仓不再触发非托管告警与对账差异，但金额照报（ta_reserved_notional）
 
 ## v1.0.5 — 2026-10-10T21:37
 

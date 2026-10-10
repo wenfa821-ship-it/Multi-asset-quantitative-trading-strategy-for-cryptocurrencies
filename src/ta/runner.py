@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .baseline import VenueBaseline, load_or_create
-from .config import Config
+from .config import Config, load_reserved_inventory
 from .execution.oms import OMS
 from .execution.sizing import (
     carry_pair_qty,
@@ -210,6 +210,12 @@ class TradingRunner:
         self._last_account: AccountState | None = None
         self._last_raw_cash: float | None = None
         self._spread_cache: dict[str, tuple[int, float | None]] = {}
+        self._reserved_cache: set[str] | None = None
+        # Symbols whose reserved amount is currently WITHIN its declared cap. Set by
+        # `_managed_account`; read by the two reconciliation calls, which ignore those
+        # diffs. Empty until the first tick, and empty for anything larger than the
+        # operator declared - an undeclared surplus is exactly what must stay loud.
+        self._reserved_active: set[str] = set()
         self._last_eval: dict[tuple[str, str], int] = {}
         # Book-vs-venue reconciliation only used to run in the shutdown path, so a
         # long-running (or SIGKILLed) loop never compared itself to the exchange.
@@ -730,6 +736,20 @@ class TradingRunner:
             self._spread_cache[symbol] = (now, value)
         return value
 
+    def _reserved_symbols(self) -> dict:
+        """Symbols declared as manual holdings in config/reserved_inventory.json.
+
+        Cached: `_managed_account` runs every tick and this file changes at human
+        speed. Read once, degrade to "nothing reserved" if it is missing or broken -
+        the old behaviour, in which every unknown position is unmanaged.
+        """
+        if self._reserved_cache is None:
+            from pathlib import Path as _Path
+
+            path = _Path(self.config.config_dir) / "reserved_inventory.json"
+            self._reserved_cache = load_reserved_inventory(path)
+        return self._reserved_cache
+
     def _managed_account(self, raw: AccountState) -> AccountState:
         """Split the account into what the bot opened vs what was already there.
 
@@ -757,6 +777,16 @@ class TradingRunner:
         managed: dict[str, Position] = {}
         unmanaged: dict[str, Position] = {}
         unmanaged_notional = 0.0
+        # Manual holdings the operator declared (config/reserved_inventory.json).
+        # They stay OUT of `unmanaged_notional` on purpose: that number drives an
+        # alarm whose meaning is "something is here that nobody can account for",
+        # and a declared position is the opposite of that. Measured 2026-10-10: the
+        # $100 of BTC bought for the options premium tripped that alarm and the
+        # reconciliation diff every cycle, which is how a deliberate position turns
+        # into permanent noise nobody reads.
+        reserved = self._reserved_symbols()
+        reserved_positions: dict[str, Position] = {}
+        reserved_notional = 0.0
 
         for symbol, position in raw.positions.items():
             ours = book.positions.get(symbol)
@@ -781,6 +811,27 @@ class TradingRunner:
                 )
                 unmanaged_notional += rest * (position.avg_price or 0.0)
 
+        # `unmanaged_notional` stays exactly what it always was - the truth about
+        # every position the book does not own. The DECLARED subset is separated out
+        # here (still counted above) so that monitoring can subtract it: the alarm's
+        # meaning is "nobody can account for this", and a reservation is somebody
+        # accounting for it in advance. Nothing is hidden - the amount is reported.
+        for symbol in list(unmanaged):
+            spec = reserved.get(symbol)
+            if not spec:
+                continue
+            position = unmanaged.pop(symbol)
+            notional = position.qty * (position.avg_price or 0.0)
+            cap = float(spec.get("max_usd") or 0.0)
+            if cap > 0 and notional > cap:
+                # More than the operator declared: put it back. The reservation says
+                # "we expect up to $X here", not "ignore whatever shows up".
+                unmanaged[symbol] = position
+                continue
+            reserved_positions[symbol] = position
+            reserved_notional += notional
+        self._reserved_active = set(reserved_positions)
+
         for symbol, position in book.open_positions().items():
             if symbol not in raw.positions:
                 managed[symbol] = position
@@ -804,6 +855,8 @@ class TradingRunner:
         raw.positions = managed
         raw.unmanaged_positions = unmanaged
         raw.unmanaged_notional = unmanaged_notional
+        raw.reserved_positions = reserved_positions
+        raw.reserved_notional = reserved_notional
         raw.dust_positions = dust
         raw.dust_notional = dust_notional
         return raw
@@ -1528,6 +1581,9 @@ class TradingRunner:
         self.metrics.set("ta_dust_notional", account.dust_notional)
         self.metrics.set("ta_kill_switch", 1.0 if self.risk.killed else 0.0)
         self.metrics.set("ta_unmanaged_notional", account.unmanaged_notional)
+        # Known-but-not-ours, reported separately so the alarm above keeps meaning
+        # "nobody can account for this".
+        self.metrics.set("ta_reserved_notional", getattr(account, "reserved_notional", 0.0))
         self.metrics.set(
             "ta_heat_pct",
             self.risk.portfolio_heat_pct(
@@ -1562,6 +1618,7 @@ class TradingRunner:
             report = self.oms.reconcile(
                 raw,
                 local_book,
+                ignore_positions=self._reserved_active,
                 # Same basis as the comparison: cashBal when the baseline has it,
                 # otherwise the legacy `cash` (identical on this account, whose
                 # baseline predates any open swap).
@@ -1626,6 +1683,7 @@ class TradingRunner:
             reconciliation = self.oms.reconcile(
                 account,
                 local_book,
+                ignore_positions=self._reserved_active,
                 cash_baseline=self.baseline.cash if self.baseline else None,
             )
         except Exception as exc:  # noqa: BLE001

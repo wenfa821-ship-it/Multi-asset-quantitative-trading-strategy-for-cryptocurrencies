@@ -48,6 +48,29 @@ def load_env_file(path: Path) -> int:
             loaded += 1
     return loaded
 
+
+def load_reserved_inventory(path: Path) -> dict:
+    """Manual holdings the bot must not touch (config/reserved_inventory.json).
+
+    Deliberately a data file, for the same reason the alert thresholds are: adding
+    a symbol should not be a code change, and a broken file must degrade to "no
+    reservations" rather than take the runner down. An empty result means every
+    position the book does not know about is unmanaged - the old behaviour.
+    """
+    import json as _json
+
+    try:
+        raw = _json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict) or not isinstance(raw.get("symbols"), dict):
+        return {}
+    return {
+        str(symbol): (spec if isinstance(spec, dict) else {})
+        for symbol, spec in raw["symbols"].items()
+    }
+
+
 # --------------------------------------------------------------------------------------
 # generic dataclass builder
 # --------------------------------------------------------------------------------------

@@ -1,0 +1,10 @@
+{
+  "_note": "Manual holdings the bot did NOT open and must never close. Listed here so the watchdogs can tell them apart from a deposit somebody forgot: the runner excludes them from `unmanaged_notional` (the alarm stays meaningful) and from the position half of reconciliation (which would otherwise warn every cycle about a position that is doing exactly what it was bought for). The amount is still reported, as `ta_reserved_notional` and in the snapshot, because known is not the same as invisible.",
+  "_why_btc": "2026-10-10: 0.00120705 BTC (~$100) bought to pay a coin-margined option premium - OKX's BTC options settle in BTC and the smallest order is ~0.0006 BTC. The USD-settled _UM family was measured and has an empty book, so holding coin is the only path (changelog 2026-10-10T15:55 / 19:30).",
+  "symbols": {
+    "BTC/USDT": {
+      "reason": "1.1 options premium inventory (coin-margined, must be paid in BTC)",
+      "max_usd": 200.0
+    }
+  }
+}

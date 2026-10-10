@@ -327,9 +327,9 @@
   {
    "id": "reserved-inventory",
    "item": "1.1 前置 · 让系统认识『保留库存』（$100 BTC 现在无人认领，看板常挂 warn）",
-   "state": "next_phase",
+   "state": "done",
    "gate": "changelog 2026-10-10T19:30：手工买来的 BTC 未入账 → `ta_unmanaged_notional 99.97` 触发看门狗 warn，且每轮对账报 `position BTC/USDT: local=2.5e-09 venue=0.0012070525`。两条告警都是**真的**（确实有 $100 不在任何策略名下），但会一直挂着直到期权腿能自己持有它",
-   "next": "两条路：①（推荐，随 1.1）期权腿接进 runner 后由它持有这份库存，告警自然消失；② 若 1.1 还要等，就给风控与对账加一个显式的『已知保留库存』清单（symbol → 用途 + 上限），让它们区分『已知保留』与『来路不明』，而不是调高阈值。**在此之前不要把它记进账本** —— 那会让策略把它当仓位卖出（今天已实测）"
+   "next": "**已实现（changelog 2026-10-10T22:40，方案②）**：`config/reserved_inventory.json`（symbol → reason + max_usd），runner 把声明内且不超上限的持仓记成 `ta_reserved_notional` 并从告警里剔除（`unmanaged_notional` 数值不变），对账按符号跳过、金额照报；实测 breaches 归零。仍是**不要把它记进账本**（那会让策略把它当仓位卖出）。1.1 期权腿接管后，这个条目可以从文件里删掉"
   },
   {
    "id": "spot-td-mode-51000",

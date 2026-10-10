@@ -1734,6 +1734,70 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class ReservedInventoryTests(unittest.TestCase):
+    """A declared manual holding must stop being an alarm, without going invisible.
+
+    Measured 2026-10-10: 0.00120705 BTC bought for a coin-margined option premium
+    tripped `unmanaged_notional` and wrote a `position BTC/USDT` reconciliation diff
+    every cycle. Both were TRUE statements about an UNKNOWN position - but this one
+    is known, and an alarm that fires forever is one nobody reads.
+    """
+
+    def _loader(self):
+        from ta.config import load_reserved_inventory
+
+        return load_reserved_inventory
+
+    def test_a_missing_or_broken_file_means_nothing_is_reserved(self) -> None:
+        load = self._loader()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load(Path(tmp) / "nope.json"), {})
+            broken = Path(tmp) / "broken.json"
+            broken.write_text("{not json", encoding="utf-8")
+            self.assertEqual(load(broken), {})
+            wrong = Path(tmp) / "wrong.json"
+            wrong.write_text('{"symbols": ["BTC/USDT"]}', encoding="utf-8")
+            self.assertEqual(load(wrong), {})
+
+    def test_the_shipped_file_reserves_the_option_premium_coin(self) -> None:
+        load = self._loader()
+        reserved = load(PROJECT / "config" / "reserved_inventory.json")
+        self.assertIn("BTC/USDT", reserved)
+        self.assertIn("premium", reserved["BTC/USDT"]["reason"])
+
+    def test_reconciliation_skips_a_reserved_position_but_keeps_the_others(self) -> None:
+        from ta.execution.oms import OMS
+
+        class Venue:
+            name = "fake"
+
+            def account_snapshot(self):
+                return {"venue": "fake", "cash": 100.0, "positions": {"BTC/USDT": 1.0, "X/USDT": 5.0}}
+
+        class Book:
+            cash = 0.0
+            marks = {"BTC/USDT": 80_000.0, "X/USDT": 10.0}
+
+            def equity(self):
+                return 0.0
+
+            def open_positions(self):
+                class P:  # noqa: D401 - tiny stand-in
+                    def __init__(self, qty):
+                        self.qty = qty
+
+                return {"BTC/USDT": P(0.0), "X/USDT": P(1.0)}
+
+        oms = OMS.__new__(OMS)
+        oms.venue = Venue()
+        account = AccountState(venue="fake", cash=0.0, unmanaged_notional=0.0)
+        without = oms.reconcile(account, Book())
+        with_ignore = oms.reconcile(account, Book(), ignore_positions=frozenset({"BTC/USDT"}))
+        self.assertTrue(any("BTC/USDT" in d for d in without.diffs))
+        self.assertFalse(any("BTC/USDT" in d for d in with_ignore.diffs))
+        self.assertTrue(any("X/USDT" in d for d in with_ignore.diffs), "others still report")
+
+
 class CarryRotateExecutionTests(unittest.TestCase):
     """Acting on a rotation is CLOSE-ONLY, and only once a day.
 

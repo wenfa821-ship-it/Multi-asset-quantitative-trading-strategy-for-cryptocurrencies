@@ -152,6 +152,7 @@ class OMS:
         *,
         cash_baseline: float | None = None,
         cash_tolerance: float = 1.0,
+        ignore_positions: set[str] | frozenset[str] = frozenset(),
     ) -> ReconciliationReport:
         """Compare our managed book with the venue.
 
@@ -177,6 +178,11 @@ class OMS:
         # prices range over nine orders of magnitude across this universe.
         trivial_usd = 0.10
         for symbol, qty in local_snapshot["positions"].items():
+            # Reserved inventory (config/reserved_inventory.json) is deliberately
+            # held outside the book, so its position diff is not news - it is the
+            # reason the entry exists. The cash half still runs for everyone.
+            if symbol in ignore_positions:
+                continue
             venue_qty = venue_snapshot.get("positions", {}).get(symbol, 0.0)
             mark = float(getattr(local_book, "marks", {}).get(symbol, 0.0) or 0.0)
             gap = abs(venue_qty - qty)

@@ -153,6 +153,11 @@ class AccountState:
     cash_bal: float = 0.0
     equity: float = 0.0
     positions: dict[str, Position] = field(default_factory=dict)
+    # Manual holdings listed in config/reserved_inventory.json: still not the bot's,
+    # but KNOWN - so they are counted here instead of in `unmanaged_notional`, whose
+    # whole job is to mean "nobody can say where this came from".
+    reserved_notional: float = 0.0
+    reserved_positions: dict[str, Position] = field(default_factory=dict)
     # Assets that exist in the account but were NOT opened by this bot (deposits,
     # manual trades, or the pre-funded bundle an exchange demo account ships with).
     # They count towards equity, but must not be treated as strategy exposure.
