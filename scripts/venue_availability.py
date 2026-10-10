@@ -83,7 +83,11 @@ def main() -> int:
     venue.connect()
     now = datetime.datetime.now(datetime.UTC)
     # US regular session in UTC: 13:30-20:00 (ignore DST - this is a hint, not a gate).
-    us_session = 13 <= now.hour < 20
+    # The half hour matters: the daily job's own 21:10 CST slot is 13:10 UTC, i.e.
+    # 20 minutes BEFORE the open, and the first version of this line called that
+    # "in session" (13 <= hour). That would have labelled the very measurement the
+    # TradFi decision rests on as an in-session one when the market had not opened.
+    us_session = (now.hour, now.minute) >= (13, 30) and now.hour < 20
     rows = []
     print(f"{'symbol':14s} {'1d':>4s} {'1h':>4s} {'15m':>4s} {'bid':>10s} {'ask':>10s}  state")
     for symbol in symbols:

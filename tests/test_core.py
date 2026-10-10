@@ -4399,5 +4399,76 @@ class OptionsGateTests(unittest.TestCase):
         self.assertEqual(settings["size"]["first_order_contracts"], 1)
 
 
+class TradFiTierTests(unittest.TestCase):
+    """Session-limited and dead look identical until you sample both sessions.
+
+    2026-10-10: 12 of the sleeve's 13 symbols answered with zero bars and 11 had a
+    bid with no ask - but every measurement so far was taken with the US market
+    closed, so the honest verdict is "not decidable", not "narrow the tier".
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "tradfi_tier", PROJECT / "scripts" / "tradfi_tier.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @staticmethod
+    def _obs(session: bool, bars: int = 0, bid=None, ask=None) -> dict:
+        return {"us_session": session, "bars_1h": bars, "bars_1d": bars,
+                "bars_15m": bars, "bid": bid, "ask": ask}
+
+    def test_tradable_needs_bars_and_both_sides(self) -> None:
+        module = self._module()
+        self.assertEqual(module.classify([self._obs(False, 300, 10.0, 10.1)])["verdict"],
+                         "tradable_outside_session")
+        self.assertEqual(module.classify([self._obs(True, 300, 10.0, 10.1)])["verdict"],
+                         "tradable")
+        # a bid with no ask is not a market, however many bars came with it
+        self.assertEqual(module.classify([self._obs(True, 300, 10.0, None)])["verdict"],
+                         "bars_but_one_sided")
+        self.assertEqual(module.classify([self._obs(True, 0, None, None)])["verdict"],
+                         "no_data")
+
+    def test_a_symbol_tradable_in_both_sessions_is_kept(self) -> None:
+        module = self._module()
+        info = module.classify([self._obs(False, 300, 1.0, 1.1), self._obs(True, 300, 1.0, 1.1)])
+        self.assertTrue(info["tradable_in_session"])
+        self.assertEqual(info["verdict"], "tradable")
+        self.assertEqual(info["max_bars_1h"], 300)
+
+    def test_no_in_session_run_means_not_decided(self) -> None:
+        module = self._module()
+        history = [
+            {"us_session": False, "rows": [{"symbol": "XMU/USDT", "bars_1h": 300,
+                                            "bid": 1.0, "ask": 1.1, "state": "tradable"}]},
+            {"us_session": False, "rows": [{"symbol": "XTSM/USDT", "bars_1h": 0,
+                                            "bid": 4.0, "ask": None, "state": "quote-only"}]},
+        ]
+        report = module.summarise(history)
+        self.assertFalse(report["decided"])
+        self.assertEqual(report["keep"], [])
+        self.assertEqual(report["symbols"]["XTSM/USDT"]["verdict"], "no_data")
+
+    def test_an_in_session_run_produces_a_keep_list(self) -> None:
+        module = self._module()
+        history = [
+            {"us_session": False, "rows": [{"symbol": "XMU/USDT", "bars_1h": 300,
+                                            "bid": 1.0, "ask": 1.1, "state": "tradable"}]},
+            {"us_session": True, "rows": [
+                {"symbol": "XMU/USDT", "bars_1h": 300, "bid": 1.0, "ask": 1.1, "state": "tradable"},
+                {"symbol": "XTSM/USDT", "bars_1h": 120, "bid": 4.0, "ask": 4.1, "state": "tradable"},
+            ]},
+        ]
+        report = module.summarise(history)
+        self.assertTrue(report["decided"])
+        self.assertEqual(sorted(report["keep"]), ["XMU/USDT", "XTSM/USDT"])
+        self.assertEqual(report["in_session_runs"], 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
