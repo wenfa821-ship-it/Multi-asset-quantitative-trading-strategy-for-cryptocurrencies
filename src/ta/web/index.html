@@ -423,7 +423,24 @@ function renderServices(s) {
     <div style="margin-top:8px">看门狗：每 ${w.period_seconds || 60} 秒评估一次，当前越界
       <b class="${w.breach_count ? 'down' : 'up'}">${w.breach_count || 0}</b> 项 ${webhook}
       <span class="muted">（只在状态变化时推送；同一组越界值不重复发）</span></div>
-    ${jobLine}`;
+    ${jobLine}
+    ${renderBatchJobs(s.batch_jobs)}`;
+}
+
+function renderBatchJobs(jobs) {
+  if (!jobs || !jobs.length) return '';
+  const rows = jobs.map(b => {
+    const dot = b.stale ? 'var(--crit)' : 'var(--up)';
+    const age = b.age_hours == null ? '无日志' : b.age_hours + 'h 前';
+    const said = b.last_run ? ` · ${esc(b.last_run)}` : '';
+    return `<tr><td><span style="color:${dot}">●</span> ${esc(b.name)}</td>
+      <td class="dim">${esc(b.label)}</td>
+      <td class="num dim">${esc(age)}</td>
+      <td class="dim">${said.replace(/^ · /, '')}</td></tr>`;
+  }).join('');
+  return `<table style="margin-top:8px"><thead><tr><th>批量任务</th><th>label</th>
+    <th class="num">上次运行</th><th>上次结果</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="muted">批量任务按『多久没跑』判活，不按端口：它们一天只跑两次，空闲才是正常的。</div>`;
 }
 
 function renderThresholds(s) {

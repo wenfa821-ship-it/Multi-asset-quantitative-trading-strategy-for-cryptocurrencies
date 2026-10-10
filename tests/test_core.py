@@ -1734,6 +1734,64 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class DashboardBatchJobsTests(unittest.TestCase):
+    """Batch jobs are invisible to a port/pid check, so they need their own.
+
+    The daily research job and the TradFi session sampler run twice a day and are
+    idle the rest of the time - "not running" is their normal state. Judging them by
+    liveness would make `all_alive` permanently false (which is why they were left
+    off the board until 2026-10-10); judging them by "did the last run happen and
+    what did it say" is a fact.
+    """
+
+    def _data(self, root: Path):
+        from ta.dashboard import DashboardData
+
+        data = DashboardData(CONFIG_DIR)
+        data.root = root
+        data.ledger_path = root / "ledger.jsonl"
+        data.alerts_path = root / "alerts.jsonl"
+        data.live_metrics = lambda: {}
+        return data
+
+    def test_a_fresh_log_is_not_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "logs").mkdir()
+            (root / "logs" / "ta-newlisting-service.log").write_text("ran\n", encoding="utf-8")
+            (root / "logs" / "ta-tradfi-session.log").write_text("ran\n", encoding="utf-8")
+            jobs = {b["label"]: b for b in self._data(root).batch_jobs()}
+        self.assertFalse(jobs["com.tradingagent.newlisting"]["stale"])
+        self.assertFalse(jobs["com.tradingagent.tradfi-session"]["stale"])
+        self.assertEqual(len(jobs), 2)
+
+    def test_a_missing_log_counts_as_stale_and_raises_a_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = self._data(root)
+            jobs = {b["label"]: b for b in data.batch_jobs()}
+            titles = [f["title"] for f in data.redflags()
+                      if f["title"].startswith("批量任务超时未运行")]
+        self.assertTrue(jobs["com.tradingagent.tradfi-session"]["stale"])
+        self.assertIsNone(jobs["com.tradingagent.tradfi-session"]["age_hours"])
+        self.assertEqual(len(titles), 2)   # both logs are missing
+
+    def test_the_research_job_repeats_what_its_own_status_file_said(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "logs").mkdir()
+            (root / "logs" / "ta-newlisting-service.log").write_text("ran\n", encoding="utf-8")
+            (root / "data").mkdir()
+            (root / "data" / "daily_job_status.json").write_text(json.dumps({
+                "generated_at": "2026-10-10T13:46:20+00:00",
+                "needs_rerun": ["new_listing_track"],
+                "steps": {},
+            }), encoding="utf-8")
+            jobs = {b["label"]: b for b in self._data(root).batch_jobs()}
+        self.assertEqual(jobs["com.tradingagent.newlisting"]["last_run"],
+                         "needs rerun: new_listing_track")
+
+
 class ReservedInventoryTests(unittest.TestCase):
     """A declared manual holding must stop being an alarm, without going invisible.
 

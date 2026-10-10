@@ -348,9 +348,9 @@
   {
    "id": "dashboard-batch-job-coverage",
    "item": "1.0.x · 看板只登记 3 个常驻服务，另两个批量任务（newlisting / tradfi-session）不在看板上",
-   "state": "not_started",
+   "state": "done",
    "gate": "2026-10-10 巡检时发现：`KNOWN_SERVICES` 里只有 runner/watcher/dashboard，而今天的第 4、第 5 个 launchd 任务（`com.tradingagent.newlisting` 每日 09:10/21:10、`com.tradingagent.tradfi-session` 每日 23:10/01:10）**只在 launchctl 里可见**。批量任务不能按『端口活否』判活（它们大部分时间就是不该在跑），所以直接塞进现有 jobs 列表会让 all_alive 永久为假——这也正是当初没加它们的原因",
-   "next": "要给批量任务一个**属于它们自己的判据**：`services.batch_jobs` 独立列表，用『上次运行时间 + 最近一次退出码/摘要』表示健康（newlisting 的摘要已经在 data/daily_job_status.json 里；tradfi-session 可以从日志尾巴取），而不是复用常驻服务的 port/pid 规则。等哪天有第二个批量任务要加时一并做，避免为两个任务写一次性代码"
+   "next": "**已实现（changelog 2026-10-10T22:40）**：`services.batch_jobs` 独立列表，按『日志新鲜度（26h 阈值）+ 上次结论』判活，研究任务复述 data/daily_job_status.json 的结论；超时进 redflags，不混进常驻服务的 all_alive。实测两项都非 stale。以后再加批量任务，只需往 `BATCH_JOBS` 里加一行"
   }
 ]
 }

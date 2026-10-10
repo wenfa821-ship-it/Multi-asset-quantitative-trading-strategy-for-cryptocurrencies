@@ -4,9 +4,10 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T22:19 起，3 条留痕）
+## Unreleased（自 2026-10-10T22:19 起，4 条留痕）
 
 - `2026-10-10T22:40` **ops** 加入『保留库存』：声明过的持仓不再触发非托管告警与对账差异，但金额照报（ta_reserved_notional）
+- `2026-10-10T22:40` **ops** 看板补上两个批量任务：按『多久没跑 + 上次说了什么』判活，而不是端口（closes dashboard-batch-job-coverage）
 - `2026-10-10T23:20` **decision** TradFi tier 收窄到 XMU：盘中样本到手，那 12 个标的是『根本不供数据』而不是『时段受限』（v1.0.6）
 - `2026-10-10T23:45` **ops** 文档同步：把今天五个补丁与两处架构变化写回 README/进度表，并记下『看板只登记 3 个服务』这个缺口
 

@@ -73,6 +73,18 @@ KNOWN_SERVICES: tuple[tuple[str, str, int | None, str | None], ...] = (
     ("com.tradingagent.dashboard", "运营看板", 9200, None),
 )
 
+# The other two launchd jobs are BATCHES, not daemons (2026-10-10): the daily
+# research job runs at 09:10/21:10 and the TradFi session sampler at 23:10/01:10.
+# They were invisible on the board because they cannot be judged the way a
+# resident service is - "no port answering" and "not running right now" are both
+# NORMAL for them, so folding them into the list above would have made
+# `all_alive` permanently false. Their health is "did it run recently", taken from
+# the log the job itself writes.
+BATCH_JOBS: tuple[tuple[str, str, str, float], ...] = (
+    ("com.tradingagent.newlisting", "每日研究任务", "logs/ta-newlisting-service.log", 26.0),
+    ("com.tradingagent.tradfi-session", "美股时段采集", "logs/ta-tradfi-session.log", 26.0),
+)
+
 
 # ---------------------------------------------------------------------------
 # loading
@@ -937,6 +949,20 @@ class DashboardData:
                 }
             )
 
+        for entry in self.batch_jobs():
+            if not entry["stale"]:
+                continue
+            age = entry["age_hours"]
+            flags.append(
+                {
+                    "level": "warn",
+                    "title": f"批量任务超时未运行：{entry['name']}",
+                    "detail": (f"{entry['label']} 的日志 "
+                               f"{'缺失' if age is None else f'已 {age} 小时没更新'}"
+                               f"（阈值 {entry['stale_after_hours']:g}h）"),
+                }
+            )
+
         blocked = Counter(
             str(e.get("action")) for e in ledger if e.get("kind") == "risk"
         )
@@ -1098,6 +1124,7 @@ class DashboardData:
             "all_alive": all(j["alive"] for j in jobs),
             "watchdog": self.watchdog_state(),
             "daily_job": self.daily_job(),
+            "batch_jobs": self.batch_jobs(),
         }
         self._services_cache = (time.time(), payload)
         return payload
@@ -1142,6 +1169,37 @@ class DashboardData:
             "steps": len(steps),
             "steps_that_needed_a_retry": retried,
         }
+
+    def batch_jobs(self) -> list[dict[str, Any]]:
+        """The two launchd jobs that are batches, judged by freshness rather than pids.
+
+        A batch job is SUPPOSED to be idle most of the day, so "not running" is not
+        a failure and port/pid checks would report a permanent one. What can be
+        judged is whether it ran recently, and - for the research job - what it said
+        (its own status file already names any step that needs a re-run).
+        """
+        status = self.daily_job() or {}
+        jobs: list[dict[str, Any]] = []
+        for label, name, log_rel, stale_after in BATCH_JOBS:
+            entry: dict[str, Any] = {
+                "label": label, "name": name, "log": log_rel,
+                "stale_after_hours": stale_after,
+            }
+            age_hours = None
+            try:
+                age_hours = round((time.time() - (self.root / log_rel).stat().st_mtime) / 3600, 1)
+            except OSError:
+                pass
+            entry["age_hours"] = age_hours
+            entry["stale"] = age_hours is None or age_hours > stale_after
+            if label == "com.tradingagent.newlisting" and status:
+                entry["last_run"] = (
+                    "ok" if status.get("ok")
+                    else "needs rerun: " + ", ".join(status.get("needs_rerun") or [])
+                )
+                entry["last_run_at"] = status.get("generated_at")
+            jobs.append(entry)
+        return jobs
 
     def watchdog_state(self) -> dict[str, Any]:
         limits = self.thresholds()
