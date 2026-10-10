@@ -4049,5 +4049,66 @@ class EnvLoaderIsSharedTests(unittest.TestCase):
         )
 
 
+class OptionsBookSurveyTests(unittest.TestCase):
+    """The 1.1 entry-cost measurement has to sample the curve, not the front expiry.
+
+    Measured 2026-10-10: three consecutive weeklies are three draws from one
+    liquidity regime, and a single contract (BTC-USD-261030-68000-C, bid 0.114 /
+    ask 0.182) had earlier suggested a spread near half the price. Walking 60
+    quotes across 13-48d put the median at 2.2% of mid instead.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "options_book_survey", PROJECT / "scripts" / "options_book_survey.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_expiries_are_spread_across_the_curve(self) -> None:
+        import datetime
+
+        module = self._module()
+        today = datetime.date(2026, 10, 10)
+        inst_ids = [
+            f"BTC-USD-2610{day:02d}-80000-C" for day in (11, 12, 13, 16, 23, 30)
+        ] + ["BTC-USD-261127-80000-C"]
+        picked = module.pick_expiries(inst_ids, today, 3, 10, 60)
+        self.assertEqual(len(picked), 3)
+        self.assertEqual(picked[0][1], 13)   # the shortest in-window
+        self.assertEqual(picked[-1][1], 48)  # and the longest, not the front three
+
+    def test_the_dte_window_is_respected(self) -> None:
+        import datetime
+
+        module = self._module()
+        today = datetime.date(2026, 10, 10)
+        picked = module.pick_expiries(["SOL-USD_UM-261010-100-C", "SOL-USD_UM-261016-100-C"],
+                                      today, 3, 10, 60)
+        self.assertEqual(picked, [])  # OKX's SOL chain ends at 6d (2026-10-10)
+
+    def test_summarise_counts_one_sided_quotes_but_keeps_them_out_of_the_median(self) -> None:
+        module = self._module()
+        rows = [
+            {"uly": "BTC-USD", "mid": 1.0, "spread_pct": 2.0, "half_spread_pct": 1.0},
+            {"uly": "BTC-USD", "mid": 2.0, "spread_pct": 4.0, "half_spread_pct": 2.0},
+            {"uly": "BTC-USD", "bid": 0.5, "ask": None},  # cannot be bought
+        ]
+        stats = module.summarise(rows)
+        self.assertEqual((stats["quotes"], stats["two_sided"], stats["one_sided"]), (3, 2, 1))
+        self.assertEqual(stats["median_spread_pct"], 3.0)
+        self.assertEqual(stats["median_half_spread_pct"], 1.5)
+        self.assertEqual(stats["by_uly"]["BTC-USD"]["two_sided"], 2)
+
+    def test_summarise_of_nothing_is_not_an_error(self) -> None:
+        module = self._module()
+        stats = module.summarise([])
+        self.assertEqual(stats["quotes"], 0)
+        self.assertIsNone(stats["median_spread_pct"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

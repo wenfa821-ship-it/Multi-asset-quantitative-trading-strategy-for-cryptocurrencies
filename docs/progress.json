@@ -217,7 +217,7 @@
    "item": "1.1 · 期权腿 venue 适配（下单路径）",
    "state": "done",
    "gate": "**已完成（2026-10-10）**：① `[venues.okx_demo_option]` + `validate()` 放开 option；② 期权不下发 posSide/reduceOnly（单向持仓）但仍带 tdMode=cross；③ `ContractSpec` 补 `ctMult`（1 张 = ctVal×ctMult = 0.01 BTC，此前差 100 倍）；④ `_venue_symbol()` 做 instId ↔ ccxt 统一符号映射（按目录反查）并覆盖所有 ccxt 调用点；+3 测试（295 全绿）",
-   "next": "下单路径本身已就绪；**买第一张之前还有两项前置**（见下两条）：`options-book-survey`（模拟盘期权盘口极宽，抽样 59%）与 `options-fund-premium-coin`（账户没有 BTC/ETH，币本位权利金拿不出币付）"
+   "next": "下单路径本身已就绪；买第一张之前的两项前置里，`options-book-survey` **已完成**（浅档价差中位 2.16%，不再是阻断项），只剩 `options-fund-premium-coin`（账户没有 BTC/ETH，币本位权利金拿不出币付；`_UM` 美元结算家族已实测无盘口，只剩换币一条路）"
   },
   {
    "id": "options-minimal-structure",
@@ -257,16 +257,16 @@
   {
    "id": "options-book-survey",
    "item": "1.1 前置 · 模拟盘期权盘口调查（宽度中位与尾部）",
-   "state": "next_phase",
-   "gate": "抽样 `BTC-USD-261030-68000-C` 的 bid/ask = 0.114/0.182（≈中值的 59%），而实盘同族约 0.8% —— 模拟盘期权**极薄**。买权利金要按 ask 成交、平仓要按 bid，价差一项就可能吞掉 1.1 的设想收益",
-   "next": "买第一张之前先量：多个标的（BTC/ETH/SOL）× 多个到期 × 多档行权价的买卖价差分布（中位/p90），据此定『可接受的入场价差』阈值；若中位价差远超模型收益，则 1.1 只交付适配+数据，不交易"
+   "state": "done",
+   "gate": "changelog 2026-10-10T15:50：**已量完**（`scripts/options_book_survey.py`，60 个报价）。BTC/ETH 在 ±10% 行权价、13–48d 上：**全部双边**，spread/mid 中位 **2.16%**、p90 5.13%、买方单边中位 1.08%（BTC 2.26% / ETH 1.96%）。早先那个『≈59%』的单点是 −17.7% 的深实值档，不在这个带内 —— 浅档是 2% 量级，深档宽一个数量级",
+   "next": "1.1 接策略时用这条临时阈值：**只做单边价差 ≤ 2% 的档**（≈ spread/mid ≤ 4%，覆盖约 90% 的样本），深度档与深实值/深虚不进候选；阈值等有了 IV−RV 判据再算成与模型收益挂钩的数"
   },
   {
    "id": "options-fund-premium-coin",
    "item": "1.1 前置 · 备好币本位权利金（账户没有 BTC/ETH）",
    "state": "next_phase",
-   "gate": "账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付",
-   "next": "**需用户拍板**：(a) 先把约 $100 的 USDT 换成 BTC（现货、可逆，推荐）；或 (b) 先查清美元结算的 `BTC-USD_UM` 家族能否用（其报价与币本位对不上，需核实）"
+   "gate": "账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付。**二选一的 (b) 已实测否决**（changelog 2026-10-10T15:55）：美元结算的 `BTC-USD_UM` 有 634 个 live 合约，但抽 6 个到期的认购**没有一个有卖价**（2 个只有 1 档 5 美元的买价，其余空簿），同一时刻币本位对照合约是 4x4 档、价差 1.65%",
+   "next": "**只剩 (a)，等用户一句话**：先把约 $100 的 USDT 换成 BTC（现货、可逆），用于支付第一张 BTC 期权的权利金。在此之前期权 20% 额度继续空置 —— 这是设计，不是故障"
   },
   {
    "id": "daily-job-retry",
