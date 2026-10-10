@@ -1734,6 +1734,55 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class CarryRotateExecutionTests(unittest.TestCase):
+    """Acting on a rotation is CLOSE-ONLY, and only once a day.
+
+    2026-10-10 decision: opening the replacement belongs to the runner (it already
+    has the passive entry, the depth gate and the pairing invariants), while the
+    half that carries the risk is the sequence - and the first day of live carry
+    showed what moving twice in an afternoon costs (31 fills, $284 of fees).
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "carry_rotate", PROJECT / "scripts" / "carry_rotate.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_newest_row_that_actually_proposed_something_wins(self) -> None:
+        module = self._module()
+        rows = [
+            {"generated_at": "2026-10-10T01:00:00+00:00", "rotations": [{"from": "A/USDT"}]},
+            {"generated_at": "2026-10-10T02:00:00+00:00", "rotations": []},
+        ]
+        self.assertEqual(module.latest_proposal(rows)["generated_at"], "2026-10-10T01:00:00+00:00")
+        self.assertIsNone(module.latest_proposal([]))
+        self.assertIsNone(module.latest_proposal([{"generated_at": "x", "rotations": []}]))
+
+    def test_one_rotation_a_day_is_counted_from_its_own_log(self) -> None:
+        module = self._module()
+        rows = [
+            {"generated_at": "2026-10-09T23:00:00+00:00"},
+            {"generated_at": "2026-10-10T01:00:00+00:00"},
+        ]
+        self.assertEqual(module.rotations_today(rows, "2026-10-10"), 1)
+        self.assertEqual(module.rotations_today(rows, "2026-10-11"), 0)
+
+    def test_the_notional_cap_reads_the_latest_equity(self) -> None:
+        module = self._module()
+        rows = [
+            {"kind": "equity", "equity": 101_000.0},
+            {"kind": "fill", "symbol": "BTC/USDT"},
+            {"kind": "equity", "equity": 102_000.0},
+        ]
+        self.assertEqual(module.last_equity(rows), 102_000.0)
+        self.assertEqual(module.last_equity([]), 0.0)
+
+
 class RefreshBudgetTests(unittest.TestCase):
     """A SLOW venue has to stop the pass too, not only a dead one.
 
