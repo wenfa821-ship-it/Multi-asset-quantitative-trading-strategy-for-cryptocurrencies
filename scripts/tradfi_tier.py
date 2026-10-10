@@ -139,7 +139,8 @@ def main() -> int:
 
     if not report["decided"]:
         print("\n结论：还缺『美股时段』的观测 —— 现在不能判定是『时段受限』还是『根本不供数据』。")
-        print("      下一次带 us_session=true 的采集（每日任务 21:10 CST = 13:10 UTC 前后）会给出答案。")
+        print("      答案来自 com.tradingagent.tradfi-session（23:10 / 01:10 CST = 15:10 / 17:10 UTC，")
+        print("      两者都在美股常规时段 13:30-20:00 UTC 内）；每日任务的两个槽位都在盘外，指望不上。")
     else:
         print(f"\n结论：盘中可交易 {len(report['keep'])} 个：{', '.join(report['keep']) or '（无）'}")
         if report["tradable_only_outside_session"]:

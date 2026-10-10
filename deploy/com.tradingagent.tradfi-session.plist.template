@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job: which TradFi symbols the venue serves DURING the US session.
+
+  Why this job exists (2026-10-10). The daily research job runs at 09:10 and 21:10
+  CST, i.e. 01:10 and 13:10 UTC. The US regular session is 13:30-20:00 UTC
+  (21:30-04:00 CST), so NEITHER daily run is inside it - and the 21:10 slot is
+  twenty minutes before the open, close enough that the first version of the
+  session test (`13 <= hour`) would have recorded it as in-session and let a
+  pre-open observation decide the tier question. The measurement that decides
+  `tradfi-tier-narrow` therefore needs its own slot INSIDE the session.
+
+  Deliberately tiny: one read-only script, ~15 seconds, two slots. It does not
+  run the daily job (that takes ~16 minutes and would overlap the session with
+  funding syncs and bar refreshes it does not need). It appends exactly one row
+  per run to data/universe/availability.jsonl - the same store and the same
+  schema the daily job already writes, so `scripts/tradfi_tier.py` reads one
+  series regardless of which job produced the row.
+
+  23:10 CST = 15:10 UTC (early in the session) and 01:10 CST = 17:10 UTC (late),
+  so two samples per session also answer "does data appear late or throughout".
+
+  KeepAlive is FALSE: a batch job, not a daemon. RunAtLoad is true so a fresh
+  install produces evidence immediately instead of waiting for 23:10.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingagent.tradfi-session</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__VENV_PYTHON__</string>
+        <string>-u</string>
+        <string>scripts/venue_availability.py</string>
+        <string>--write</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>src</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/anaconda3/bin</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>TA_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>23</integer>
+            <key>Minute</key>
+            <integer>10</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>1</integer>
+            <key>Minute</key>
+            <integer>10</integer>
+        </dict>
+    </array>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/ta-tradfi-session.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/ta-tradfi-session.err.log</string>
+</dict>
+</plist>

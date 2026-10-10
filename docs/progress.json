@@ -208,9 +208,9 @@
   {
    "id": "tradfi-session-slot",
    "item": "tradfi 决策的前置：在美股时段内加一次采集（现有两个槽位都在盘外）",
-   "state": "not_started",
+   "state": "done",
    "gate": "changelog 2026-10-10T18:55：美股常规时段 = 13:30–20:00 UTC = 21:30–04:00 CST，而每日任务是 09:10 / 21:10 CST —— 21:10 比开盘早 20 分钟，**没有任何一次采集落在盘中**。旧代码的 `13 <= hour` 还会把它误标成盘中（已修）",
-   "next": "**需用户拍板**：① 把每日任务第二个槽位挪到 23:10 CST（整轮约 16 分钟）；或 ②（推荐）新增一个只跑 `venue_availability.py --write` 的轻量 launchd 任务，23:10 CST 触发、约 15 秒。选定后我改 plist 并装回、跑一次验证"
+   "next": "**已按方案②落地**（changelog 2026-10-10T19:10）：第 5 个 launchd 任务 `com.tradingagent.tradfi-session`，23:10 / 01:10 CST = 15:10 / 17:10 UTC（都在盘中），只跑 `venue_availability.py --write`（~15 秒）。已装好并验证（runs=1、exit 0、store 3→4 行），原有四服务未动。今晚 23:10 落第一条盘中样本"
   },
   {
    "id": "reconcile-tool-units",
