@@ -216,8 +216,8 @@
    "id": "options-venue-adapter",
    "item": "1.1 · 期权腿 venue 适配（下单路径）",
    "state": "next_phase",
-   "gate": "1.1 的第一步：现有 venue 层只处理现货与永续，期权（`BTC-USD-261008-80000-C`）没有适配；数据层已有（期权面 + IV−RV 每日行）",
-   "next": "实现期权合约的 symbol→instId 映射、下单参数（币本位保证金/到期日）、最小仓位的有限风险结构；先用最小权利金跑通一笔并核对结算口径"
+   "gate": "**探测已完成（2026-10-10）**：`scripts/options_probe.py` 量清合约事实 —— 币本位 `BTC-USD-YYMMDD-STRIKE-C/P`，ctVal=1、**ctMult=0.01**、minSz=1、tick 0.0001、settleCcy 为标的币；ATM 附近盘口 5x5 双边正常；**最小一单权利金 = 价钱 × ctVal × ctMult × minSz ≈ $38–50（BTC）/ $2–18（ETH）**。另有美元结算的 `BTC-USD_UM-…` 平行家族，报价与币本位对不上，暂不采用",
+   "next": "据此写适配器：期权 id 映射（`BTC-USD-261127-82000-C`）+ 币本位保证金/结算处理（账户需持足额 BTC/ETH）+ 最小单下单路径 + 带重试（探测中遇到一次瞬时 URLError）。**仍不接策略** —— 策略要等 IV−RV 样本闸门"
   },
   {
    "id": "options-minimal-structure",
@@ -246,6 +246,13 @@
    "state": "waiting_data",
    "gate": "已两次证明频率换不来正收益；链上任何方向性信号必须先跨过 1.4% 的往返成本，目前没有信号做到",
    "next": "只把链上当作研究/信号源；除非出现『扣掉 1.4% 仍为正』的样本，否则不进执行层"
+  },
+  {
+   "id": "options-probe",
+   "item": "1.1 · 期权合约与最小单的只读探测（写适配器前的事实）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T16:10：新增 `scripts/options_probe.py`（公开端点、不签名不下单）。事实：BTC-USD 1336 个合约；币本位 spec ctVal=1/ctMult=0.01/minSz=1/tick 0.0001/settle=BTC；最小单 0.0006 BTC ≈ $49.52；ETH 同类 ≈ $2–18；盘口 5x5 双边。**并修掉我自己第一版把 ctVal 当乘数导致的 100 倍高估**",
+   "next": "适配器按这些事实写；`_UM` 美元结算家族的报价待核"
   }
  ]
 }
