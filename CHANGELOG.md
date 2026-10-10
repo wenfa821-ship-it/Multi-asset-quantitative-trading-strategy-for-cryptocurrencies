@@ -4,12 +4,13 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T16:17 起，4 条留痕）
+## Unreleased（自 2026-10-10T16:17 起，5 条留痕）
 
 - `2026-10-10T16:20` **strategy** 1.2 换腿规则的检测侧落地（只读）：新增 scripts/carry_rotation.py，首次实测 5 对里没有一对『连续 3 天全部低于 1 bp/天』；但 CRV 的中位数已经转负（−0.24）
 - `2026-10-10T16:40` **bug** 期权适配器（1.1）做到单位与下单参数层：修掉 ctMult 缺失（差 100 倍）、posSide/reduceOnly 误加、以及 validate 的 market_type 白名单；剩 symbol 映射与『交权利金的币』两块
 - `2026-10-10T17:05` **ops** 补上 v1.0.2 留的那半句：把『每日任务需补跑』接进看板（services.daily_job + 一条 warn 红旗），并用 launchd 同款环境跑出 14/14 步全绿
 - `2026-10-10T17:10` **bug** 期权 symbol 映射做完并在模拟盘验证；顺带量到模拟盘期权盘口极宽（抽样价差 ≈ 中值的 59%，实盘约 0.8%）
+- `2026-10-10T17:40` **decision** 1.1 最小结构说明书落地（docs/options-sleeve-spec.md）：币本位、25–45 天、平值 ±2.5%、单腿买入；闸门/退出/张数全部写成数字，成本墙换算成 1.5 个波动率点
 
 ## v1.0.3 — 2026-10-10T16:17
 
