@@ -252,10 +252,42 @@ def main(argv: list[str] | None = None) -> int:
         default="data/daily_job_status.json",
         help="where to record the steps that still need a re-run",
     )
+    parser.add_argument(
+        "--rerun-failed",
+        action="store_true",
+        help="run only the steps the status file lists as needing a re-run",
+    )
     args = parser.parse_args(argv)
+    status_path = Path(args.status_file)
+    if not status_path.is_absolute():
+        status_path = PROJECT / status_path
+    steps, script_steps = INPROCESS_STEPS, SCRIPT_STEPS
     codes: dict[str, int] = {}
     attempts_used: dict[str, int] = {}
-    for name, step_argv in INPROCESS_STEPS:
+    if args.rerun_failed:
+        # The "补跑" the retry change promised: after a night like 2026-10-10 (the
+        # 21:10 run left `new_listing_track` failing through a proxy storm) the point
+        # of naming a failure is being able to act on exactly that list, instead of
+        # re-running 16 minutes of work. Every step is idempotent, and the status
+        # file is seeded with the previous outcome so it still describes the whole
+        # run afterwards rather than only the part that ran again.
+        try:
+            previous = json.loads(status_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            print(f"{status_path} unreadable - nothing to re-run")
+            return 0
+        wanted = [str(name) for name in (previous.get("needs_rerun") or [])]
+        if not wanted:
+            print("status file lists no failing steps - nothing to re-run")
+            return 0
+        codes = {
+            str(name): int((info or {}).get("rc") or 0)
+            for name, info in (previous.get("steps") or {}).items()
+        }
+        steps = tuple(step for step in INPROCESS_STEPS if step[0] in wanted)
+        script_steps = tuple(step for step in SCRIPT_STEPS if step[0] in wanted)
+        print(f"re-running {len(steps) + len(script_steps)} step(s): {', '.join(wanted)}")
+    for name, step_argv in steps:
         print(f"=== {name} ===", flush=True)
         codes[name], attempts_used[name] = run_with_retry(
             name,
@@ -263,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
             attempts=args.attempts,
             sleep_seconds=args.retry_sleep,
         )
-    for script, step_argv in SCRIPT_STEPS:
+    for script, step_argv in script_steps:
         print(f"=== {script} ===", flush=True)
         codes[script], attempts_used[script] = run_with_retry(
             script,

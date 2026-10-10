@@ -72,10 +72,17 @@ new = [
 # What this tier is FOR, right now: acquiring real fills and real cost data on a
 # sleeve that has never traded (0/30% used since the split). It is not a claim
 # that a daily breakout works on equities - that needs years, not 90 bars.
+#
+# NARROWED TO ONE SYMBOL on 2026-10-10, and the reading is now unambiguous rather
+# than preliminary: with one measurement taken INSIDE the US session (13:46 UTC,
+# 16 minutes after the open), `scripts/tradfi_tier.py` reports XMU/USDT as
+# tradable (300 1h bars, two-sided) and the other twelve as `no_data` - zero bars
+# on 1d/1h/15m and 11 of them showing a bid with no ask. Session-limited would
+# have looked different: data outside the window, none inside. These have none at
+# any hour, so they are not a session problem, they are simply not served.
+#   python3 scripts/tradfi_tier.py --write   # re-run when the venue changes
 tradfi = [
-  "XTSM/USDT", "XGOOGL/USDT", "XASML/USDT", "XAVGO/USDT", "XCSCO/USDT",
-  "XAMD/USDT", "XDELL/USDT", "XHIMS/USDT", "XGME/USDT", "XLITE/USDT",
-  "XPLTR/USDT", "XIWM/USDT", "XMU/USDT",
+  "XMU/USDT",
 ]
 
 

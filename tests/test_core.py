@@ -3865,11 +3865,14 @@ class EntryDepthGateCoverageTests(unittest.TestCase):
             def bars(self, symbol: str, timeframe: str | None = None) -> list[Bar]:
                 return bars
 
-        signal = Signal(symbol="XTSM/USDT", side="buy", reason="test", tag=strategy.name)
+        # XMU/USDT: the only TradFi symbol the venue still serves (2026-10-10). The
+        # subject here is the depth gate, so the symbol just has to be one the tier
+        # actually carries.
+        signal = Signal(symbol="XMU/USDT", side="buy", reason="test", tag=strategy.name)
         account = AccountState(venue="paper", cash=10_000.0, equity=10_000.0)
-        view = MarketView(symbol="XTSM/USDT", mark=mark, source=_Source())
+        view = MarketView(symbol="XMU/USDT", mark=mark, source=_Source())
         return runner._handle_signal(
-            strategy, signal, account, {"XTSM/USDT": mark}, view
+            strategy, signal, account, {"XMU/USDT": mark}, view
         )
 
     def test_a_one_sided_book_refuses_a_directional_entry(self) -> None:

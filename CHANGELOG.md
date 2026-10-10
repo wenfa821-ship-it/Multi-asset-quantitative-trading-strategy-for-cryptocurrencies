@@ -1,14 +1,20 @@
 # Changelog
 
-当前版本：**v1.0.5**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.6**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T21:37 起，3 条留痕）
+## Unreleased（自 2026-10-10T22:19 起，2 条留痕）
 
-- `2026-10-10T21:45` **bug** 给市场数据刷新加 120 秒预算：慢场馆不再能把一个 tick 拖成 86 分钟（closes 21:35 那条卡顿）
-- `2026-10-10T22:10` **strategy** 1.2 换腿的执行侧落地为『只平旧、绝不开新』：新增 scripts/carry_rotate.py（默认 dry-run），三条防护规则写进代码
 - `2026-10-10T22:40` **ops** 加入『保留库存』：声明过的持仓不再触发非托管告警与对账差异，但金额照报（ta_reserved_notional）
+- `2026-10-10T23:20` **decision** TradFi tier 收窄到 XMU：盘中样本到手，那 12 个标的是『根本不供数据』而不是『时段受限』（v1.0.6）
+
+## v1.0.6 — 2026-10-10T22:19
+
+- 测试 **342** 绿 · 权益 $101,609.90 · 记录时的包版本 1.0.6
+
+1.0.6 补丁：TradFi tier 从 13 个收窄到 1 个（XMU/USDT）—— 盘中观测证明其余 12 个在两个时段都不供数据，属于配置与场馆实际脱节。342 tests。
+its config/ and manifest.json rather than against memory.
 
 ## v1.0.5 — 2026-10-10T21:37
 

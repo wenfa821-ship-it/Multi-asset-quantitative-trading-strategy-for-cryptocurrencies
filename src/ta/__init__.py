@@ -4,4 +4,4 @@ Design contract (keep this true when you extend it):
     strategy proposes  ->  risk engine decides  ->  OMS executes  ->  ledger records
 """
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
