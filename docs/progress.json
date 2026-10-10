@@ -208,9 +208,9 @@
   {
    "id": "reconcile-tool-units",
    "item": "1.0.x · 对账脚本的 ACT 10 倍单位假差异",
-   "state": "not_started",
-   "gate": "`scripts/reconcile_ledger_to_venue.py` 把永续 `contracts` 与账本『张』直接相比，ACT（ctVal 10）报出 -22912 vs -229120 的假差异（runner 侧已统一为张，脚本没跟上）",
-   "next": "让脚本用与 runner 相同的口径（张，或按 symbol 乘 ctVal）比较永续仓位；它只做向下修正，所以现在不会误伤，但报表里那行是假的"
+   "state": "done",
+   "gate": "**已修（v1.0.1）**：`_venue_swap_positions` 曾把场馆仓位换算成 base 单位，而账本存的是张 —— ACT（ctVal 10）因此报 `ledger=-22912 venue=-229120` 的假差异。改成两侧统一用张；实测五条永续腿现在全部 ok、脚本报 nothing to correct。+2 测试（292）",
+   "next": "已提交并发 1.0.1；这条通道继续接收运营中发现的工具/风控修复"
   },
   {
    "id": "options-venue-adapter",

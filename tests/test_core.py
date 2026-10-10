@@ -3056,6 +3056,41 @@ class DepthGateTests(unittest.TestCase):
         self.assertGreater(config.risk.per_trade.max_entry_impact_bps, 0.0)
 
 
+class ReconcileSwapUnitsTests(unittest.TestCase):
+    """The reconciler must speak the SAME unit the ledger does: contracts (张).
+
+    Measured 2026-10-10: it converted the venue's positions into base units while
+    the ledger stores contracts, so ACT (ctVal 10) read `ledger=-22912
+    venue=-229120` and showed up as "venue-only". No correction was made - but the
+    quantity this feeds is written into the ledger as a contract count, so a real
+    correction on any ctVal != 1 symbol would have been off tenfold.
+    """
+
+    def _positions(self, contracts: float, side: str, contract_size: float):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "reconcile_ledger_to_venue", PROJECT / "scripts" / "reconcile_ledger_to_venue.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class Ex:
+            def fetch_positions(self):
+                return [{"symbol": "ACT/USDT:USDT", "contracts": contracts, "side": side}]
+
+        venue = type("V", (), {"ex": Ex(), "markets": {"ACT/USDT:USDT": {"contractSize": contract_size}}})()
+        return module._venue_swap_positions(venue)
+
+    def test_contracts_are_not_multiplied_by_the_contract_size(self) -> None:
+        # 10 contracts of something worth 10 base units each is still 10 contracts.
+        self.assertEqual(self._positions(10.0, "short", 10.0), {"ACT/USDT:USDT": -10.0})
+        self.assertEqual(self._positions(10.0, "long", 10.0), {"ACT/USDT:USDT": 10.0})
+
+    def test_a_contract_size_of_one_is_unaffected(self) -> None:
+        self.assertEqual(self._positions(7.0, "short", 1.0), {"ACT/USDT:USDT": -7.0})
+
+
 class VenueAvailabilityTests(unittest.TestCase):
     """One word for what the venue offers a symbol right now.
 

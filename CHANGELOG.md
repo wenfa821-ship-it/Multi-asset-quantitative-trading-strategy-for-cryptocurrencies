@@ -1,12 +1,11 @@
 # Changelog
 
-当前版本：**v1.0.0**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.1**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T11:58 起，9 条留痕）
+## Unreleased（自 2026-10-10T12:10 起，8 条留痕）
 
-- `2026-10-10T12:00` **decision** carry 名额决策简报（给用户拍板用）：预算其实只用了 22.9%，真正的约束是『三处配置互相矛盾』
 - `2026-10-10T12:15` **ops** 把『场馆此刻到底供不供数据』变成每日自动记录：新增 venue_availability（09:10 在美股时段外、21:10 在时段内）
 - `2026-10-10T12:40` **research** 用今天的资金费历史重跑选标：榜单前列全是『没有现货腿』的合约，唯一比我们好的可做标的是 WLFI
 - `2026-10-10T13:00` **research** 用真实成交检验 carry 的成本模型：三对实际入场 basis 是 −15.7 / −130.6 / −18.3 bps —— **今天的新规则会把这三对全部拒掉**；而当下 basis 反而全是正的（含 WLFI +951 bps）
@@ -15,6 +14,13 @@
 - `2026-10-10T14:20` **ops** 建立专业化的版本与代码管理（v0.4.7）：VERSION 单一来源 + 生成式 CHANGELOG.md + RELEASING 规则 + git 仓库；并明确『1.0.0 = 第一阶段完成』
 - `2026-10-10T15:00` **decision** 第一阶段封板 1.0：期权策略移入 1.1（用户决定），四条腿 + 风控/对账/数据/发布管理全部就位
 - `2026-10-10T15:30` **decision** 1.0 之后的路径规划：1.1 期权腿/期权策略（新增收益来源）、1.2 carry 轮换、1.3 链上研究，1.0.x 随修随发
+
+## v1.0.1 — 2026-10-10T12:10
+
+- 测试 **292** 绿 · 权益 $101,600.65 · 记录时的包版本 1.0.1
+
+PATCH：对账脚本单位修一致（场馆侧与账本都用张）—— 此前 _venue_swap_positions 换算成 base 单位，ACT/NEAR（ctVal 10）虚报 10 倍差额，且喂给修正逻辑的数量会被当张数写进账本（错 10 倍）。修后五条永续腿全部 ok、nothing to correct；+2 测试（292 全绿）。
+its config/ and manifest.json rather than against memory.
 
 ## v1.0.0 — 2026-10-10T11:58
 

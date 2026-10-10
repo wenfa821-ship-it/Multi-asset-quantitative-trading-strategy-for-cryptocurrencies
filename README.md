@@ -66,14 +66,14 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `venue-availability-track` | 『场馆此刻供不供数据』的每日自动记录（选标的不能只看磁盘） | **✅ 完成** | changelog 2026-10-10T12:15：新增 scripts/venue_availability.py（tradable/one-sided/quote-only/absent/bars-only 五态）并接进每日任务（09:10 时段外 / 21:10 时段内）；基线 tradable=1（XMU）、quote-only=11、absent=1（XAMD）；+2 测试（288） | 看今晚 21:10 那一行：若 12 个标的在美股时段内仍无 K 线/卖盘 → 把 tradfi tier 收窄到真正供数据的标的；若恢复 → 按『时段受限』设计（跳过非交易时段的信号） |
 | `release-tooling` | 版本与代码管理的专业化（VERSION/CHANGELOG/RELEASING/git + 每日校验） | **✅ 完成** | changelog 2026-10-10T14:20（v0.4.7）：VERSION 单一来源 + version_sync --check；生成式 CHANGELOG.md + --check；docs/RELEASING.md（1.0.0 = 第一阶段完成；之后 MAJOR/MINOR/PATCH）；git init + e4f4864 + tag v0.4.6；每日任务新增 3 个校验步骤 | 1.0.0 等 path-5 闸门（约 10-13/14）；之后每轮收尾按 RELEASING.md 的 7 步清单执行，不再靠记忆 |
 | `tradfi-tier-narrow` | 1.0.x · TradFi tier 收窄到真正能交易的标的 | **⬜ 未开始** | 等今晚 21:10 的 `venue_availability` 美股时段记录：当前 13 个标的里只有 XMU 同时有 K 线与双边盘口，其余 12 个（XTSM/XGOOGL/XASML/XAVGO/XCSCO/XAMD/XDELL/XHIMS/XGME/XLITE/XPLTR/XIWM）在 1d/1h/15m 上都是 0 根 | 若美股时段仍无数据 → 把 `[universe.symbols_by_tier].tradfi` 收窄到 XMU（或届时确实供数据的那些），发 1.0.1；若恢复供数据 → 改为『时段受限』处理（跳过非交易时段的信号） |
-| `reconcile-tool-units` | 1.0.x · 对账脚本的 ACT 10 倍单位假差异 | **⬜ 未开始** | `scripts/reconcile_ledger_to_venue.py` 把永续 `contracts` 与账本『张』直接相比，ACT（ctVal 10）报出 -22912 vs -229120 的假差异（runner 侧已统一为张，脚本没跟上） | 让脚本用与 runner 相同的口径（张，或按 symbol 乘 ctVal）比较永续仓位；它只做向下修正，所以现在不会误伤，但报表里那行是假的 |
+| `reconcile-tool-units` | 1.0.x · 对账脚本的 ACT 10 倍单位假差异 | **✅ 完成** | **已修（v1.0.1）**：`_venue_swap_positions` 曾把场馆仓位换算成 base 单位，而账本存的是张 —— ACT（ctVal 10）因此报 `ledger=-22912 venue=-229120` 的假差异。改成两侧统一用张；实测五条永续腿现在全部 ok、脚本报 nothing to correct。+2 测试（292） | 已提交并发 1.0.1；这条通道继续接收运营中发现的工具/风控修复 |
 | `options-venue-adapter` | 1.1 · 期权腿 venue 适配（下单路径） | **🔜 下一版本** | 1.1 的第一步：现有 venue 层只处理现货与永续，期权（`BTC-USD-261008-80000-C`）没有适配；数据层已有（期权面 + IV−RV 每日行） | 实现期权合约的 symbol→instId 映射、下单参数（币本位保证金/到期日）、最小仓位的有限风险结构；先用最小权利金跑通一笔并核对结算口径 |
 | `options-minimal-structure` | 1.1 · 期权策略（买权利金的有限风险结构） | **🔜 下一版本** | 门槛：IV−RV 满 5–7 天新鲜样本且符号稳定（现 3 天：10-08/09/10；读数 BTC −7.25 / ETH +7.18 / SOL −0.24，逐日漂移）。**方向必须是买方**（最大损失=权利金），与『风险最小化』一致 | 样本够后先判符号稳定性；稳定且扣掉成本仍为正，才接最小仓位策略；若符号继续漂移，则 1.1 只交付适配+数据，不交易 |
 | `carry-rotation-rule` | 1.2 · carry 换腿规则（名额 5/5 满，轮换是唯一进场方式） | **🔜 下一版本** | 现货/衍生品名额各 5，现已满（CRV/ACT/LTC/SUI/NEAR）。可做升级标的是 WLFI（中位 4.49 bps/天 vs 我们约 3.0），但**换一次腿要 44.9 bps 往返**，只多赚约 1.5 bps/天 → 约 30 天才回本 | 只在『某标的资金费持续低于阈值 N 天』时触发换腿（不是追高费率），并记入留痕；同时把 `carry_notional_pct` 的校准等到非尖峰样本（现 97% 收入来自 CRV 的模拟盘产物） |
 | `onchain-1h-hypothesis` | 1.3 · 链上 +1h 高换手假设的正式判定 | **⏳ 等数据** | 每轮事件研究里『20+ 桶中位 −1.3~−1.6% vs 低桶 ~0%』方向连续同向，但**低换手桶只有 6–7 个代币**，未达『两侧各 ≥20 代币』的判据；+5m 覆盖仅 1%，属结构性不可测 | 等低换手桶累积到 ≥20 个代币再看是否提出；即使成立，方向是做空而 DEX 无借券，执行上暂时不可得 |
 | `onchain-cost-wall` | 1.3 · 链上执行的成本墙（$200 单往返 1.4%） | **⏳ 等数据** | 已两次证明频率换不来正收益；链上任何方向性信号必须先跨过 1.4% 的往返成本，目前没有信号做到 | 只把链上当作研究/信号源；除非出现『扣掉 1.4% 仍为正』的样本，否则不进执行层 |
 
-**合计**：✅ 完成 23 · 🔜 下一版本 5 · ⬜ 未开始 2 · ⏳ 等数据 5。
+**合计**：✅ 完成 24 · 🔜 下一版本 5 · ⬜ 未开始 1 · ⏳ 等数据 5。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。

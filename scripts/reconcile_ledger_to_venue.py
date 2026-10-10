@@ -144,11 +144,17 @@ def _explain_cash(config, rows: list[dict], book: dict[str, float]) -> None:
 
 
 def _venue_swap_positions(venue) -> dict[str, float]:
-    """Venue swap positions in BASE units, signed (+ long, - short).
+    """Venue swap positions in CONTRACTS (张), signed (+ long, - short).
 
-    Contracts are NOT base units - contractSize differs per symbol (SOL 1,
-    BTC 0.01, DOGE 1000) - so the same conversion `CcxtVenue.account_snapshot`
-    uses is applied here. Getting this wrong is the trap `swap_math` exists for.
+    The ledger stores a swap position in contracts, so this MUST be contracts too.
+    It used to multiply by `contractSize` "to match CcxtVenue" - but the runner
+    stopped speaking base units for swaps on 2026-10-09 (it compares 张 against 张
+    because that is what a fill reports), so the two sides disagreed by exactly
+    ctVal: measured 2026-10-10, ACT (ctVal 10) showed `ledger=-22912
+    venue=-229120` and the line read "venue-only". Nothing was corrected, so no
+    harm was done - but the correcting quantity this function feeds is written INTO
+    the ledger as a contract count, so a real correction on any ctVal != 1 symbol
+    would have been off by that factor. One unit, both sides.
     """
     out: dict[str, float] = {}
     try:
@@ -161,11 +167,8 @@ def _venue_swap_positions(venue) -> dict[str, float]:
         contracts = float(row.get("contracts") or 0.0)
         if not symbol or abs(contracts) < 1e-12:
             continue
-        size = float((venue.ex.markets.get(symbol) or {}).get("contractSize") or 1.0)
-        signed = abs(contracts * size)
-        if str(row.get("side") or "").lower() == "short":
-            signed = -signed
-        out[symbol] = signed
+        signed = abs(contracts)
+        out[symbol] = -signed if str(row.get("side") or "").lower() == "short" else signed
     return out
 
 
