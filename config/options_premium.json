@@ -1,0 +1,32 @@
+{
+  "_note": "1.1 期权腿参数（设计见 docs/options-sleeve-spec.md）。刻意是数据文件而不是代码：改一个阈值不该需要动代码，写错也该退化到内置默认值，而不是让脚本崩掉 —— 与 config/alerts.json 的看门狗阈值同一个理由。",
+  "_enabled_note": "enabled=false 是刻意的：runner 目前没有期权执行路径（期权腿的 venue 适配只到『能报价、能映射符号』），而且闸门此刻是关闭的（BTC 连 3/5 天、ETH 连 0/5）。开闸日只需要把这里改成 true，并先完成 options-fund-premium-coin（换约 $100 USDT→BTC）。",
+  "enabled": false,
+  "families": ["BTC-USD", "ETH-USD"],
+  "gate": {
+    "days": 5,
+    "min_edge_pp": 1.5
+  },
+  "entry": {
+    "min_dte": 25,
+    "max_dte": 45,
+    "max_strike_offset_pct": 2.5,
+    "max_spread_pct": 3.0,
+    "min_book_levels": 2
+  },
+  "size": {
+    "max_premium_pct_of_equity": 0.5,
+    "max_total_premium_pct_of_equity": 2.0,
+    "first_order_contracts": 1,
+    "max_concurrent_positions": 2
+  },
+  "exit": {
+    "premium_stop_pct": -60.0,
+    "premium_take_profit_pct": 100.0,
+    "force_close_dte": 7,
+    "max_exit_spread_pct": 8.0
+  },
+  "direction": {
+    "filter": "ema20_daily"
+  }
+}

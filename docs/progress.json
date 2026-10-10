@@ -241,6 +241,13 @@
    "next": "每天继续累积：BTC 若保持，最早 10-12/13 达到 5 天；ETH 要先让 RV−IV 连续为正。开闸那天 gate.jsonl 会留下时间戳，再按说明书 §4 开门（前置仍是换 ~$100 USDT→BTC）"
   },
   {
+   "id": "options-sleeve-config",
+   "item": "1.1 前置 · 参数落到 `config/options_premium.json`（`enabled=false`），闸门脚本改读它",
+   "state": "done",
+   "gate": "changelog 2026-10-10T18:30：说明书 §4 的全部数字（DTE 25–45 / 平值 ±2.5% / 价差 ≤3% 且双边 ≥2 档 / 单笔 ≤0.5% 权益、合计 ≤2% / −60%、+100%、DTE≤7 / 闸门 5 天 1.5pp）只在一处存在。刻意做成数据文件（同 `config/alerts.json` 的理由：改阈值不动代码、写错退化到默认值）；`options_gate.py` 读它并把 `enabled` 与选档规则一起打印",
+   "next": "开闸日三步都在纸面上：① 把 `enabled` 改 true；② 换 ~$100 USDT→BTC；③ 用 1 张最小单跑通『下单→成交→记录价差/费用→平仓』。测试 `test_the_shipped_config_file_ships_disabled` 会守住第 ① 步不被手滑执行"
+  },
+  {
    "id": "carry-rotation-rule",
    "item": "1.2 · carry 换腿规则（名额 5/5 满，轮换是唯一进场方式）",
    "state": "done",

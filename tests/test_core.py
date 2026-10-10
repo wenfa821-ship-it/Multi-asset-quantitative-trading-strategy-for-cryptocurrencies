@@ -4364,6 +4364,40 @@ class OptionsGateTests(unittest.TestCase):
         self.assertFalse(runs["ETH-USD"]["open"])
         self.assertEqual(runs["ETH-USD"]["run_days"], 0)
 
+    def test_settings_degrade_to_the_defaults(self) -> None:
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = module.load_settings(Path(tmp) / "nope.json")
+            broken = Path(tmp) / "broken.json"
+            broken.write_text("{not json", encoding="utf-8")
+            self.assertEqual(module.load_settings(broken), missing)
+        self.assertEqual(missing["gate"], {"days": 5, "min_edge_pp": 1.5})
+        self.assertFalse(missing["enabled"])
+
+    def test_a_partial_settings_file_merges_over_the_defaults(self) -> None:
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "options_premium.json"
+            path.write_text(
+                json.dumps({"_note": "comment", "gate": {"days": 7}, "enabled": True}),
+                encoding="utf-8",
+            )
+            settings = module.load_settings(path)
+        self.assertEqual(settings["gate"]["days"], 7)
+        self.assertEqual(settings["gate"]["min_edge_pp"], 1.5)  # untouched default
+        self.assertTrue(settings["enabled"])
+        self.assertNotIn("_note", settings)
+        self.assertEqual(settings["entry"]["max_spread_pct"], 3.0)
+
+    def test_the_shipped_config_file_ships_disabled(self) -> None:
+        """The sleeve is off until the gate opens AND the premium coin exists."""
+        module = self._module()
+        settings = module.load_settings(PROJECT / "config" / "options_premium.json")
+        self.assertFalse(settings["enabled"])
+        self.assertEqual(settings["families"], ["BTC-USD", "ETH-USD"])
+        self.assertEqual(settings["gate"]["min_edge_pp"], 1.5)
+        self.assertEqual(settings["size"]["first_order_contracts"], 1)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

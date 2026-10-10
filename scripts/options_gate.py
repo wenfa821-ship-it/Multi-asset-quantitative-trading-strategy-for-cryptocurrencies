@@ -33,6 +33,45 @@ PROJECT = Path(__file__).resolve().parents[1]
 # USD-settled _UM family exists there, with no asks (changelog 2026-10-10T15:55).
 DEFAULT_FAMILIES = ("BTC-USD", "ETH-USD")
 
+# The parameters live in a data file, not in here - the same choice the dashboard's
+# alert thresholds made (config/alerts.json): changing a threshold should not be a
+# code change, and a typo should degrade to these instead of taking the job down.
+DEFAULTS: dict = {
+    "enabled": False,
+    "families": list(DEFAULT_FAMILIES),
+    "gate": {"days": 5, "min_edge_pp": 1.5},
+    "entry": {"min_dte": 25, "max_dte": 45, "max_strike_offset_pct": 2.5,
+              "max_spread_pct": 3.0, "min_book_levels": 2},
+    "size": {"max_premium_pct_of_equity": 0.5, "max_total_premium_pct_of_equity": 2.0,
+             "first_order_contracts": 1, "max_concurrent_positions": 2},
+    "exit": {"premium_stop_pct": -60.0, "premium_take_profit_pct": 100.0,
+             "force_close_dte": 7, "max_exit_spread_pct": 8.0},
+    "direction": {"filter": "ema20_daily"},
+}
+
+
+def load_settings(path: Path, defaults: dict | None = None) -> dict:
+    """Settings from `config/options_premium.json`, merged over the defaults.
+
+    Unknown keys pass through, `_`-prefixed keys are comments, and anything
+    unreadable leaves the defaults in place: a typo must not stop the daily job.
+    """
+    base = json.loads(json.dumps(defaults if defaults is not None else DEFAULTS))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return base
+    if not isinstance(raw, dict):
+        return base
+    for key, value in raw.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            base[key].update({k: v for k, v in value.items() if not k.startswith("_")})
+        else:
+            base[key] = value
+    return base
+
 
 def load_rows(path: Path) -> list[dict]:
     rows = []
@@ -101,30 +140,41 @@ def gate_runs(rows: list[dict], families=DEFAULT_FAMILIES, *, days: int = 5,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--history", default="data/options/cost_history.jsonl")
-    ap.add_argument("--families", default=",".join(DEFAULT_FAMILIES))
-    ap.add_argument("--days", type=int, default=5)
-    ap.add_argument("--min-edge-pp", type=float, default=1.5)
+    ap.add_argument("--settings", default="config/options_premium.json")
+    ap.add_argument("--families", default="", help="default: the settings file")
+    ap.add_argument("--days", type=int, default=0, help="default: the settings file")
+    ap.add_argument("--min-edge-pp", type=float, default=0.0, help="default: the settings file")
     ap.add_argument("--out", default="data/options/gate.jsonl")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
-    families = [f.strip() for f in args.families.split(",") if f.strip()]
+    settings = load_settings(PROJECT / args.settings)
+    families = ([f.strip() for f in args.families.split(",") if f.strip()]
+                or list(settings.get("families") or DEFAULT_FAMILIES))
+    days = args.days or int(settings["gate"]["days"])
+    min_edge = args.min_edge_pp or float(settings["gate"]["min_edge_pp"])
+    entry = settings.get("entry") or {}
+    size = settings.get("size") or {}
     rows = load_rows(PROJECT / args.history)
     if not rows:
         print(f"no rows in {args.history} - nothing to judge")
         return 1
-    runs = gate_runs(rows, families, days=args.days, min_edge_pp=args.min_edge_pp)
+    runs = gate_runs(rows, families, days=days, min_edge_pp=min_edge)
 
-    print(f"1.1 买权利金闸门：RV(30d) − IV ≥ {args.min_edge_pp:g}pp 连续 {args.days} 天")
+    print(f"1.1 买权利金闸门：RV(30d) − IV ≥ {min_edge:g}pp 连续 {days} 天"
+          f"（配置 enabled={settings.get('enabled')}）")
     for family, info in runs.items():
         state = "OPEN" if info["open"] else "closed"
         latest = info["latest_rv_minus_iv_pp"]
-        print(f"  {family:9s} {state:6s} 连{info['run_days']}/{args.days} 天 · "
+        print(f"  {family:9s} {state:6s} 连{info['run_days']}/{days} 天 · "
               f"最新 {info['latest_date']} RV−IV = {latest} pp · 样本 {info['sample_days']} 天")
         print("      " + "  ".join(f"{d}:{v}" for d, v in info["series"]))
     opened = [f for f, i in runs.items() if i["open"]]
     print("\n" + (f"闸门开启：{', '.join(opened)} —— 可按说明书 §4 开门"
                   if opened else "闸门关闭：不接策略，1.1 只交付适配+数据"))
+    print(f"选档：DTE {entry.get('min_dte')}–{entry.get('max_dte')} · 平值 ±{entry.get('max_strike_offset_pct')}% · "
+          f"价差 ≤{entry.get('max_spread_pct')}%（≥{entry.get('min_book_levels')} 档）· "
+          f"单笔 ≤{size.get('max_premium_pct_of_equity')}% 权益 / 合计 ≤{size.get('max_total_premium_pct_of_equity')}%")
 
     if args.write:
         path = Path(args.out)
@@ -133,8 +183,9 @@ def main() -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "generated_at": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
-            "days": args.days,
-            "min_edge_pp": args.min_edge_pp,
+            "enabled": bool(settings.get("enabled")),
+            "days": days,
+            "min_edge_pp": min_edge,
             "families": runs,
             "open": opened,
         }
