@@ -299,9 +299,9 @@
   {
    "id": "options-fund-premium-coin",
    "item": "1.1 前置 · 备好币本位权利金（账户没有 BTC/ETH）",
-   "state": "next_phase",
+   "state": "done",
    "gate": "账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付。**二选一的 (b) 已实测否决**（changelog 2026-10-10T15:55）：美元结算的 `BTC-USD_UM` 有 634 个 live 合约，但抽 6 个到期的认购**没有一个有卖价**（2 个只有 1 档 5 美元的买价，其余空簿），同一时刻币本位对照合约是 4x4 档、价差 1.65%",
-   "next": "**只剩 (a)，等用户一句话**：先把约 $100 的 USDT 换成 BTC（现货、可逆），用于支付第一张 BTC 期权的权利金。在此之前期权 20% 额度继续空置 —— 这是设计，不是故障"
+   "next": "**已完成（2026-10-10T19:30）**：`scripts/options_fund_premium.py` 买入 **0.00120705 BTC @ 82,843.90**，手续费 $0.099997（≈10 bps），账户现有 0.0012070525 BTC ≈ 够买 2 张最小单。**副作用（已知且刻意）**：这份库存暂不属于任何策略 → 看板常挂 `unmanaged_notional ≈ $99.97` warn + 每轮一条 `position BTC/USDT` 对账差异；把它记进账本会更糟（策略会把它当仓位卖掉，见 changelog 19:30）"
   },
   {
    "id": "daily-job-retry",
@@ -323,6 +323,20 @@
    "state": "done",
    "gate": "changelog 2026-10-10T17:05：看板新增 `services.daily_job`（缺文件/坏 JSON 都退化到 None）+ 一行渲染 + redflags 的 warn『每日任务需补跑』。重启后立刻读出修复前那次运行留下的真实状态（needs_rerun=[refresh_daily_bars.py]），随后带 launchd 环境重跑 14/14 全绿、红旗消失",
    "next": "以后任何一天只要重试后仍有失败步骤，看板会直接点名；`data/daily_job_status.json` 的 `age_hours` 也一并显示，避免把『上次运行』误读成『现在』"
+  },
+  {
+   "id": "reserved-inventory",
+   "item": "1.1 前置 · 让系统认识『保留库存』（$100 BTC 现在无人认领，看板常挂 warn）",
+   "state": "next_phase",
+   "gate": "changelog 2026-10-10T19:30：手工买来的 BTC 未入账 → `ta_unmanaged_notional 99.97` 触发看门狗 warn，且每轮对账报 `position BTC/USDT: local=2.5e-09 venue=0.0012070525`。两条告警都是**真的**（确实有 $100 不在任何策略名下），但会一直挂着直到期权腿能自己持有它",
+   "next": "两条路：①（推荐，随 1.1）期权腿接进 runner 后由它持有这份库存，告警自然消失；② 若 1.1 还要等，就给风控与对账加一个显式的『已知保留库存』清单（symbol → 用途 + 上限），让它们区分『已知保留』与『来路不明』，而不是调高阈值。**在此之前不要把它记进账本** —— 那会让策略把它当仓位卖出（今天已实测）"
+  },
+  {
+   "id": "spot-exit-reduce-only",
+   "item": "1.0.x · 策略现货平仓路径坏：卖出带 reduce_only → OKX 51000 拒单（从未被真实触发过）",
+   "state": "not_started",
+   "gate": "changelog 2026-10-10T19:35：`runner._handle_signal` 的退出分支对现货持仓发 `reduce_only=True` 的市价卖单，OKX 回 `51000 Parameter tdMode error`（11:16:08 实测，被 $100 BTC 库存意外撞出来）。四个方向性策略至今零成交，所以这条路径此前从未在演示盘执行过；carry 腿走 `paired.py`，不受影响",
+   "next": "需要单独一轮：先定『现货上如何表达只减不增』（去掉 reduce_only + 正确 tdMode/tgtCcy，或按可用余额下单），再用 `order_path_check.py` 式的往返探针验证并补回归测试。修之前：方向性策略**一建仓就平不掉**（止损会每 tick 刷 rejected）"
   }
 ]
 }
