@@ -75,8 +75,10 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `options-probe` | 1.1 · 期权合约与最小单的只读探测（写适配器前的事实） | **✅ 完成** | changelog 2026-10-10T16:10：新增 `scripts/options_probe.py`（公开端点、不签名不下单）。事实：BTC-USD 1336 个合约；币本位 spec ctVal=1/ctMult=0.01/minSz=1/tick 0.0001/settle=BTC；最小单 0.0006 BTC ≈ $49.52；ETH 同类 ≈ $2–18；盘口 5x5 双边。**并修掉我自己第一版把 ctVal 当乘数导致的 100 倍高估** | 适配器按这些事实写；`_UM` 美元结算家族的报价待核 |
 | `options-book-survey` | 1.1 前置 · 模拟盘期权盘口调查（宽度中位与尾部） | **🔜 下一版本** | 抽样 `BTC-USD-261030-68000-C` 的 bid/ask = 0.114/0.182（≈中值的 59%），而实盘同族约 0.8% —— 模拟盘期权**极薄**。买权利金要按 ask 成交、平仓要按 bid，价差一项就可能吞掉 1.1 的设想收益 | 买第一张之前先量：多个标的（BTC/ETH/SOL）× 多个到期 × 多档行权价的买卖价差分布（中位/p90），据此定『可接受的入场价差』阈值；若中位价差远超模型收益，则 1.1 只交付适配+数据，不交易 |
 | `options-fund-premium-coin` | 1.1 前置 · 备好币本位权利金（账户没有 BTC/ETH） | **🔜 下一版本** | 账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付 | **需用户拍板**：(a) 先把约 $100 的 USDT 换成 BTC（现货、可逆，推荐）；或 (b) 先查清美元结算的 `BTC-USD_UM` 家族能否用（其报价与币本位对不上，需核实） |
+| `daily-job-retry` | 每日任务的有界重试与补跑清单（10-10 09:10 五步 rc≠0、无自动补跑） | **✅ 完成** | changelog 2026-10-10T15:15：一次代理抖动就把当天那一步判死。现在每步 3 次 / 间隔 60 秒（`--attempts` / `--retry-sleep`，或 `TA_DAILY_ATTEMPTS` / `TA_DAILY_RETRY_SLEEP`），异常也算一次失败；收尾把仍失败的写进 `data/daily_job_status.json` 并在日志打 `NEEDS RERUN`。步骤清单上移到模块级 `INPROCESS_STEPS` / `SCRIPT_STEPS` | 已生效于 09:10 / 21:10 两个槽位（下次自动运行即带重试）。若某步连续多天进 `needs_rerun`，那是确定性故障而不是抖动，按点名去修 —— 本轮就是这么做才挖出 `.env` 加载器那条 |
+| `daily-job-env-loader` | 定时步骤的凭据加载：凡 `build_venue` 的步骤必须自带 `.env` 加载器 | **✅ 完成** | changelog 2026-10-10T15:18：launchd 单元只导出代理、不导出密钥，`venue_availability.py`（今天才进任务）与 `refresh_daily_bars.py` 因此**必然**抛 `API key is not set`。加载器统一到 `ta.config.load_env_file`，两个脚本补 `--env-file` 并在 `Config.load` 前调用；回归测试改走 `daily_research` 自己的步骤表，凡 `build_venue` 必检 `load_env_file` 且必须是同一个函数对象 | 已实测：带 launchd 环境整轮 12/13 步首跑通过，`venue_availability` 追加一行（XMU tradable / 11 quote-only / 1 absent，当时为盘外时段）。今晚 21:10 是第一次带美股时段的记录，直接喂 `tradfi-tier-narrow` |
 
-**合计**：✅ 完成 26 · 🔜 下一版本 6 · ⬜ 未开始 1 · ⏳ 等数据 5。
+**合计**：✅ 完成 28 · 🔜 下一版本 6 · ⬜ 未开始 1 · ⏳ 等数据 5。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。

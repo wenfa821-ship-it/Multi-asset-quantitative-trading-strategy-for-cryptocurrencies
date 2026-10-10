@@ -5,6 +5,7 @@ without installing anything; pytest also collects them.
 from __future__ import annotations
 
 import shutil
+import json
 import sys
 import tempfile
 import time
@@ -3906,6 +3907,146 @@ class TradFiLegIdentityTests(unittest.TestCase):
     def test_plain_crypto_is_spot(self) -> None:
         for symbol in ("BTC/USDT", "DOGE/USDT", "SOL/USDT"):
             self.assertEqual(self._leg(symbol), "spot", symbol)
+
+
+class DailyResearchRetryTests(unittest.TestCase):
+    """A lost day of daily research is a lost day of IV-RV sample.
+
+    Measured 2026-10-10: five of the ten daily steps came back rc != 0 with SSL
+    UNEXPECTED_EOF (the same proxy drop as 10-09) and nothing retried them, so the
+    run had to be re-done by hand. The steps are idempotent (keyed by bill id /
+    listing / merged writes), so a bounded retry costs nothing when the venue is
+    flaky and returns the same rc when it is genuinely dead.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "daily_research", PROJECT / "scripts" / "daily_research.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_a_first_try_success_is_not_retried(self) -> None:
+        module = self._module()
+        calls: list[int] = []
+        slept: list[float] = []
+
+        def action() -> int:
+            calls.append(1)
+            return 0
+
+        code, used = module.run_with_retry(
+            "step", action, attempts=3, sleep_seconds=0, sleep=slept.append
+        )
+        self.assertEqual((code, used, len(calls), slept), (0, 1, 1, []))
+
+    def test_a_flaky_step_recovers_within_the_budget(self) -> None:
+        module = self._module()
+        codes = [1, 1, 0]
+        slept: list[float] = []
+
+        def action() -> int:
+            return codes.pop(0)
+
+        code, used = module.run_with_retry(
+            "step", action, attempts=3, sleep_seconds=60.0, sleep=slept.append
+        )
+        self.assertEqual((code, used), (0, 3))
+        self.assertEqual(slept, [60.0, 60.0])
+
+    def test_a_dead_step_stops_after_the_budget(self) -> None:
+        module = self._module()
+        calls: list[int] = []
+
+        def action() -> int:
+            calls.append(1)
+            return 2
+
+        code, used = module.run_with_retry(
+            "step", action, attempts=3, sleep_seconds=0, sleep=lambda _s: None
+        )
+        self.assertEqual((code, used, len(calls)), (2, 3, 3))
+
+    def test_an_exception_counts_as_a_failed_attempt(self) -> None:
+        module = self._module()
+        calls: list[int] = []
+
+        def action() -> int:
+            calls.append(1)
+            if len(calls) < 2:
+                raise RuntimeError("URLError: SSL UNEXPECTED_EOF_WHILE_READING")
+            return 0
+
+        code, used = module.run_with_retry(
+            "step", action, attempts=3, sleep_seconds=0, sleep=lambda _s: None
+        )
+        self.assertEqual((code, used, len(calls)), (0, 2, 2))
+
+    def test_the_status_file_names_what_still_needs_a_rerun(self) -> None:
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "daily_job_status.json"
+            needs = module.write_status(path, {"a": 0, "b": 1}, {"a": 1, "b": 3})
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(needs, ["b"])
+        self.assertEqual(payload["needs_rerun"], ["b"])
+        self.assertEqual(payload["steps"]["b"], {"rc": 1, "attempts": 3})
+        self.assertEqual(payload["steps"]["a"], {"rc": 0, "attempts": 1})
+
+
+class EnvLoaderIsSharedTests(unittest.TestCase):
+    """Three daily-job steps read credentials through ONE loader, not three copies.
+
+    Measured 2026-10-10: `scripts/venue_availability.py` went into the daily job
+    without the `.env` loader `sync_funding.py` and `funding_income.py` already had,
+    so under launchd - proxy yes, API keys no (README 50.4) - it died with "API key
+    is not set" on all three attempts, and its 21:10 row is the entire input to the
+    TradFi tier decision. One function is what stops the next script repeating it.
+    """
+
+    def _daily_research(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "daily_research", PROJECT / "scripts" / "daily_research.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_missing_file_is_not_an_error(self) -> None:
+        from ta.config import load_env_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load_env_file(Path(tmp) / "nope.env"), 0)
+
+    def test_every_daily_step_that_builds_a_venue_loads_env(self) -> None:
+        """Walked from the job's own step list, so adding a step is what breaks it."""
+        import importlib
+
+        from ta.config import load_env_file as shared
+
+        checked = []
+        for script, _argv in self._daily_research().SCRIPT_STEPS:
+            source = (PROJECT / "scripts" / script).read_text(encoding="utf-8")
+            if "build_venue(" not in source:
+                continue
+            checked.append(script)
+            self.assertIn("load_env_file", source, f"{script} builds a venue without loading .env")
+            module = importlib.import_module(f"scripts.{script[:-3]}")
+            self.assertIs(module.load_env_file, shared, script)
+        self.assertEqual(
+            sorted(checked),
+            [
+                "funding_income.py",
+                "refresh_daily_bars.py",
+                "sync_funding.py",
+                "venue_availability.py",
+            ],
+        )
 
 
 if __name__ == "__main__":

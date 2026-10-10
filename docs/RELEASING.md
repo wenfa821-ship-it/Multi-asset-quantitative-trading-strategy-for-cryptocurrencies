@@ -50,7 +50,8 @@
 ## 3. 发布清单（每次冻结一个版本都按这个顺序做）
 
 1. `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests` —— 必须全绿；
-2. 更新 `docs/progress.json`，并 `python3 scripts/progress.py --write && python3 scripts/progress.py --check`；
+2. 更新 `docs/progress.json`，并 `python3 scripts/progress.py && python3 scripts/progress.py --check`
+   （`progress.py` 直接渲染，没有 `--write`；只有 `changelog_md.py` 需要显式的 `--write`）；
 3. 追加 `docs/changelog.jsonl`（每条改动/决定/研究结论）；
 4. 改 `VERSION`（并让 `scripts/version_sync.py --check` 通过）；
 5. `python3 scripts/version_snapshot.py --version vX.Y.Z --notes "..."`；

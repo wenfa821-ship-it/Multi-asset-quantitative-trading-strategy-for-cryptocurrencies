@@ -18,6 +18,12 @@ research side is not:
 So this fetches a short recent window and MERGES it, which is the shape a daily
 job needs: cheap, idempotent, and it cannot shrink history.
 
+Credentials come from `.env` (README 50.4): the launchd unit exports the proxy but
+not the API keys, so the venue is built without `OKX_DEMO_API_KEY` unless this
+loads it. 2026-10-10: this step was the last one in the daily job failing with
+"API key is not set" - the same omission `venue_availability.py` had, on the one
+step whose whole job is keeping `options_cost`'s 30-day realized vol fresh.
+
     python3 scripts/refresh_daily_bars.py --write                # option underlyings
     python3 scripts/refresh_daily_bars.py --write --symbols BTC/USDT,ETH/USDT
 """
@@ -31,7 +37,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
-from ta.config import Config  # noqa: E402
+from ta.config import Config, load_env_file  # noqa: E402
 from ta.history import fetch_symbol, history_path, merge_bars, read_bars  # noqa: E402
 from ta.venues import build_venue  # noqa: E402
 
@@ -48,8 +54,13 @@ def main() -> int:
     ap.add_argument("--symbols", default=",".join(DEFAULT_SYMBOLS))
     ap.add_argument("--timeframe", default="1d")
     ap.add_argument("--bars", type=int, default=60, help="recent window to fetch and merge")
+    ap.add_argument("--env-file", default=".env", help="credentials, read like the runner does")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
+
+    loaded = load_env_file(PROJECT / args.env_file)
+    if loaded:
+        print(f"loaded {loaded} value(s) from {args.env_file}")
 
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     config = Config.load(args.config_dir)

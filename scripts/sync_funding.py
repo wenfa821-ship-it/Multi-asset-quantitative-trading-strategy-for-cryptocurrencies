@@ -22,7 +22,6 @@ written twice, so this is safe to run on a schedule.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
@@ -30,33 +29,9 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
-from ta.config import Config  # noqa: E402
+from ta.config import Config, load_env_file  # noqa: E402
 from ta.portfolio import Ledger  # noqa: E402
 from ta.venues import build_venue  # noqa: E402
-
-
-def load_env_file(path: Path) -> int:
-    """Read `.env` the way the runner's `--env-file` does.
-
-    The launchd job this runs under exports the proxy but NOT the API keys
-    (checked 2026-10-08: `com.tradingagent.newlisting` sets TA_PROXY/HTTPS_PROXY/
-    PATH/PYTHONPATH/TZ only), so without this the step would fail with "API key is
-    not set" every morning at 09:10 and nobody would notice. Existing environment
-    always wins, so an explicit export still overrides the file.
-    """
-    if not path.exists():
-        return 0
-    loaded = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key and value and key not in os.environ:
-            os.environ[key] = value
-            loaded += 1
-    return loaded
 
 
 def symbol_of(inst_id: str) -> str:

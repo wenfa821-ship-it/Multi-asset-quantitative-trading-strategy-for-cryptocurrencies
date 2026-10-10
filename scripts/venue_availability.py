@@ -16,6 +16,12 @@ was closed. So the honest instrument is a TIME SERIES - one row per run - which 
 why this is wired into the daily job, whose 21:10 CST slot falls inside the US
 session and whose 09:10 slot falls outside it.
 
+Credentials come from `.env`, like `sync_funding.py` and `funding_income.py`: the
+launchd unit exports the proxy but not the API keys (README 50.4), so without the
+loader this step dies with "API key is not set" on every run. It was written
+without it on 2026-10-10 and caught by the daily job's retry summary the same day,
+before the 21:10 slot it exists for.
+
     python3 scripts/venue_availability.py --write     # append one row
     python3 scripts/venue_availability.py --symbols XMU/USDT,XTSM/USDT
 """
@@ -31,7 +37,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
-from ta.config import Config  # noqa: E402
+from ta.config import Config, load_env_file  # noqa: E402
 from ta.venues import build_venue  # noqa: E402
 
 TIMEFRAMES = ("1d", "1h", "15m")
@@ -60,8 +66,13 @@ def main() -> int:
     ap.add_argument("--venue", default="okx_demo")
     ap.add_argument("--symbols", default="", help="comma separated; default = the tradfi tier")
     ap.add_argument("--out", default="data/universe/availability.jsonl")
+    ap.add_argument("--env-file", default=".env", help="credentials, read like the runner does")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
+
+    loaded = load_env_file(PROJECT / args.env_file)
+    if loaded:
+        print(f"loaded {loaded} value(s) from {args.env_file}")
 
     config = Config.load(args.config_dir)
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]

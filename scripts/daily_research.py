@@ -37,14 +37,31 @@ interpreter this job can demonstrably read the project with.
 
 Exit 0 unless BOTH steps fail, so one bad network moment does not paint the job
 red and hide which half actually worked. Both steps are idempotent.
+
+AND WHY EVERY STEP IS RETRIED
+-----------------------------
+2026-10-10 09:10: five of these ten steps came back rc != 0 with
+`SSL: UNEXPECTED_EOF_WHILE_READING` - the same upstream proxy drop that had
+already wiped out the 10-09 run (see the trading loop's own `venue call failed`
+lines in the same window). Nothing retried them, so the run was simply lost and
+had to be re-run by hand, twice in two days. The "options IV-RV needs 5-7 days of
+fresh samples" gate in the 1.1 plan depends on this job, so a silent lost day is
+not cosmetic. Every step therefore gets a bounded retry (3 attempts, 60s apart by
+default, both overridable), and whatever is still failing at the end is written to
+data/daily_job_status.json and printed as NEEDS RERUN instead of being buried in
+an rc table.
 """
 
 from __future__ import annotations
 
+import argparse
 import importlib
+import json
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -84,76 +101,177 @@ def run_script(script: str, argv: list[str]) -> int:
     return int(proc.returncode)
 
 
-def main() -> int:
-    steps = (
-        ("new_listing_track", ["--max-age-days", "400"]),
-        ("vol_monitor", []),
-        ("options_surface", []),
-        ("options_cost", []),
+# Bounded, because the failure mode we are fixing is "one proxy drop loses the
+# whole day" - not "the venue is down for hours". Three tries spans two minutes,
+# which is longer than the observed drops and short enough that the job still
+# finishes well before the next one is due. The steps are idempotent (keyed by
+# bill id / listing / merged writes), so a retry cannot double-count.
+DEFAULT_ATTEMPTS = 3
+DEFAULT_RETRY_SLEEP = 60.0
+
+# What the job runs, in order, at module level so a test can walk the same list the
+# job walks (2026-10-10: two of these steps had been added without the `.env`
+# loader the others carry, and nothing noticed until a manual re-run).
+INPROCESS_STEPS: tuple[tuple[str, list[str]], ...] = (
+    ("new_listing_track", ["--max-age-days", "400"]),
+    ("vol_monitor", []),
+    ("options_surface", []),
+    ("options_cost", []),
+)
+
+SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
+    # Funding is cash the book never recorded; it settles 3x/day on every open
+    # swap. Idempotent by bill id, so a daily catch-up is enough.
+    ("sync_funding.py", ["--yes"]),
+    # Keep the funding RATE history growing for carry research. One page per perp
+    # is ~3 days of new prints, so a daily run both tops up and (over several days)
+    # completes the backfill this project could not finish in one pass - the proxy
+    # drops about a third of the requests under load.
+    ("fetch_funding_history.py", ["--yes", "--pages", "1"]),
+    # ...and what the carry legs actually COLLECT. The rate history is what we rank
+    # on; this is what the venue paid, and it is the only way to test the
+    # 2026-10-09 prediction that the spike fades back to ~3 bps/day.
+    ("funding_income.py", ["--write"]),
+    # The progress table at the top of README.md is the single source of truth for
+    # "what is next"; --check fails (rc=1) when it no longer matches
+    # docs/progress.json, so drift shows up in this job's log instead of in a
+    # confident wrong answer during the next盘点.
+    ("progress.py", ["--check"]),
+    # The TradFi leg is matched by a NAME PREFIX ("X"), and OKX keeps listing new
+    # crypto in that namespace (XDP-USDT, 2026-09-28). Any such line starts drawing
+    # on the 30% TradFi quota silently. This asks the live catalogue what each
+    # X-prefixed demo line actually is and fails on a mismatch.
+    ("leg_identity.py", ["--write", "data/universe/leg_identity.json"]),
+    # Top up the daily bars the research reads. `ta data fetch` REPLACES the series,
+    # so nothing was ever refreshed and every 1d file had gone four days stale by
+    # 2026-10-09 - which froze the options sleeve's 30-day realized vol (its IV-RV
+    # gate was reading a premium against a stale base). This merges instead, so it
+    # cannot shrink history. It runs after the in-process steps, so options_cost
+    # sees bars at most one day old, which is immaterial inside a 30-day window.
+    ("refresh_daily_bars.py", ["--write"]),
+    # Which symbols the venue ACTUALLY serves, twice a day. The 09:10 slot is
+    # outside US market hours and 21:10 is inside them - the pair is what answers
+    # "is the TradFi sleeve session-limited or dead?" (2026-10-10: 12 of its 13
+    # symbols answered with zero bars on every timeframe while keeping 84+ bars on
+    # disk, but that was measured with the US market closed).
+    ("venue_availability.py", ["--write"]),
+    # The release hygiene checks (docs/RELEASING.md): the version number lives in
+    # three files and the release notes are generated, so both are verified here
+    # rather than remembered. A drift shows up as a failed step instead of as a
+    # confident wrong answer during the next盘点.
+    ("version_sync.py", ["--check"]),
+    ("changelog_md.py", ["--check"]),
+)
+
+
+def run_with_retry(
+    name: str,
+    action,
+    *,
+    attempts: int = DEFAULT_ATTEMPTS,
+    sleep_seconds: float = DEFAULT_RETRY_SLEEP,
+    sleep=time.sleep,
+) -> tuple[int, int]:
+    """Run `action` until it succeeds or `attempts` is exhausted.
+
+    Returns (return code, attempts used). A raised exception counts as a failed
+    attempt, so a step that explodes on one interpreter state still gets the
+    others instead of taking the whole job down with it.
+    """
+    tries = max(1, int(attempts))
+    code = 1
+    used = 0
+    for attempt in range(1, tries + 1):
+        used = attempt
+        try:
+            code = int(action() or 0)
+        except SystemExit as exc:
+            code = int(exc.code or 0)
+        except Exception as exc:  # noqa: BLE001 - one track must not kill the rest
+            print(f"{name}: attempt {attempt}/{tries} failed {type(exc).__name__}: {exc}", flush=True)
+            code = 1
+        if code == 0:
+            return 0, used
+        if attempt < tries:
+            print(
+                f"{name}: attempt {attempt}/{tries} rc={code} - retrying in {sleep_seconds:g}s",
+                flush=True,
+            )
+            sleep(sleep_seconds)
+    return code, used
+
+
+def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int]) -> list[str]:
+    """Persist what still needs a re-run so the dashboard can show it.
+
+    A failed step used to be visible only to whoever read the launchd log. The
+    file is best-effort: not being able to write it must not fail the job.
+    """
+    needs_rerun = [name for name, code in codes.items() if code != 0]
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "needs_rerun": needs_rerun,
+        "steps": {
+            name: {"rc": code, "attempts": attempts_used.get(name, 1)}
+            for name, code in codes.items()
+        },
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"could not write {path}: {exc}", flush=True)
+    return needs_rerun
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="daily read-only research job")
+    parser.add_argument(
+        "--attempts",
+        type=int,
+        default=int(os.environ.get("TA_DAILY_ATTEMPTS", DEFAULT_ATTEMPTS)),
+        help="tries per step before it counts as failed",
     )
-    script_steps = (
-        # Funding is cash the book never recorded; it settles 3x/day on every open
-        # swap. Idempotent by bill id, so a daily catch-up is enough.
-        ("sync_funding.py", ["--yes"]),
-        # Keep the funding RATE history growing for carry research. One page per
-        # perp is ~3 days of new prints, so a daily run both tops up and (over
-        # several days) completes the backfill this project could not finish in
-        # one pass - the proxy drops about a third of the requests under load.
-        ("fetch_funding_history.py", ["--yes", "--pages", "1"]),
-        # ...and what the carry legs actually COLLECT. The rate history is what we
-        # rank on; this is what the venue paid, and it is the only way to test the
-        # 2026-10-09 prediction that the spike fades back to ~3 bps/day.
-        ("funding_income.py", ["--write"]),
-        # The progress table at the top of README.md is the single source of truth
-        # for "what is next"; --check fails (rc=1) when it no longer matches
-        # docs/progress.json, so drift shows up in this job's log instead of in a
-        # confident wrong answer during the next盘点.
-        ("progress.py", ["--check"]),
-        # The TradFi leg is matched by a NAME PREFIX ("X"), and OKX keeps listing
-        # new crypto in that namespace (XDP-USDT, 2026-09-28). Any such line starts
-        # drawing on the 30% TradFi quota silently. This asks the live catalogue
-        # what each X-prefixed demo line actually is and fails on a mismatch.
-        ("leg_identity.py", ["--write", "data/universe/leg_identity.json"]),
-        # Top up the daily bars the research reads. `ta data fetch` REPLACES the
-        # series, so nothing was ever refreshed and every 1d file had gone four
-        # days stale by 2026-10-09 - which froze the options sleeve's 30-day
-        # realized vol (its IV-RV gate was reading a premium against a stale
-        # base). This merges instead, so it cannot shrink history. It runs after
-        # the in-process steps, so options_cost sees bars at most one day old,
-        # which is immaterial inside a 30-day window.
-        ("refresh_daily_bars.py", ["--write"]),
-        # Which symbols the venue ACTUALLY serves, twice a day. The 09:10 slot is
-        # outside US market hours and 21:10 is inside them - the pair is what
-        # answers "is the TradFi sleeve session-limited or dead?" (2026-10-10: 12 of
-        # its 13 symbols answered with zero bars on every timeframe while keeping
-        # 84+ bars on disk, but that was measured with the US market closed).
-        ("venue_availability.py", ["--write"]),
-        # The release hygiene checks (docs/RELEASING.md): the version number lives
-        # in three files and the release notes are generated, so both are verified
-        # here rather than remembered. A drift shows up as a failed step instead of
-        # as a confident wrong answer during the next盘点.
-        ("version_sync.py", ["--check"]),
-        ("changelog_md.py", ["--check"]),
+    parser.add_argument(
+        "--retry-sleep",
+        type=float,
+        default=float(os.environ.get("TA_DAILY_RETRY_SLEEP", DEFAULT_RETRY_SLEEP)),
+        help="seconds between attempts",
     )
+    parser.add_argument(
+        "--status-file",
+        default="data/daily_job_status.json",
+        help="where to record the steps that still need a re-run",
+    )
+    args = parser.parse_args(argv)
     codes: dict[str, int] = {}
-    for name, argv in steps:
+    attempts_used: dict[str, int] = {}
+    for name, step_argv in INPROCESS_STEPS:
         print(f"=== {name} ===", flush=True)
-        try:
-            codes[name] = run(name, argv)
-        except Exception as exc:  # noqa: BLE001 - one track must not kill the other
-            print(f"{name}: FAILED {type(exc).__name__}: {exc}", flush=True)
-            codes[name] = 1
-    for script, argv in script_steps:
+        codes[name], attempts_used[name] = run_with_retry(
+            name,
+            lambda n=name, a=step_argv: run(n, a),
+            attempts=args.attempts,
+            sleep_seconds=args.retry_sleep,
+        )
+    for script, step_argv in SCRIPT_STEPS:
         print(f"=== {script} ===", flush=True)
-        try:
-            codes[script] = run_script(script, argv)
-        except Exception as exc:  # noqa: BLE001
-            print(f"{script}: FAILED {type(exc).__name__}: {exc}", flush=True)
-            codes[script] = 1
+        codes[script], attempts_used[script] = run_with_retry(
+            script,
+            lambda s=script, a=step_argv: run_script(s, a),
+            attempts=args.attempts,
+            sleep_seconds=args.retry_sleep,
+        )
 
     print("=== summary ===")
     for name, code in codes.items():
-        print(f"  {name:<20} rc={code}")
+        print(f"  {name:<20} rc={code} attempts={attempts_used.get(name, 1)}")
+    status_path = Path(args.status_file)
+    if not status_path.is_absolute():
+        status_path = PROJECT / status_path
+    needs_rerun = write_status(status_path, codes, attempts_used)
+    if needs_rerun:
+        print(f"NEEDS RERUN ({len(needs_rerun)}): " + ", ".join(needs_rerun))
     if all(code != 0 for code in codes.values()):
         print("both steps failed")
         return 1

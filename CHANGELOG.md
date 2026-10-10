@@ -1,20 +1,24 @@
 # Changelog
 
-当前版本：**v1.0.1**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.0.2**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-10T12:10 起，9 条留痕）
+## Unreleased（自 2026-10-10T15:17 起，6 条留痕）
 
-- `2026-10-10T12:15` **ops** 把『场馆此刻到底供不供数据』变成每日自动记录：新增 venue_availability（09:10 在美股时段外、21:10 在时段内）
-- `2026-10-10T12:40` **research** 用今天的资金费历史重跑选标：榜单前列全是『没有现货腿』的合约，唯一比我们好的可做标的是 WLFI
-- `2026-10-10T13:00` **research** 用真实成交检验 carry 的成本模型：三对实际入场 basis 是 −15.7 / −130.6 / −18.3 bps —— **今天的新规则会把这三对全部拒掉**；而当下 basis 反而全是正的（含 WLFI +951 bps）
-- `2026-10-10T13:20` **research** 更正我自己上一条的论断：『min_hold_hours 必须 ≥ 回本周期』**是错的** —— 它对轮换成立，对『论点破产的退出』不成立
-- `2026-10-10T13:50` **bug** 按用户决定扩名额（v0.4.6）：改到第 5 处时才发现真凶 —— 引擎把 tier 的持仓上限拿**整个账户的持仓数**去比，顺带锁死了 TradFi 腿与所有方向性入场
-- `2026-10-10T14:20` **ops** 建立专业化的版本与代码管理（v0.4.7）：VERSION 单一来源 + 生成式 CHANGELOG.md + RELEASING 规则 + git 仓库；并明确『1.0.0 = 第一阶段完成』
-- `2026-10-10T15:00` **decision** 第一阶段封板 1.0：期权策略移入 1.1（用户决定），四条腿 + 风控/对账/数据/发布管理全部就位
+- `2026-10-10T15:18` **bug** 定时步骤缺 .env 加载器：venue_availability 与 refresh_daily_bars 在 launchd 下必然抛 API key is not set —— 其中一个会丢掉 TradFi tier 判定所需的 21:10 记录
 - `2026-10-10T15:30` **decision** 1.0 之后的路径规划：1.1 期权腿/期权策略（新增收益来源）、1.2 carry 轮换、1.3 链上研究，1.0.x 随修随发
+- `2026-10-10T15:50` **bug** 对账脚本的单位假差异修掉（v1.0.1）：场馆侧换算成 base 单位、账本存的是张，ACT/NEAR 因此虚报 10 倍差额
+- `2026-10-10T16:10` **research** 1.1 第一步的只读探测：期权最小单其实约 $50（我先算错 100 倍），合约乘数是 ctMult 不是 ctVal
 - `2026-10-10T16:40` **bug** 期权适配器（1.1）做到单位与下单参数层：修掉 ctMult 缺失（差 100 倍）、posSide/reduceOnly 误加、以及 validate 的 market_type 白名单；剩 symbol 映射与『交权利金的币』两块
+- `2026-10-10T17:10` **bug** 期权 symbol 映射做完并在模拟盘验证；顺带量到模拟盘期权盘口极宽（抽样价差 ≈ 中值的 59%，实盘约 0.8%）
+
+## v1.0.2 — 2026-10-10T15:17
+
+- 测试 **302** 绿 · 权益 $101,580.74 · 记录时的包版本 1.0.2
+
+1.0.2 补丁：每日任务加有界重试（3 次/60 秒）与补跑清单 data/daily_job_status.json；.env 加载器统一到 ta.config.load_env_file，修掉 venue_availability 与 refresh_daily_bars 在 launchd 下必然抛 API key is not set。302 tests。
+its config/ and manifest.json rather than against memory.
 
 ## v1.0.1 — 2026-10-10T12:10
 

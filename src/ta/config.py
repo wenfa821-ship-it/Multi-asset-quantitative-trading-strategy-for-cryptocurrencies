@@ -6,6 +6,7 @@ Everything the bot is allowed to do lives in config/*.toml. Nothing is hardcoded
 from __future__ import annotations
 
 import dataclasses
+import os
 import types
 import typing
 from dataclasses import dataclass, field
@@ -15,6 +16,37 @@ from typing import Any
 import tomllib
 
 from .util import TIMEFRAME_MS
+
+
+def load_env_file(path: Path) -> int:
+    """Load `KEY=VALUE` lines into os.environ. Returns how many were set.
+
+    One implementation, because three callers depend on the same behaviour and the
+    failure it prevents is silent. The launchd units export the proxy
+    (TA_PROXY/HTTPS_PROXY) but NOT the venue credentials - those live in `.env`,
+    which is deliberately not copied into ~/Library/LaunchAgents (README 50.4). A
+    step that forgets to call this fails with "API key is not set", which is how
+    `scripts/venue_availability.py` - added 2026-10-10 without the loader its two
+    siblings already had - would have failed on every run, including the 21:10 one
+    whose whole point is the US-session measurement.
+
+    Real environment variables always win, so an explicit export still overrides
+    the file. Quotes are stripped; blanks and `#` comments are skipped.
+    """
+    if not path.exists():
+        return 0
+    loaded = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
 
 # --------------------------------------------------------------------------------------
 # generic dataclass builder

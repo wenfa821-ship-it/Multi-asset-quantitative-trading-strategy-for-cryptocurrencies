@@ -28,7 +28,6 @@ import argparse
 import collections
 import datetime
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -36,25 +35,8 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
-from ta.config import Config  # noqa: E402
+from ta.config import Config, load_env_file  # noqa: E402
 from ta.venues import build_venue  # noqa: E402
-
-
-def load_env_file(path: Path) -> int:
-    """The launchd job exports the proxy but not the API keys (README 50.4)."""
-    if not path.exists():
-        return 0
-    loaded = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key and value and key not in os.environ:
-            os.environ[key] = value
-            loaded += 1
-    return loaded
 
 
 def funding_bills(venue, days: int = 7) -> list[dict]:
