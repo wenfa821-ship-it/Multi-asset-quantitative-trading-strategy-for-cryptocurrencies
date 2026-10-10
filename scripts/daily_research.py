@@ -155,6 +155,11 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # symbols answered with zero bars on every timeframe while keeping 84+ bars on
     # disk, but that was measured with the US market closed).
     ("venue_availability.py", ["--write"]),
+    # 1.2's detector half (2026-10-10): is any open carry pair persistently unpaid?
+    # Offline, 0.1s, read-only against the venue - it turns "which pair stopped
+    # paying" into a daily series instead of a memory. Acting on it is a separate
+    # user-approved step; this only records what the rule WOULD do.
+    ("carry_rotation.py", ["--write"]),
     # The release hygiene checks (docs/RELEASING.md): the version number lives in
     # three files and the release notes are generated, so both are verified here
     # rather than remembered. A drift shows up as a failed step instead of as a

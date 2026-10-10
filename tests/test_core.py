@@ -4110,5 +4110,127 @@ class OptionsBookSurveyTests(unittest.TestCase):
         self.assertIsNone(stats["median_spread_pct"])
 
 
+class CarryRotationTests(unittest.TestCase):
+    """Rotation is the only way into a full carry book, and it costs 44.9 bps.
+
+    The rule has to be "persistently unpaid", not "worst right now": the first day
+    of live carry churned six pairs in an afternoon (31 fills, $284 of fees) by
+    deciding on the instantaneous print.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "carry_rotation", PROJECT / "scripts" / "carry_rotation.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    @staticmethod
+    def _day(day: int, hour: int = 0) -> int:
+        import datetime
+
+        return int(datetime.datetime(2026, 10, day, hour, tzinfo=datetime.UTC).timestamp() * 1000)
+
+    def test_daily_bps_is_a_per_day_median_not_a_mean(self) -> None:
+        module = self._module()
+        # One spike and two quiet prints in the same UTC day: the median is the
+        # quiet print, so a 20x spike cannot carry the day.
+        prints = [
+            {"ts": self._day(9, 0), "rate": 0.0001},      # 3 bps/day
+            {"ts": self._day(9, 8), "rate": 0.0001},
+            {"ts": self._day(9, 16), "rate": 0.002},
+            {"ts": self._day(10, 0), "rate": 0.00005},    # 1.5 bps/day
+        ]
+        series = module.daily_bps_series(prints, 2)
+        self.assertEqual([(d, bps, n) for d, bps, n in series],
+                         [("2026-10-09", 3.0, 3), ("2026-10-10", 1.5, 1)])
+
+    def test_persistence_needs_every_day_of_the_window(self) -> None:
+        module = self._module()
+        low = [("2026-10-08", 0.5, 3), ("2026-10-09", 0.9, 3), ("2026-10-10", 0.2, 3)]
+        self.assertTrue(module.is_persistently_below(low, 1.0, 3))
+        # one good day in the window is enough to keep the pair
+        mixed = [("2026-10-08", 0.5, 3), ("2026-10-09", 1.4, 3), ("2026-10-10", 0.2, 3)]
+        self.assertFalse(module.is_persistently_below(mixed, 1.0, 3))
+        # and two days of history is not three
+        self.assertFalse(module.is_persistently_below(low[:2], 1.0, 3))
+
+    def test_age_comes_from_the_current_holding_streak(self) -> None:
+        module = self._module()
+        fills = [
+            {"symbol": "CRV/USDT", "side": "buy", "qty": 10.0, "ts": self._day(5)},
+            {"symbol": "CRV/USDT", "side": "sell", "qty": 10.0, "ts": self._day(6)},
+            {"symbol": "CRV/USDT", "side": "buy", "qty": 10.0, "ts": self._day(7)},
+            {"symbol": "LTC/USDT", "side": "buy", "qty": 1.0, "ts": self._day(8)},
+        ]
+        self.assertEqual(module.open_since(fills, "CRV/USDT"), self._day(7))
+        self.assertEqual(module.open_since(fills, "LTC/USDT"), self._day(8))
+        self.assertIsNone(module.open_since(fills, "NEAR/USDT"))
+
+    def test_breakeven_days_needs_a_real_gain(self) -> None:
+        module = self._module()
+        self.assertEqual(module.breakeven_days(44.9, 1.5), 30)
+        self.assertEqual(module.breakeven_days(44.9, 4.49), 10)
+        self.assertIsNone(module.breakeven_days(44.9, 0.0))
+        self.assertIsNone(module.breakeven_days(44.9, -0.5))
+
+    def test_a_stale_pair_rotates_into_the_best_free_name(self) -> None:
+        module = self._module()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            history = Path(tmp)
+            low = "\n".join(
+                json.dumps({"ts": self._day(day, hour), "rate": 0.00002})
+                for day in (8, 9, 10) for hour in (0, 8, 16)
+            )
+            (history / "CRV-USDT_USDT.jsonl").write_text(low + "\n", encoding="utf-8")
+            fills = [{"symbol": "CRV/USDT", "side": "buy", "qty": 10.0, "ts": self._day(1)}]
+            report = module.plan(
+                {"CRV/USDT": {"pair_id": "x", "base_qty": 10.0}},
+                history,
+                [{"symbol": "WLFI/USDT:USDT", "bps": 4.49}, {"symbol": "CRV/USDT:USDT", "bps": 9.0}],
+                fills,
+                days=3, floor_bps=1.0, round_trip_bps=44.9, min_hold_hours=24.0,
+                intended_hold_days=30.0,
+                now_ms=self._day(10, 20),
+            )
+        pair = report["pairs"][0]
+        self.assertTrue(pair["stale"])
+        self.assertEqual(pair["median_bps"], 0.6)
+        # the held name is not a candidate for itself even though it ranks highest
+        self.assertEqual([r["to"] for r in report["rotations"]], ["WLFI/USDT:USDT"])
+        # 4.49 bps/day against a 0.6 bps/day pair = 3.89 bps/day of gain, so the
+        # 44.9 bps round trip is paid back in 12 days - inside the 30-day hold.
+        self.assertEqual(report["rotations"][0]["breakeven_days"], 12)
+
+    def test_a_young_pair_is_not_rotated_however_bad_it_looks(self) -> None:
+        module = self._module()
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            history = Path(tmp)
+            low = "\n".join(
+                json.dumps({"ts": self._day(day, hour), "rate": 0.00002})
+                for day in (8, 9, 10) for hour in (0, 8, 16)
+            )
+            (history / "CRV-USDT_USDT.jsonl").write_text(low + "\n", encoding="utf-8")
+            fills = [{"symbol": "CRV/USDT", "side": "buy", "qty": 10.0, "ts": self._day(10, 19)}]
+            report = module.plan(
+                {"CRV/USDT": {"pair_id": "x", "base_qty": 10.0}},
+                history,
+                [{"symbol": "WLFI/USDT:USDT", "bps": 9.0}],
+                fills,
+                days=3, floor_bps=1.0, round_trip_bps=44.9, min_hold_hours=24.0,
+                intended_hold_days=30.0,
+                now_ms=self._day(10, 20),
+            )
+        self.assertTrue(report["pairs"][0]["stale"])
+        self.assertEqual(report["rotations"], [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
