@@ -409,6 +409,12 @@ class Ledger:
             "equity",
             equity=round(account.equity, 6),
             cash=round(account.cash, 6),
+            # The venue's own `cashBal`, recorded from 2026-10-11 because `cash`
+            # (ccxt's `eq`) is cashBal PLUS the open swaps' unrealised PnL - so a
+            # cash-residual series built on it moves with the mark price and cannot
+            # answer "did cash actually change". The reconciler already compares
+            # against cashBal; without this field there was no history to compare to.
+            cash_bal=round(float(getattr(account, "cash_bal", 0.0) or 0.0), 6),
             realized_today=round(account.realized_pnl_today, 6),
             drawdown_pct=round(account.drawdown_pct, 4),
             positions={s: round(p.qty, 10) for s, p in account.positions.items()},

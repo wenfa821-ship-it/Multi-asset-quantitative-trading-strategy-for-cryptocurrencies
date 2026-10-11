@@ -1789,6 +1789,22 @@ class CashAttributionTests(unittest.TestCase):
         ])
         self.assertAlmostEqual(grouped[("2", "1")]["amount"], -0.002)
 
+    def test_the_equity_row_records_the_venues_own_cash_bal(self) -> None:
+        """`cash` includes swap upl; `cash_bal` is what the reconciler compares.
+
+        Until 2026-10-11 the equity rows carried only `cash`, so a cash-residual
+        series could not be built from them at all - the drift question had no data.
+        """
+        from ta.portfolio import Ledger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Ledger(Path(tmp) / "ledger.jsonl", run_id="t", venue="paper")
+            account = AccountState(venue="paper", cash=100.0, equity=100.0, cash_bal=97.5)
+            ledger.record_equity(account, {})
+            row = [e for e in ledger.events if e.get("kind") == "equity"][0]
+        self.assertEqual(row["cash"], 100.0)
+        self.assertEqual(row["cash_bal"], 97.5)
+
 
 class OptionsRoundTripSelectionTests(unittest.TestCase):
     """The contract choice is a rule, so it is testable without a venue.

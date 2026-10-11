@@ -142,8 +142,17 @@ def main() -> int:
     rows = load_jsonl(PROJECT / args.ledger)
     ours = our_cash_flow(rows, start_ms)
     equity = [r for r in rows if r.get("kind") == "equity" and r.get("ts", 0) >= start_ms]
+    # `cash` is ccxt's `eq` = cashBal + the open swaps' unrealised PnL, so it moves
+    # with the mark and cannot answer "did cash change". `cash_bal` is the venue's
+    # own figure and has been recorded since 2026-10-11; use it when present.
+    with_bal = [r for r in equity if r.get("cash_bal")]
+    if len(with_bal) >= 2:
+        print(f"ledger cashBal: {float(with_bal[0]['cash_bal']):,.2f} -> "
+              f"{float(with_bal[-1]['cash_bal']):,.2f} "
+              f"({float(with_bal[-1]['cash_bal']) - float(with_bal[0]['cash_bal']):+,.2f})"
+              f"   [{len(with_bal)}/{len(equity)} equity rows carry it]")
     if equity:
-        print(f"ledger cash (venue figure, incl. upl): "
+        print(f"ledger cash (incl. upl, for reference): "
               f"{float(equity[0].get('cash') or 0):,.2f} -> {float(equity[-1].get('cash') or 0):,.2f} "
               f"({float(equity[-1].get('cash') or 0) - float(equity[0].get('cash') or 0):+,.2f})")
 
