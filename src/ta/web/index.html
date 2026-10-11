@@ -175,6 +175,12 @@
       拿不到持有人结构的链，它的候选会被判「缺数据」拒绝。这张表就是下一步该补哪条链的依据。</div>
   </section>
 
+  <section class="span12"><h2>距离能下结论还差多少（样本状态）</h2>
+    <div id="nc-sample"></div>
+    <div class="muted" style="margin-top:6px">「条数够」不等于「样本够」：
+      同一批快照全来自一天，仍然不能用来调阈值 —— 所以这里数的是<b>日期</b>与<b>不同标的</b>。</div>
+  </section>
+
   <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
     <div id="nc-raw"></div>
     <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
@@ -343,6 +349,22 @@ function renderNewcoin(nc) {
         <td class="num ${c.concentration ? '' : 'down'}">${c.concentration}</td>
         <td class="num">${c.safety}</td><td class="num">${c.passed}</td></tr>`).join('')}
     </tbody></table>` : '<div class="muted">还没有跨链数据。</div>';
+
+  const sample = nc.sample || {};
+  const gates = sample.gates || {};
+  $('#nc-sample').innerHTML = sample.rounds == null ? '<div class="muted">还没有样本状态。</div>' : `
+    <div class="kpis" style="margin-bottom:10px">
+      ${ncKpi('采集轮次', String(sample.rounds), '跨 ' + (sample.date_count || 0) + ' 个日期')}
+      ${ncKpi('索引快照', String(sample.snapshots_in_index || 0), '磁盘行数 ' + (sample.rows_on_disk || 0))}
+      ${ncKpi('不同标的', String(sample.distinct_tokens || 0), '同一代币记多次不算多个样本')}
+    </div>
+    <table><thead><tr><th>闸门</th><th>要求</th><th>现状</th><th>卡在哪</th></tr></thead>
+    <tbody>${Object.entries(gates).map(([name, g]) => `<tr>
+      <td>${g.ready ? '✅' : '⬜'} <b>${esc(name)}</b></td>
+      <td class="dim">${esc(g.need || '')}</td>
+      <td>${Object.entries(g).filter(([k]) => !['need','ready','blocked_by'].includes(k))
+            .map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join(' · ')}</td>
+      <td class="dim">${esc(g.blocked_by || '—')}</td></tr>`).join('')}</tbody></table>`;
 
   const s = nc.scores || {};
   const summary = s.summary || {};
