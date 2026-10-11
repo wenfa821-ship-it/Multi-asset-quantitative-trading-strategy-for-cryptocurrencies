@@ -189,6 +189,12 @@
     <div id="nc-scores"></div>
   </section>
 
+  <section class="span6"><h2>前向台账（累积：一次测量一行，永不重算）</h2>
+    <div id="nc-ledger"></div>
+    <div class="muted" style="margin-top:6px">同一「标的×轮次×窗口」只认<b>第一次</b>测量
+      （离目标时刻最近）。台账号数只增不减 —— 这就是「样本在长」的证据。</div>
+  </section>
+
   <section class="span8"><h2>路径进度表</h2><div id="nc-progress" class="scroll"></div></section>
   <section class="span4"><h2>数据源（实测状态）</h2><div id="nc-sources" class="kv"></div></section>
 
@@ -349,6 +355,28 @@ function renderNewcoin(nc) {
         <td class="num ${c.concentration ? '' : 'down'}">${c.concentration}</td>
         <td class="num">${c.safety}</td><td class="num">${c.passed}</td></tr>`).join('')}
     </tbody></table>` : '<div class="muted">还没有跨链数据。</div>';
+
+  const led = nc.scores_ledger || {};
+  const ledHorizons = led.horizons || {};
+  $('#nc-ledger').innerHTML = led.unique_measurements ? `
+    <div class="kpis" style="margin-bottom:8px">
+      ${ncKpi('唯一测量', String(led.unique_measurements), '事件 ' + (led.events || 0) + ' 条')}
+      ${ncKpi('测量日', String(Object.keys(led.by_day || {}).length),
+              Object.keys(led.by_day || {}).join(' · '))}
+      ${ncKpi('成本假设', String(led.cost_bps || '') + ' bps', '往返；毛净可分开看')}
+    </div>
+    <table><thead><tr><th>窗口</th><th class="num">n</th><th class="num">不同标的</th>
+      <th class="num">中位净</th><th class="num">均值</th><th class="num">p90</th>
+      <th class="num">最大</th><th class="num">胜率</th></tr></thead>
+    <tbody>${Object.entries(ledHorizons).map(([h, v]) => `<tr>
+      <td>${esc(h)}</td><td class="num">${v.n || 0}</td>
+      <td class="num">${v.distinct_tokens || 0}</td>
+      <td class="num">${v.median_net_bps == null ? '—' : v.median_net_bps}</td>
+      <td class="num">${v.mean_net_bps == null ? '—' : v.mean_net_bps}</td>
+      <td class="num">${v.p90_net_bps == null ? '—' : v.p90_net_bps}</td>
+      <td class="num">${v.max_net_bps == null ? '—' : v.max_net_bps}</td>
+      <td class="num">${v.win_rate == null ? '—' : (v.win_rate * 100).toFixed(0) + '%'}</td>
+    </tr>`).join('')}</tbody></table>` : '<div class="muted">台账还空着（等第一个窗口走完）。</div>';
 
   const sample = nc.sample || {};
   const gates = sample.gates || {};
