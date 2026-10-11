@@ -188,6 +188,13 @@
       只有 age / turnover / liquidity 三道在做真正的质量判断。</div>
   </section>
 
+  <section class="span12"><h2>待评估清单（过闸了，但还没有人真正看过）</h2>
+    <div id="nc-awaiting"></div>
+    <div class="muted" style="margin-top:6px">证据标准要求<b>放弃也要记录</b>（与买入同权），
+      否则样本是幸存者偏差。判断由人来做：做 → <code>new_thesis.py</code>，
+      不做 → <code>record_skip.py</code>（理由同样必须可复核）。</div>
+  </section>
+
   <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
     <div id="nc-raw"></div>
     <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
@@ -410,6 +417,31 @@ function renderNewcoin(nc) {
         <td class="num">${b.missing ? '<span class="down">' + b.missing + '</span>' : 0}</td>
         <td class="num">${total ? (b.missing / total * 100).toFixed(0) + '%' : '—'}</td></tr>`;
     }).join('')}</tbody></table>` : '<div class="muted">还没有漏斗数据。</div>';
+
+  const aw = nc.awaiting || {};
+  const rows2 = aw.awaiting || [];
+  $('#nc-awaiting').innerHTML = (aw.distinct_passed_tokens == null)
+    ? '<div class="muted">还没有清单。</div>' : `
+    <div class="kpis" style="margin-bottom:8px">
+      ${ncKpi('过闸标的', String(aw.distinct_passed_tokens),
+              '测量行 ' + (aw.passed_rows || 0))}
+      ${ncKpi('已判断', String(aw.judged || 0), '开仓或放弃都算')}
+      ${ncKpi('待评估', String(rows2.length),
+              rows2.length ? '最多显示 12 个（按深度）' : '名单空了')}
+    </div>
+    ${rows2.length ? `<table><thead><tr><th>链</th><th>标的</th><th class="num">深度</th>
+      <th class="num">24h 量</th><th class="num">年龄</th><th class="num">前10</th>
+      <th class="num">持有人</th><th>首次出现</th></tr></thead>
+    <tbody>${rows2.slice(0, 12).map(r => `<tr>
+      <td>${esc(r.chain)}</td><td><b>${esc(r.symbol)}</b></td>
+      <td class="num">${usd(Number(r.liquidity_usd || 0))}</td>
+      <td class="num">${usd(Number(r.turnover_24h_usd || 0))}</td>
+      <td class="num">${Number(r.age_days || 0).toFixed(1)} 天</td>
+      <td class="num">${r.top10_share == null || r.top10_share === '' ? 'n/a'
+        : (Number(r.top10_share) * 100).toFixed(1) + '%'}</td>
+      <td class="num">${esc(String(r.holder_count || '—'))}</td>
+      <td class="dim">${esc(String(r.observed_at || '').slice(5, 16))}</td>
+    </tr>`).join('')}</tbody></table>` : ''}`;
 
   const sample = nc.sample || {};
   const gates = sample.gates || {};
