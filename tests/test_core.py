@@ -1734,6 +1734,63 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class DailyReviewGeneratorTests(unittest.TestCase):
+    """The numbers half of a daily review has to be reproducible, not remembered.
+
+    The first version of this script had the date and project path hardcoded
+    (2026-10-06), so every morning the arithmetic was redone by hand - which is
+    where a review goes wrong silently. Checked against README 68 (2026-10-10):
+    equity 101,569.14 -> 101,411.33, 4 fills, $5.4984 of fees, funding +$47.6879
+    across 25 settlements.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "daily_review", PROJECT / "scripts" / "daily_review.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_a_cst_day_is_a_half_open_utc_window(self) -> None:
+        module = self._module()
+        start, end = module.day_window("2026-10-10")
+        import datetime
+
+        self.assertEqual(end - start, 24 * 3600 * 1000)
+        start_utc = datetime.datetime.fromtimestamp(start / 1000, datetime.UTC)
+        # CST midnight is 16:00 UTC the previous day
+        self.assertEqual(start_utc.isoformat(timespec="seconds"), "2026-10-09T16:00:00+00:00")
+
+    def test_the_summary_is_built_from_the_ledger_alone(self) -> None:
+        module = self._module()
+        import datetime
+
+        base = int(datetime.datetime(2026, 10, 10, 1, 0, tzinfo=module.CST).timestamp() * 1000)
+        rows = [
+            {"kind": "equity", "ts": base, "equity": 100.0,
+             "positions": {"AAA/USDT": 1.0, "AAA/USDT:USDT": -1.0}},
+            {"kind": "fill", "ts": base + 1, "symbol": "AAA/USDT", "side": "buy",
+             "qty": 1.0, "price": 10.0, "fee": 0.05, "fee_ccy": "USDT"},
+            {"kind": "funding", "ts": base + 2, "symbol": "AAA/USDT:USDT", "amount": 3.0},
+            {"kind": "blocked", "ts": base + 3, "reason": "leg_positions: spot 5 >= 5"},
+            {"kind": "equity", "ts": base + 4, "equity": 104.0,
+             "positions": {"AAA/USDT": 1.0, "AAA/USDT:USDT": -1.0}},
+            # 23:00 CST the day before - outside the window, must not be counted
+            {"kind": "equity", "ts": base - 2 * 3600_000, "equity": 999.0},
+        ]
+        stats = module.summarise(rows, *module.day_window("2026-10-10"))
+        self.assertEqual((stats["equity_start"], stats["equity_end"]), (100.0, 104.0))
+        self.assertEqual(len(stats["fills"]), 1)
+        self.assertAlmostEqual(stats["fill_fees"], 0.05)
+        self.assertAlmostEqual(stats["funding_total"], 3.0)
+        self.assertEqual(stats["funding_top"][0], "AAA/USDT:USDT")
+        self.assertEqual(stats["blocked_total"], 1)
+        self.assertEqual(stats["legs"], (1, 1))
+
+
 class CancelByClientOrderIdTests(unittest.TestCase):
     """A client order id is not an order id, and a fresh process has neither.
 
