@@ -4609,6 +4609,75 @@ class TradFiLegIdentityTests(unittest.TestCase):
             self.assertEqual(self._leg(symbol), "spot", symbol)
 
 
+class NewCoinPanelTests(unittest.TestCase):
+    """看板的第二个面板：只读兄弟项目自己发布的报告，不 import 它的代码。
+
+    2026-10-11 用户要求「把多资产组合策略与新币主观量化策略分开展示」。两个项目是
+    独立仓库、独立证据标准（README §71），所以耦合必须停在"读一个 JSON 文件"这一层：
+    对方重命名一个函数不该能把这里的看板弄坏。
+    """
+
+    def _write(self, tmp: str, payload: dict | str) -> Path:
+        target = Path(tmp) / "data" / "reports" / "latest.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload if isinstance(payload, str) else json.dumps(payload),
+                          encoding="utf-8")
+        return target
+
+    def test_a_missing_report_says_why_instead_of_showing_zeros(self) -> None:
+        from ta.newcoin_panel import view
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = view(Path(tmp))
+        self.assertFalse(out["available"])
+        self.assertIn("latest.json", out["reason"])
+        # 关键：不是 available=True + 一堆 0 —— 0 和"没采集"是两件事
+        self.assertNotIn("candidates", out)
+
+    def test_a_fresh_report_is_passed_through(self) -> None:
+        import datetime
+
+        from ta.newcoin_panel import view
+
+        now = datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, {"generated_at": now, "version": "0.2.0",
+                              "candidates": {"rows": [], "passed": 0}})
+            out = view(Path(tmp))
+        self.assertTrue(out["available"])
+        self.assertFalse(out["stale"])
+        self.assertEqual(out["version"], "0.2.0")
+        self.assertLess(out["age_seconds"], 60)
+
+    def test_a_report_older_than_a_day_is_flagged_stale(self) -> None:
+        """采集是每天一次，超过 26 小时基本就是某天没跑成。"""
+        import datetime
+
+        from ta.newcoin_panel import view
+
+        old = (datetime.datetime.now(datetime.UTC)
+               - datetime.timedelta(hours=30)).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, {"generated_at": old, "version": "0.2.0"})
+            out = view(Path(tmp))
+        self.assertTrue(out["stale"])
+
+    def test_a_broken_report_is_a_reason_not_an_exception(self) -> None:
+        from ta.newcoin_panel import view
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "{ this is not json")
+            out = view(Path(tmp))
+        self.assertFalse(out["available"])
+        self.assertIn("读不了", out["reason"])
+
+    def test_the_default_points_at_the_sibling_project(self) -> None:
+        from ta.newcoin_panel import DEFAULT_DIR
+
+        self.assertEqual(DEFAULT_DIR.name, "newcoin-subjective-quant")
+        self.assertEqual(DEFAULT_DIR.parent.name, "outputs")
+
+
 class DailyResearchRetryTests(unittest.TestCase):
     """A lost day of daily research is a lost day of IV-RV sample.
 

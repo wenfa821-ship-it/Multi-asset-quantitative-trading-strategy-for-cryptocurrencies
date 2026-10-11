@@ -69,13 +69,33 @@
   .strat p{margin:0 0 8px;color:var(--dim);font-size:12.5px}
   .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px}
   .kv div:nth-child(odd){color:var(--dim)}
+  /* 2026-10-11: 两个项目分开展示（用户要求）。tab 只切换显示，数据仍来自同一个快照。 */
+  .navtabs{display:flex;gap:6px}
+  .navtabs button{display:flex;gap:8px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);color:var(--dim);padding:6px 12px;border-radius:8px;
+    font-size:13px;cursor:pointer}
+  .navtabs button.active{color:var(--fg);border-color:var(--accent);background:#0d1a2a}
+  .navtabs button:hover{color:var(--fg)}
+  .viewgrid{display:contents}
+  [hidden]{display:none !important}
+  .pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:11px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--dim);margin-right:4px}
+  .pill.ok{color:var(--up);border-color:#1f6f36}
+  .pill.no{color:var(--crit);border-color:#7a2621}
+  .step{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}
+  .step .dot{flex:0 0 16px;text-align:center}
   footer{max-width:1400px;margin:0 auto;padding:8px 20px 40px;color:var(--dim);font-size:12px}
 </style>
 </head>
 <body>
 <header>
-  <h1>trading-agent · 运营看板</h1>
-  <span id="health" class="badge ok">加载中…</span>
+  <h1>运营看板</h1>
+  <nav class="navtabs">
+    <button data-view="portfolio" class="active">多资产组合策略
+      <span id="health" class="badge ok">加载中…</span></button>
+    <button data-view="newcoin">新币主观量化策略
+      <span id="nc-badge" class="badge warnb">加载中…</span></button>
+  </nav>
   <span id="venue" class="muted"></span>
   <span id="updated" class="muted"></span>
   <span id="freshness" class="muted"></span>
@@ -84,6 +104,7 @@
 </header>
 
 <main>
+<div id="view-portfolio" class="viewgrid">
   <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis"></div></section>
   <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
   <section class="span12"><h2>常驻服务与告警看门狗</h2>
@@ -134,8 +155,39 @@
       <th>分组</th><th>文件</th><th class="num">大小</th><th>修改时间</th>
     </tr></thead><tbody></tbody></table></div>
   </section>
+</div>
+
+<div id="view-newcoin" class="viewgrid" hidden>
+  <section class="span12"><h2>新币主观量化策略 · 证据标准进度（现阶段唯一诚实的"进展"）</h2>
+    <div id="nc-bars" class="kpis"></div>
+    <div id="nc-gates" style="margin-top:12px"></div>
+    <div class="muted" style="margin-top:8px">这个项目与左边那个<b>不共用闸门</b>：
+      它按"决策过程是否可回看"判，不按统计显著性判（低频主观决策 30 笔也构不成分布）。</div>
+  </section>
+
+  <section class="span12"><h2>今日候选（只读采集 · 未交易 · 筛查只负责淘汰）</h2>
+    <div id="nc-candidates"></div>
+  </section>
+
+  <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
+    <div id="nc-raw"></div>
+    <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
+  </section>
+  <section class="span6"><h2>前向打分（没有模拟盘 → 带时刻的快照 + 后来的价格历史）</h2>
+    <div id="nc-scores"></div>
+  </section>
+
+  <section class="span8"><h2>路径进度表</h2><div id="nc-progress" class="scroll"></div></section>
+  <section class="span4"><h2>数据源（实测状态）</h2><div id="nc-sources" class="kv"></div></section>
+
+  <section class="span12"><h2>最近留痕</h2><div id="nc-changelog" class="scroll"></div></section>
+</div>
 </main>
-<footer>数据源：data/ledger.*.jsonl、logs/alerts.jsonl、logs/metrics(:9101)、docs/changelog.jsonl、config/*.toml、reports/、archive/。OKX Demo 为模拟盘。</footer>
+<footer>
+  <b>多资产组合策略</b>：data/ledger.*.jsonl、logs/alerts.jsonl、logs/metrics(:9101)、docs/changelog.jsonl、config/*.toml、reports/、archive/（OKX Demo 为模拟盘）。<br>
+  <b>新币主观量化策略</b>：同级目录 <code>../newcoin-subjective-quant</code> 自己发布的
+  <code>data/reports/latest.json</code>（本项目只读文件，不 import 它的代码）。
+</footer>
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -173,6 +225,139 @@ const ts = (ms) => { if (!ms) return '-'; const d = new Date(Number(ms)); return
 const cls = (v) => v > 0 ? 'up' : (v < 0 ? 'down' : 'dim');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const KIND = {bug:'缺陷', decision:'决策', research:'研究', ops:'运维', strategy:'策略'};
+
+// ---- 两个项目的切换（2026-10-11 用户要求分开展示）----------------------------
+// 只用显示切换，请求仍然是同一个快照：多请求就多一种"某一边没刷新"的假象。
+let VIEW = 'portfolio';
+function setView(name) {
+  VIEW = name;
+  document.querySelectorAll('.navtabs button').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === name));
+  document.querySelector('#view-portfolio').hidden = name !== 'portfolio';
+  document.querySelector('#view-newcoin').hidden = name !== 'newcoin';
+  try { localStorage.setItem('dashboard.view', name); } catch (e) { /* 忽略 */ }
+}
+document.querySelectorAll('.navtabs button').forEach(b => b.onclick = () => setView(b.dataset.view));
+try { const saved = localStorage.getItem('dashboard.view'); if (saved) setView(saved); } catch (e) { /* 忽略 */ }
+
+const NC_STATE = {done:'✅ 完成', in_progress:'🔧 进行中', gated:'⏳ 等闸门', waiting_data:'⏳ 等数据',
+  waiting_decision:'⏳ 等决定', blocked:'⛔ 阻塞', not_started:'⬜ 未开始', next_phase:'🔜 下一版本'};
+
+function ncKpi(k, v, s) {
+  return `<div class="kpi"><div class="k">${esc(k)}</div><div class="v">${v}</div>
+    <div class="s">${esc(s || '')}</div></div>`;
+}
+function ncBar(label, ok, detail) {
+  return `<div class="step"><span class="dot">${ok ? '✅' : '⬜'}</span>
+    <span style="flex:0 0 300px">${esc(label)}</span>
+    <span class="muted">${esc(detail || '')}</span></div>`;
+}
+
+function renderNewcoin(nc) {
+  const ids = ['nc-gates','nc-candidates','nc-raw','nc-scores','nc-progress','nc-sources','nc-changelog'];
+  const badge = $('#nc-badge');
+  if (!nc || !nc.available) {
+    badge.className = 'badge warnb'; badge.textContent = '无报告';
+    $('#nc-bars').innerHTML = `<div class="muted">${esc((nc && nc.reason) || '没有数据')}</div>`;
+    ids.forEach(id => { $('#' + id).innerHTML = '<div class="muted">—</div>'; });
+    return;
+  }
+  const j = nc.journal || {}, pb = j.process_bar || {}, rb = j.result_bar || {};
+  const b = j.buckets || {};
+  const age = nc.age_seconds == null ? '未知'
+    : (nc.age_seconds < 3600 ? Math.round(nc.age_seconds / 60) + ' 分钟前'
+                             : Math.round(nc.age_seconds / 3600) + ' 小时前');
+  badge.className = 'badge ' + (nc.stale ? 'warnb' : 'ok');
+  badge.textContent = nc.stale ? '采集过期' : '采集正常';
+
+  const counts = (nc.progress && nc.progress.counts) || {};
+  const total = Object.values(counts).reduce((a, c) => a + c, 0);
+  $('#nc-bars').innerHTML = [
+    ncKpi('版本', 'v' + esc(nc.version), '包 ' + esc(nc.package_version || '?')),
+    ncKpi('进度', (counts.done || 0) + '/' + total, Object.entries(counts).map(([k,v]) => `${NC_STATE[k] || k} ${v}`).join(' · ')),
+    ncKpi('今日候选', String((nc.candidates && nc.candidates.rows || []).length),
+      '过闸 ' + ((nc.candidates && nc.candidates.passed) || 0) + ' 个'),
+    ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
+    ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
+      '时间盒 + 执行/数据，门槛 ≤30%'),
+    ncKpi('报告时刻', esc(age), nc.stale ? '超过 26 小时没更新' : '采集正常'),
+  ].join('');
+
+  $('#nc-gates').innerHTML =
+    '<div class="muted" style="margin-bottom:4px">过程门槛（现在就能挣；不满足就不许加仓/放量）</div>' +
+    ncBar('开仓 ≥30 条', pb['opened>=30'], '现有 ' + (j.opened || 0)) +
+    ncBar('结案 ≥20 条', pb['closed>=20'], '现有 ' + (j.closed || 0)) +
+    ncBar('③+④ ≤30%', pb['drift_share<=0.30'], j.drift_share == null ? '还没结案' : (j.drift_share * 100).toFixed(0) + '%') +
+    ncBar('无事后补写快照且全部写了失效条件', pb['no_posterior_and_all_have_invalidation'],
+      '补写 ' + (j.posterior_snapshots || 0) + ' 条 · 写了失效条件 ' + (j.open_with_invalidation || 0) + '/' + (j.opened || 0)) +
+    '<div class="muted" style="margin:8px 0 4px">结果门槛（更晚才谈：≥50 条结案，且<b>剔除最赚 3 笔</b>后仍为正）</div>' +
+    ncBar('结案 ≥50 条', rb['closed>=50'], '现有 ' + (j.closed || 0)) +
+    ncBar('剔除最赚 3 笔后为正', rb['positive_without_top3'],
+      '净额 ' + (j.net_usd ?? 0) + ' → 剔除后 ' + (j.net_usd_without_top3 ?? 0) + ' USDT') +
+    `<div class="muted" style="margin-top:6px">结案四分类：① 兑现 ${b.played_out || 0} · ② 按条件失效 ${b.invalidated || 0} · ③ 时间盒 ${b.time_box || 0} · ④ 执行/数据 ${b.execution_or_data || 0}｜放弃记录 ${j.skipped || 0} 条（与买入同权）</div>`;
+
+  const rows = (nc.candidates && nc.candidates.rows) || [];
+  $('#nc-candidates').innerHTML = rows.length ? `
+    <div class="muted" style="margin-bottom:6px">${esc(nc.candidates.date || '')} · 只读采集，没有任何成交。
+      判决里的「缺数据」= 这个字段没查到（未知 ≠ 通过），不是"风险高"。</div>
+    <div class="scroll"><table><thead><tr>
+      <th>标的</th><th>链</th><th class="num">流动性</th><th class="num">24h 量</th>
+      <th class="num">年龄</th><th class="num">前10占比</th><th>口径</th><th>判决</th><th>理由</th>
+    </tr></thead><tbody>${rows.map(r => `
+      <tr>
+        <td><b>${esc(r.symbol)}</b></td><td>${esc(r.chain)}</td>
+        <td class="num">${usd(Number(r.liquidity_usd || 0))}</td>
+        <td class="num">${usd(Number(r.turnover_24h_usd || 0))}</td>
+        <td class="num">${r.age_days == null ? '-' : Number(r.age_days).toFixed(1)} 天</td>
+        <td class="num">${r.top10_share == null || r.top10_share === '' ? '<span class="dim">n/a</span>'
+          : (Number(r.top10_share) * 100).toFixed(1) + '%'}</td>
+        <td class="dim">${esc(r.top10_source || '—')}</td>
+        <td>${r.passed ? '<span class="pill ok">PASS</span>' : '<span class="pill no">reject</span>'}</td>
+        <td class="dim">${esc((r.reasons || []).join('；') || '—')}</td>
+      </tr>`).join('')}</tbody></table></div>` : '<div class="muted">今天还没有候选表。</div>';
+
+  $('#nc-raw').innerHTML = (nc.raw_health || []).length ? `
+    <table><thead><tr><th>源</th><th class="num">记录</th><th>最后到达</th></tr></thead>
+    <tbody>${nc.raw_health.map(h => `<tr><td>${esc(h.source)}</td>
+      <td class="num">${h.records}</td>
+      <td class="${h.records ? '' : 'down'}">${esc(h.last_ts || '今天没有记录')}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="muted">还没有原始记录。</div>';
+
+  const s = nc.scores || {};
+  const summary = s.summary || {};
+  const keys = Object.keys(summary);
+  $('#nc-scores').innerHTML = keys.length ? `
+    <div class="muted" style="margin-bottom:6px">成本假设 ${esc(String(s.cost_bps || ''))} bps 往返；
+      入场价取<b>当时记下</b>的价格，不是今天挑的历史低点。已打分 ${esc(String(s.scored || 0))} 条。</div>
+    <table><thead><tr><th>窗口</th><th class="num">n</th><th class="num">中位净</th>
+      <th class="num">均值</th><th class="num">p90</th><th class="num">最大</th><th class="num">胜率</th>
+    </tr></thead><tbody>${keys.map(k => { const v = summary[k] || {}; return `<tr>
+      <td>${esc(k)}</td><td class="num">${v.n || 0}</td>
+      <td class="num">${v.median_net_bps == null ? '—' : v.median_net_bps}</td>
+      <td class="num">${v.mean_net_bps == null ? '—' : v.mean_net_bps}</td>
+      <td class="num">${v.p90_net_bps == null ? '—' : v.p90_net_bps}</td>
+      <td class="num">${v.max_net_bps == null ? '—' : v.max_net_bps}</td>
+      <td class="num">${v.win_rate == null ? '—' : (v.win_rate * 100).toFixed(0) + '%'}</td>
+    </tr>`; }).join('')}</tbody></table>
+    <div class="muted" style="margin-top:6px">窗口没走完就会显示 n=0 —— 样本从记录那天开始长，不能倒填。</div>`
+    : '<div class="muted">还没有打分结果（首次采集当天，1h/6h/24h 三个窗口都还没走完）。</div>';
+
+  const prows = (nc.progress && nc.progress.rows) || [];
+  $('#nc-progress').innerHTML = `<table><thead><tr><th>#</th><th>项目</th><th>状态</th><th>下一步</th></tr></thead>
+    <tbody>${prows.map(r => `<tr><td class="dim"><code>${esc(r.id)}</code></td>
+      <td>${esc(r.item)}</td><td>${esc(NC_STATE[r.state] || r.state)}</td>
+      <td class="dim">${esc(r.next || '—')}</td></tr>`).join('')}</tbody></table>`;
+
+  $('#nc-sources').innerHTML = Object.entries(nc.sources || {})
+    .map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('');
+
+  $('#nc-changelog').innerHTML = `<table><thead><tr><th>时间</th><th>类型</th><th>标题</th><th>说明</th></tr></thead>
+    <tbody>${(nc.changelog || []).slice().reverse().map(c => `<tr>
+      <td class="dim">${esc(String(c.ts || '').slice(5, 16))}</td>
+      <td><span class="chip ${esc(c.kind || '')}">${esc(KIND[c.kind] || c.kind || '')}</span></td>
+      <td>${esc(c.title || '')}</td><td class="dim">${esc(String(c.verdict || c.detail || '').slice(0, 220))}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
 
   let AUDIT = [], FILTER = 'all';
   // Set from services.jobs before the summary renders. Distinguishes a loop that
@@ -523,6 +708,7 @@ async function refresh() {
     renderThresholds(d.services);
     renderRefit(d.refit);
     renderArtifacts(d.artifacts);
+    renderNewcoin(d.newcoin);
     if (AUDIT.length !== d.audit.length) { AUDIT = d.audit; renderAuditFilter(); }
     renderAudit();
     $('#updated').textContent = '更新于 ' + new Date(d.generated_at).toLocaleTimeString('zh-CN');

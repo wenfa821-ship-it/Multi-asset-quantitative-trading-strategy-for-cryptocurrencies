@@ -1353,7 +1353,21 @@ class DashboardData:
             "monitor": self.monitor(),
             "redflags": self.redflags(),
             "services": self.services(),
+            "newcoin": self.newcoin(),
         }
+
+    def newcoin(self) -> dict[str, Any]:
+        """第二个项目（新币主观量化策略）的面板数据。
+
+        2026-10-11：用户要求两个项目在看板上**分开展示**。它们是独立仓库、独立证据标准
+        （README §71），所以这里只读对方自己发布的报告 JSON，不 import 对方的代码；
+        读不到就返回原因，而不是把看板一起弄挂。
+        """
+        try:
+            from . import newcoin_panel
+            return newcoin_panel.view()
+        except Exception as exc:  # noqa: BLE001 - 一个面板不能拖垮整台看板
+            return {"available": False, "reason": f"{type(exc).__name__}: {exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -1424,6 +1438,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(200, html, "text/html; charset=utf-8")
             elif path == "/api/snapshot":
                 payload = json.dumps(self.data.snapshot(), ensure_ascii=False, default=str)
+                self._send(200, payload.encode("utf-8"), "application/json; charset=utf-8")
+            elif path == "/api/newcoin":
+                payload = json.dumps(self.data.newcoin(), ensure_ascii=False, default=str)
                 self._send(200, payload.encode("utf-8"), "application/json; charset=utf-8")
             elif path == "/api/health":
                 self._send(200, b'{"status":"ok"}', "application/json")
