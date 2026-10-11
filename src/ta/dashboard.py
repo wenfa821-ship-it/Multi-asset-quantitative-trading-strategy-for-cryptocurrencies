@@ -83,6 +83,8 @@ KNOWN_SERVICES: tuple[tuple[str, str, int | None, str | None], ...] = (
 BATCH_JOBS: tuple[tuple[str, str, str, float], ...] = (
     ("com.tradingagent.newlisting", "每日研究任务", "logs/ta-newlisting-service.log", 26.0),
     ("com.tradingagent.tradfi-session", "美股时段采集", "logs/ta-tradfi-session.log", 26.0),
+    # Hourly, so a silent stop shows up within a couple of hours rather than a day.
+    ("com.tradingagent.funding-sync", "资金费入账", "logs/ta-funding-sync.log", 3.0),
 )
 
 

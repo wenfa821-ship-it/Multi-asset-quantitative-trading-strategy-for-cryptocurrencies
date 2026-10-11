@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job: book the funding the venue already paid, every hour.
+
+  Why an hourly job for a once-a-day task (2026-10-11). Funding settles three times
+  a day on every open swap, but the daily research job only syncs it at 09:10 and
+  21:10 CST - so between those runs the venue's cash moves while our book does not.
+  The reconciler compares `baseline + our flow` against the venue's cashBal, which
+  means the residual DRIFTS all day and snaps back twice.
+
+  Measured: on 2026-10-10 the watchdog escalated that residual from "stable" to
+  "drifting" (-$86 in eight hours, zero fills of ours), and the careful look that
+  followed found 24 funding bills worth +$264.68 that we had simply not booked yet.
+  The fix is frequency, not a threshold: sync_funding.py is idempotent by the
+  venue's own billId, takes ~10 seconds, and books whatever is missing.
+
+  KeepAlive is FALSE (a batch job) and StartInterval is 3600, so the residual's
+  between-sync drift is bounded by one hour instead of twelve.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tradingagent.funding-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__VENV_PYTHON__</string>
+        <string>-u</string>
+        <string>scripts/sync_funding.py</string>
+        <string>--yes</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>src</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/anaconda3/bin</string>
+        <key>TZ</key>
+        <string>Asia/Shanghai</string>
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>TA_PROXY</key>
+        <string>http://127.0.0.1:7897</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/ta-funding-sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/ta-funding-sync.err.log</string>
+</dict>
+</plist>

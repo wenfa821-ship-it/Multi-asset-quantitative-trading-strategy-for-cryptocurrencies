@@ -1938,7 +1938,11 @@ class DashboardBatchJobsTests(unittest.TestCase):
             jobs = {b["label"]: b for b in self._data(root).batch_jobs()}
         self.assertFalse(jobs["com.tradingagent.newlisting"]["stale"])
         self.assertFalse(jobs["com.tradingagent.tradfi-session"]["stale"])
-        self.assertEqual(len(jobs), 2)
+        # Every configured batch job must appear - the list grows as jobs are added,
+        # so assert against the configuration rather than a frozen count.
+        from ta.dashboard import BATCH_JOBS
+
+        self.assertEqual(len(jobs), len(BATCH_JOBS))
 
     def test_a_missing_log_counts_as_stale_and_raises_a_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1949,7 +1953,8 @@ class DashboardBatchJobsTests(unittest.TestCase):
                       if f["title"].startswith("批量任务超时未运行")]
         self.assertTrue(jobs["com.tradingagent.tradfi-session"]["stale"])
         self.assertIsNone(jobs["com.tradingagent.tradfi-session"]["age_hours"])
-        self.assertEqual(len(titles), 2)   # both logs are missing
+        self.assertGreaterEqual(len(titles), 2)   # every missing log raises one
+        self.assertEqual(len(titles), len(jobs))
 
     def test_the_research_job_repeats_what_its_own_status_file_said(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
