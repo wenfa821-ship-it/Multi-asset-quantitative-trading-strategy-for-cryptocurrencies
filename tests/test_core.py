@@ -1734,6 +1734,47 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class CarryRotationRuleTests(unittest.TestCase):
+    """1.2's decision half: what the RUNNER may close, given the detector's report.
+
+    The detector lives in the daily job and writes a report; the close has to happen
+    inside the runner, because only the runner holds pairs.json, the ledger and the
+    executor - an external script closing a pair leaves the pair state describing a
+    position that no longer exists (the shape behind the duplicate-hedge incidents).
+    """
+
+    def _module(self):
+        from ta.execution.rotation import plan_rotation
+
+        return plan_rotation
+
+    def test_a_reported_pair_the_runner_holds_is_closed(self) -> None:
+        plan = self._module()
+        report = {"rotations": [{"from": "CRV/USDT", "to": "WLFI/USDT:USDT",
+                                 "current_bps": 0.4, "breakeven_days": 12}]}
+        out = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 2_700.0})
+        self.assertEqual(out["symbol"], "CRV/USDT")
+        self.assertEqual(out["refused"], "")
+
+    def test_a_pair_the_runner_does_not_hold_is_ignored(self) -> None:
+        plan = self._module()
+        report = {"rotations": [{"from": "WLFI/USDT", "to": "X"}]}
+        self.assertIsNone(plan(report, {"CRV/USDT"}, 100_000.0, {"WLFI/USDT": 10.0}))
+
+    def test_the_notional_cap_and_the_daily_cap_both_refuse(self) -> None:
+        plan = self._module()
+        report = {"rotations": [{"from": "CRV/USDT", "to": "WLFI/USDT:USDT"}]}
+        big = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 6_000.0})
+        self.assertEqual(big["refused"], "notional")           # 6000 > 5% of 100k
+        spent = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 100.0}, actions_today=1)
+        self.assertIsNone(spent)                               # one a day, no more
+
+    def test_no_report_and_no_proposals_do_nothing(self) -> None:
+        plan = self._module()
+        self.assertIsNone(plan(None, {"CRV/USDT"}, 100_000.0, {}))
+        self.assertIsNone(plan({"rotations": []}, {"CRV/USDT"}, 100_000.0, {}))
+
+
 class DailyReviewGeneratorTests(unittest.TestCase):
     """The numbers half of a daily review has to be reproducible, not remembered.
 
@@ -2111,11 +2152,14 @@ class ReservedInventoryTests(unittest.TestCase):
             wrong.write_text('{"symbols": ["BTC/USDT"]}', encoding="utf-8")
             self.assertEqual(load(wrong), {})
 
-    def test_the_shipped_file_reserves_the_option_premium_coin(self) -> None:
+    def test_the_shipped_file_loads_and_the_mechanism_is_intact(self) -> None:
+        """The BTC reserve was unwound on 2026-10-11 (sold back), so `symbols` is
+        empty - but the MECHANISM must still load, because the next deliberate
+        manual holding will need it. The populated case is covered above."""
         load = self._loader()
         reserved = load(PROJECT / "config" / "reserved_inventory.json")
-        self.assertIn("BTC/USDT", reserved)
-        self.assertIn("premium", reserved["BTC/USDT"]["reason"])
+        self.assertIsInstance(reserved, dict)
+        self.assertNotIn("BTC/USDT", reserved)
 
     def test_reconciliation_skips_a_reserved_position_but_keeps_the_others(self) -> None:
         from ta.execution.oms import OMS

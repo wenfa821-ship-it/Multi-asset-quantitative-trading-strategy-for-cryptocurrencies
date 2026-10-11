@@ -645,6 +645,7 @@ class TradingRunner:
 
         self._adopt_positions(account, marks)
         self._manage_exits(account, marks)
+        self._check_carry_rotation(account, marks)
 
         for strategy in self.strategies:
             for symbol in strategy.symbols:
@@ -1403,6 +1404,104 @@ class TradingRunner:
                     "unmanaged": is_unmanaged,
                 }},
             )
+
+    def _check_carry_rotation(self, account: AccountState, marks: dict[str, float]) -> None:
+        """Run the 1.2 rotation rule and, when it fires, close the pair HERE.
+
+        The detector (`scripts/carry_rotation.py`, in the daily job) decides which
+        pair stopped paying; this closes it through the runner's own executor so the
+        pair state, the ledger and the book stay consistent - an external script
+        closing a pair behind the runner is what leaves `pairs.json` describing a
+        position that no longer exists. CLOSE ONLY: the freed slot is filled by the
+        normal carry entry on a later tick, not by a hand-rolled two-leg sequence.
+
+        Guardrails (all refusals): hold the pair, notional <= 5% of equity, at most
+        one rotation per calendar day. Off unless the strategy config says
+        `rotation_enabled = true`.
+        """
+        if not self._rotation_enabled():
+            return
+        if not self._carry_pairs:
+            return
+        from .execution.rotation import plan_rotation
+
+        report = None
+        from pathlib import Path as _Path
+
+        path = _Path(self.config.path("data/carry/rotation.jsonl"))
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line:
+                    report = json.loads(line)
+        except (OSError, ValueError):
+            return
+        notionals = {}
+        for symbol, pair in self._carry_pairs.items():
+            mark = marks.get(symbol) or 0.0
+            notionals[symbol] = float(getattr(pair, "base_qty", 0.0) or 0.0) * mark
+        plan = plan_rotation(report, set(self._carry_pairs), account.equity, notionals,
+                             actions_today=self._rotations_today())
+        if not plan:
+            return
+        symbol = plan["symbol"]
+        if plan["refused"]:
+            self._alert("warning", "carry rotation refused",
+                        symbol=symbol, reason=plan["refused"],
+                        notional=round(plan["notional"], 2), cap=round(plan["cap"], 2))
+            return
+        pair = self._carry_pairs[symbol]
+        try:
+            # Same construction the carry exit path uses (line ~971): the runner has
+            # no long-lived executor, it builds one per action.
+            from .execution.paired import PairedExecutor
+
+            PairedExecutor(self.oms, self.hedge_oms, stamp=lambda: int(self._now_ms())).close_pair(pair)
+        except Exception as exc:  # noqa: BLE001 - a failed close must not kill the tick
+            self.log.error("carry rotation close failed",
+                           extra={"extra_fields": {"symbol": symbol, "error": str(exc)}})
+            return
+        self._carry_pairs.pop(symbol, None)
+        self._save_carry_pairs()
+        self.exits.pop(symbol, None)
+        self._note_rotation()
+        self._alert("info", "carry pair rotated out (close-only)",
+                    symbol=symbol, candidate=plan["rotation"].get("to"),
+                    current_bps=plan["rotation"].get("current_bps"),
+                    breakeven_days=plan["rotation"].get("breakeven_days"))
+
+    def _rotation_enabled(self) -> bool:
+        """Is 1.2's close-only rotation switched on? (config, default off)
+
+        A config flag rather than a constant: turning a trading rule on and off has
+        to be inspectable in `strategies.toml`, not in a commit message.
+        """
+        try:
+            params = self.config.strategy("carry_funding").params
+        except KeyError:
+            return False
+        return str(params.get("rotation_enabled", "false")).lower() in ("1", "true", "yes")
+
+    def _rotation_state_path(self) -> Path:
+        from pathlib import Path as _Path
+
+        return _Path(self.config.path("data/carry/rotation_state.json"))
+
+    def _rotations_today(self) -> int:
+        try:
+            state = json.loads(self._rotation_state_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return 0
+        today = time.strftime("%Y-%m-%d", time.localtime())
+        return int(state.get("count") or 0) if state.get("date") == today else 0
+
+    def _note_rotation(self) -> None:
+        path = self._rotation_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        today = time.strftime("%Y-%m-%d", time.localtime())
+        count = self._rotations_today() + 1
+        path.write_text(json.dumps({"date": today, "count": count}), encoding="utf-8")
+
 
     def _manage_exits(self, account: AccountState, marks: dict[str, float]) -> None:
         limits = self.config.risk.positions

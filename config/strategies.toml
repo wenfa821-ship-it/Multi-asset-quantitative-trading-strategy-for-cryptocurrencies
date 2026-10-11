@@ -202,6 +202,15 @@ warmup_bars             = 3
 # ACCEPTED and then killed by the exchange (cancelSource=31, zero fill), and a
 # resting order can be cancelled (cancelSource=1, confirmed gone).
 passive_entry           = true
+# 1.2 rotation, CLOSE ONLY (2026-10-11, user decision "启用"): when the daily
+# detector (scripts/carry_rotation.py) reports that a held pair has stopped paying -
+# median funding below the floor on every day of the window, breakeven inside the
+# hold, older than min_hold_hours - the RUNNER closes that pair through its own
+# executor, so pairs.json, the ledger and the book stay consistent. The freed slot is
+# filled by the normal carry entry on a later tick, never by a hand-rolled two-leg
+# sequence. Guardrails in ta/execution/rotation.py: hold the pair, notional <= 5% of
+# equity, at most one rotation per calendar day. Set false to turn it off.
+rotation_enabled        = true
 # How long the resting order is left before it is pulled and the leg goes to
 # market. Carry holds for days, so a few seconds of price drift is a cheap price
 # for 10-70 bps of spread - but the fallback is mandatory, never a wait forever.

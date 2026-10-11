@@ -271,9 +271,9 @@
   {
    "id": "carry-rotation-execution",
    "item": "1.2 · 换腿执行：工具已就绪（`scripts/carry_rotate.py`，默认 dry-run），开启与否等用户决定",
-   "state": "next_phase",
+   "state": "done",
    "gate": "**执行工具已落地（changelog 2026-10-10T22:10）**：`scripts/carry_rotate.py` 只做『平旧不开新』，三条防护写死（两腿必须齐全 / 先买回永续再卖现货 / 单笔 ≤5% 权益、每日 ≤1 次），默认 dry-run，只有手动 `--yes` 才动仓；开新对交还 runner 的 carry 入场逻辑。实际执行路径与已在 2026-10-08 实跑过的 `carry_unwind_all.py` 相同",
-   "next": "**仍需用户一句话**才能让某次换腿真的执行（脚本不会自动跑，也不在每日任务里）。触发仍由检测器给：连续 3 天中位 <1 bp/天且回本 <30 天；当前报告无提案（CRV 中位已回到 0.9 附近）"
+   "next": "**已启用（2026-10-11 用户决定）**：执行放在 **runner 内部**（`_check_carry_rotation` 每 tick 读 `data/carry/rotation.jsonl`，命中就用 runner 自己的 `PairedExecutor.close_pair()` 平掉），**只平旧、绝不开新**；三条护栏写死：只接受 runner 真实持有的对、名义 ≤ 权益 5%、每日 ≤ 1 次（拒绝也回原因）。配置开关 `[strategies.carry_funding] rotation_enabled = true`，可随时关。触发仍由检测器给（连续 3 天中位 <1 bp/天且回本 <30 天）；今日无提案，链路待命"
   },
   {
    "id": "onchain-1h-hypothesis",

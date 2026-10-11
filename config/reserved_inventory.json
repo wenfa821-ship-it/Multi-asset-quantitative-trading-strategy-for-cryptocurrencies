@@ -1,10 +1,5 @@
 {
   "_note": "Manual holdings the bot did NOT open and must never close. Listed here so the watchdogs can tell them apart from a deposit somebody forgot: the runner excludes them from `unmanaged_notional` (the alarm stays meaningful) and from the position half of reconciliation (which would otherwise warn every cycle about a position that is doing exactly what it was bought for). The amount is still reported, as `ta_reserved_notional` and in the snapshot, because known is not the same as invisible.",
-  "_why_btc": "2026-10-10: 0.00120705 BTC (~$100) bought to pay a coin-margined option premium - OKX's BTC options settle in BTC and the smallest order is ~0.0006 BTC. The USD-settled _UM family was measured and has an empty book, so holding coin is the only path (changelog 2026-10-10T15:55 / 19:30).",
-  "symbols": {
-    "BTC/USDT": {
-      "reason": "1.1 options premium inventory (coin-margined, must be paid in BTC)",
-      "max_usd": 200.0
-    }
-  }
+  "_history": "2026-10-10: 0.00120705 BTC (~$100) was bought to pay a coin-margined option premium (OKX options settle in BTC; the USD-settled _UM family was measured and has an empty book). 2026-10-11: the user decided to sell it back, because this venue turned out to be unable to sell an option at all (README 69) - so the reserve had no purpose. The round trip is booked in the ledger under tag btc-premium-inventory and nets to dust; the entry below is therefore empty, and the mechanism stays for the next time a deliberate manual holding exists.",
+  "symbols": {}
 }
