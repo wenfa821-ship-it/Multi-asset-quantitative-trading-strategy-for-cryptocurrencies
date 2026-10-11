@@ -365,6 +365,13 @@
    "state": "done",
    "gate": "changelog 2026-10-10T23:35 记的问题：tier 从 13 收窄到 1 之后，第一次采样只覆盖 XMU 一个标的，那 12 个被移除的标的从此没有任何东西在看。修法：`venue_availability.py` 默认采样集合改为 `watch_symbols(tier, data/universe/tradfi_tier.json)`（tier 在前、报告里出现过的接在后面、去重）",
    "next": "**已完成（changelog 2026-10-11T10:20）**：实测名单恢复到 13 个；不用改 plist——任务调的是同一个脚本，默认值已变，下一次 23:10 槽位即生效。若将来新增/移除标的，只需更新 tier 与报告，采集自动跟随"
+  },
+  {
+   "id": "funding-sync-cadence",
+   "item": "1.0.x · 资金费入账频率：每天 2 次 → 每小时（残余漂移的根因是同步节奏）",
+   "state": "done",
+   "gate": "changelog 2026-10-11T10:55：资金费每天结算 3 次/持仓，而每日任务只在 09:10 / 21:10 同步 → 两次之间的残余整天漂、每天弹两次；10-10 看门狗因此把长期 info 升级为 warn（8 小时 −$86，其中 24 条资金费账单 +$264.68 当时未记）",
+   "next": "**已落地**：第 6 个 launchd 任务 `com.tradingagent.funding-sync`（`StartInterval=3600`、RunAtLoad、`sync_funding.py --yes`，按 billId 幂等）。实测 runs=1 / exit 0 / 『already holds 75』；看板列为第 3 个批量任务（3h 阈值）。那个 $50 阈值**刻意没动**——它是判据而不是 bug。下一步：观察未来 24h 残余是否只在间隙内小幅摆动、不再触发『在漂移』"
   }
 ]
 }
