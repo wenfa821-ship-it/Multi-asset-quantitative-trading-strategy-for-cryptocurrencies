@@ -283,10 +283,15 @@ function renderNewcoin(nc) {
     ncKpi('进度', (counts.done || 0) + '/' + total, Object.entries(counts).map(([k,v]) => `${NC_STATE[k] || k} ${v}`).join(' · ')),
     ncKpi('今日候选', String((nc.candidates && nc.candidates.rows || []).length),
       '过闸 ' + ((nc.candidates && nc.candidates.passed) || 0) + ' 个'),
-    ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
-    ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
+  ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
+  ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
       '时间盒 + 执行/数据，门槛 ≤30%'),
-    ncKpi('报告时刻', esc(age), nc.stale ? '超过 26 小时没更新' : '采集正常'),
+  ncKpi('采集轮次', String((nc.candidates && nc.candidates.rounds || []).length),
+    (nc.candidates && nc.candidates.rounds || []).length
+      ? '最近一轮 ' + esc(String((nc.candidates.rounds.slice(-1)[0] || {}).ts || '').slice(5, 16))
+        + '（每 6 小时一轮，一轮一个文件）'
+      : '还没有轮次索引'),
+  ncKpi('报告时刻', esc(age), nc.stale ? '超过 26 小时没更新' : '采集正常'),
   ].join('');
 
   $('#nc-gates').innerHTML =
