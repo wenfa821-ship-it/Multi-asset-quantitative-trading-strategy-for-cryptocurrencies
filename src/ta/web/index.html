@@ -192,7 +192,8 @@
   <section class="span6"><h2>前向台账（累积：一次测量一行，永不重算）</h2>
     <div id="nc-ledger"></div>
     <div class="muted" style="margin-top:6px">同一「标的×轮次×窗口」只认<b>第一次</b>测量
-      （离目标时刻最近）。台账号数只增不减 —— 这就是「样本在长」的证据。</div>
+      （离目标时刻最近）。台账号数只增不减 —— 这就是「样本在长」的证据。
+      <b>样本量看「不同标的」那一列</b>（同一个代币被记多次 ≠ 多个样本）。</div>
   </section>
 
   <section class="span8"><h2>路径进度表</h2><div id="nc-progress" class="scroll"></div></section>
@@ -366,16 +367,18 @@ function renderNewcoin(nc) {
       ${ncKpi('成本假设', String(led.cost_bps || '') + ' bps', '往返；毛净可分开看')}
     </div>
     <table><thead><tr><th>窗口</th><th class="num">n</th><th class="num">不同标的</th>
-      <th class="num">中位净</th><th class="num">均值</th><th class="num">p90</th>
-      <th class="num">最大</th><th class="num">胜率</th></tr></thead>
+      <th class="num">其中多次</th><th class="num">中位净(按标的)</th>
+      <th class="num">中位净(按测量)</th><th class="num">p90(按标的)</th>
+      <th class="num">最大</th><th class="num">胜率(按标的)</th></tr></thead>
     <tbody>${Object.entries(ledHorizons).map(([h, v]) => `<tr>
       <td>${esc(h)}</td><td class="num">${v.n || 0}</td>
       <td class="num">${v.distinct_tokens || 0}</td>
-      <td class="num">${v.median_net_bps == null ? '—' : v.median_net_bps}</td>
-      <td class="num">${v.mean_net_bps == null ? '—' : v.mean_net_bps}</td>
-      <td class="num">${v.p90_net_bps == null ? '—' : v.p90_net_bps}</td>
+      <td class="num">${v.tokens_with_multiple == null ? '—' : v.tokens_with_multiple}</td>
+      <td class="num"><b>${(v.per_token || {}).median_net_bps == null ? '—' : v.per_token.median_net_bps}</b></td>
+      <td class="num dim">${v.median_net_bps == null ? '—' : v.median_net_bps}</td>
+      <td class="num">${(v.per_token || {}).p90_net_bps == null ? '—' : v.per_token.p90_net_bps}</td>
       <td class="num">${v.max_net_bps == null ? '—' : v.max_net_bps}</td>
-      <td class="num">${v.win_rate == null ? '—' : (v.win_rate * 100).toFixed(0) + '%'}</td>
+      <td class="num">${(v.per_token || {}).win_rate == null ? '—' : (v.per_token.win_rate * 100).toFixed(0) + '%'}</td>
     </tr>`).join('')}</tbody></table>` : '<div class="muted">台账还空着（等第一个窗口走完）。</div>';
 
   const sample = nc.sample || {};
