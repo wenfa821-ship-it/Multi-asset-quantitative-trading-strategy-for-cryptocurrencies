@@ -3564,6 +3564,141 @@ class FundingIncomeTests(unittest.TestCase):
         self.assertEqual(out["BAND-USDT-SWAP"]["usdt"], 5.0)
         self.assertIsNone(out["BAND-USDT-SWAP"]["bps_per_day"])
 
+    def test_bps_per_day_divides_by_the_real_window_not_one_day(self) -> None:
+        """2026-10-11: the window is rolling, so `--days 2` rows cover two days.
+
+        Dividing the window's whole sum by one day inflates every rate by the
+        window length; the recorded `bps_per_day` was ~2x the truth for that
+        reason. The same income over two days must read half the bps.
+        """
+        from scripts.funding_income import summarise, window_days
+
+        day = 86_400_000
+        bills = [
+            {"instId": "ACT-USDT-SWAP", "pnl": "1.0", "ts": 1_790_000_000_000},
+            {"instId": "ACT-USDT-SWAP", "pnl": "1.0", "ts": 1_790_000_000_000 + day},
+        ]
+        self.assertAlmostEqual(window_days(bills), 1.0, places=6)
+        one_day = summarise(bills, {"ACT/USDT:USDT": 1000.0}, window=1.0)
+        self.assertAlmostEqual(one_day["ACT-USDT-SWAP"]["bps_per_day"], 20.0)
+        two_days = summarise(bills, {"ACT/USDT:USDT": 1000.0}, window=2.0)
+        self.assertAlmostEqual(two_days["ACT-USDT-SWAP"]["bps_per_day"], 10.0)
+
+    def test_window_days_measures_the_span_actually_returned(self) -> None:
+        """An account with fewer than 100 funding bills gets one whole page back,
+        so a `--days 2` request can hand over three days of history."""
+        from scripts.funding_income import window_days
+
+        day = 86_400_000
+        base = 1_790_000_000_000
+        bills = [{"instId": "CRV-USDT-SWAP", "pnl": "1.0", "ts": base + k * day}
+                 for k in range(3)]
+        self.assertAlmostEqual(window_days(bills), 2.0, places=6)
+        self.assertEqual(window_days([]), 1.0)
+        self.assertEqual(window_days([{"instId": "X", "ts": base}]), 1.0)
+
+
+class CarryIncomeReportTests(unittest.TestCase):
+    """Realised carry income vs the market's own funding prints (README 71).
+
+    2026-10-11: `data/funding/income.jsonl` stores a ROLLING window per day, so
+    adding its rows double-counts. On the real file BAND's 10-08 credit appears in
+    all three rows, and CRV's rows sum to 1,301.6 USDT when the venue only ever
+    paid 796.1. These lock the re-derivation from raw bills.
+    """
+
+    DAY = 86_400_000
+    BASE = 1_790_000_000_000 - (1_790_000_000_000 % 86_400_000)  # a UTC midnight
+
+    def _rate_dir(self, tmp: str, name: str, rows: list[tuple[int, float, int]]) -> Path:
+        path = Path(tmp) / f"{name}-USDT_USDT.jsonl"
+        path.write_text(
+            "\n".join(json.dumps({"ts": ts, "rate": rate}) for ts, rate, _ in rows) + "\n",
+            encoding="utf-8",
+        )
+        return Path(tmp)
+
+    def _rates(self, days: int, per_day_prints: int, rate: float) -> list[tuple[int, float, int]]:
+        step = self.DAY // per_day_prints
+        return [(self.BASE + d * self.DAY + k * step, rate, k)
+                for d in range(days) for k in range(per_day_prints)]
+
+    def test_realised_income_is_bucketed_by_utc_day(self) -> None:
+        from scripts.carry_income_report import realised_by_day
+
+        bills = [
+            {"instId": "ACT-USDT-SWAP", "pnl": "1.0", "ts": self.BASE + 3_600_000},
+            {"instId": "ACT-USDT-SWAP", "pnl": "2.0", "ts": self.BASE + 7_200_000},
+            {"instId": "ACT-USDT-SWAP", "pnl": "4.0", "ts": self.BASE + self.DAY + 3_600_000},
+        ]
+        out = realised_by_day(bills)
+        days = sorted(out)
+        self.assertEqual(len(days), 2)
+        self.assertAlmostEqual(out[days[0]]["ACT-USDT-SWAP"]["usdt"], 3.0)
+        self.assertEqual(out[days[0]]["ACT-USDT-SWAP"]["settles"], 2)
+        self.assertAlmostEqual(out[days[1]]["ACT-USDT-SWAP"]["usdt"], 4.0)
+        self.assertEqual(out[days[1]]["ACT-USDT-SWAP"]["settles"], 1)
+
+    def test_rate_history_sums_each_day_and_reads_the_interval(self) -> None:
+        from scripts.carry_income_report import rate_summary
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # 3 prints a day at 1 bp each -> 3 bps/day, 8h interval
+            rate_dir = self._rate_dir(tmp, "ACT", self._rates(days=5, per_day_prints=3,
+                                                              rate=0.0001))
+            out = rate_summary(rate_dir, "ACT", 30)
+            self.assertEqual(out["days"], 5)
+            self.assertAlmostEqual(out["median_bps"], 3.0, places=6)
+            self.assertAlmostEqual(out["settle_hours"], 8.0, places=6)
+            self.assertEqual(out["negative_days"], 0)
+            self.assertIsNone(rate_summary(rate_dir, "NOPE", 30))
+
+    def test_a_demo_artefact_is_dropped_from_the_basket_not_averaged_in(self) -> None:
+        """CRV-like: the market pays 2 bps/day while the demo credited 700.
+
+        Including that row would set the basket rate 350x too high and turn a
+        22-day payback into a 0.06-day one.
+        """
+        from scripts.carry_income_report import build_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rate_dir = self._rate_dir(tmp, "SUI", self._rates(days=5, per_day_prints=3,
+                                                              rate=0.0000666))
+            self._rate_dir(tmp, "CRV", self._rates(days=5, per_day_prints=3, rate=0.0000666))
+            realised = {
+                "2026-10-09": {"SUI-USDT-SWAP": {"usdt": 0.31, "settles": 2},
+                               "CRV-USDT-SWAP": {"usdt": 200.0, "settles": 12}},
+                "2026-10-10": {"SUI-USDT-SWAP": {"usdt": 0.31, "settles": 2},
+                               "CRV-USDT-SWAP": {"usdt": 200.0, "settles": 12}},
+            }
+            notionals = {"SUI/USDT:USDT": 2000.0, "CRV/USDT:USDT": 2800.0}
+            report = build_report(
+                realised=realised, notionals=notionals, rate_dir=rate_dir,
+                names=[], days=30, artefact_ratio=3.0, round_trip_bps=44.9, min_days=5,
+            )
+        self.assertEqual(report["basket_names"], ["SUI"])
+        self.assertIn("CRV", report["excluded"])
+        self.assertGreater(report["per_contract"]["CRV"]["realised_over_market"], 3.0)
+        # SUI is credible here (0.31 USDT/day over $2k ~= 1.55 bps/day)
+        self.assertLess(report["per_contract"]["SUI"]["realised_over_market"], 3.0)
+
+    def test_breakeven_uses_the_basket_rate_and_flags_a_short_sample(self) -> None:
+        from scripts.carry_income_report import build_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rate_dir = self._rate_dir(tmp, "SUI", self._rates(days=30, per_day_prints=3,
+                                                              rate=0.0000666))
+            realised = {"2026-10-09": {"SUI-USDT-SWAP": {"usdt": 0.3, "settles": 2}}}
+            report = build_report(
+                realised=realised, notionals={"SUI/USDT:USDT": 2000.0}, rate_dir=rate_dir,
+                names=[], days=30, artefact_ratio=3.0, round_trip_bps=44.9, min_days=5,
+            )
+        basket = report["basket_market_bps_per_day"]
+        self.assertAlmostEqual(basket, round(0.0000666 * 3 * 1e4, 3), places=3)
+        self.assertAlmostEqual(report["breakeven_days"], round(44.9 / basket, 1), places=1)
+        self.assertFalse(report["sample_ok"])          # 1 realised day < min_days
+        self.assertEqual(report["realised_days"], 1)
+
 
 class DepthGateTests(unittest.TestCase):
     """Entry impact from the order book, in bps of mid.
@@ -4606,6 +4741,7 @@ class EnvLoaderIsSharedTests(unittest.TestCase):
         self.assertEqual(
             sorted(checked),
             [
+                "carry_income_report.py",
                 "funding_income.py",
                 "refresh_daily_bars.py",
                 "sync_funding.py",

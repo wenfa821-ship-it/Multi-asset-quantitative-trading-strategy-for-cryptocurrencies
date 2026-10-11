@@ -1,6 +1,6 @@
 {
  "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
- "updated": "2026-10-10",
+ "updated": "2026-10-11",
  "rows": [
   {
    "id": "path-1",
@@ -400,6 +400,13 @@
    "state": "done",
    "gate": "用户决定（2026-10-11，含当日追加确认）：① 项目定名为**多资产组合策略**，四条腿共用一份风控/账本/闸门，当前 100% 仓位属于它；② 未来新增**新币策略**另立新项目（预定名**新币主观量化策略**），不混入本项目；③ 版本管理法则不变（仍按 RELEASING.md 的 7 步与语义化版本）；④ 表上剩余的 waiting_data 项**不再逐轮更新**，等实盘后再统一重估；⑤ **目录名与 git 仓库路径保持 `trading-agent` 不改**——项目名只在文档层生效",
    "next": "维护：README 顶部与 docs/RELEASING.md 已写入项目名与边界；代码目录名保持 `trading-agent`（5 个 launchd 单元的 WorkingDirectory 指着它）。再启动时：若决定进入实盘，把实盘相关项从挂起恢复成可执行，并在新项目里从零建立『新币主观量化策略』的证据标准"
+  },
+  {
+   "id": "carry-income-report",
+   "item": "carry 真实收入的「两个口径对照」报告（非尖峰篮子）：市场费率 vs 模拟盘到账",
+   "state": "done",
+   "gate": "用户 2026-10-11 同意先算一份非尖峰标的的 carry 真实收入报告；越算越发现 `income.jsonl` 本身口径错（滚动窗口重复计费、bps 少除窗口天数），一并修掉",
+   "next": "每天由 `daily_research.py` 跑 `scripts/carry_income_report.py --write` 累积到 `data/carry/income_report.json`（代理不通时退化为只读费率面板，不会让任务变红）。结论：市场费率 ~2.03 bps/天、44.9 bps 往返回本 22.2 天、30 天净 +15.9 bps → **低于自己的 20 bps 边际门槛**，今天不该新开 carry 对，也不该触发换腿。等 §70.6 第 5 条门槛（非尖峰 ≥30 天实测，现只有 4 天）满"
   }
  ]
 }

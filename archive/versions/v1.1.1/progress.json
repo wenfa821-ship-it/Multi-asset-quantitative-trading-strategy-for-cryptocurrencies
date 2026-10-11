@@ -1,0 +1,412 @@
+{
+ "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
+ "updated": "2026-10-11",
+ "rows": [
+  {
+   "id": "path-1",
+   "item": "回放改「并集时间轴 + 按标的可用性」",
+   "state": "done",
+   "gate": "README §35",
+   "next": "—"
+  },
+  {
+   "id": "path-2",
+   "item": "carry 提升为受风控管理的永续策略",
+   "state": "done",
+   "gate": "README §37/38，§43–59 大幅加固",
+   "next": "—"
+  },
+  {
+   "id": "path-3",
+   "item": "补齐现货 272 / 永续 155 历史",
+   "state": "done",
+   "gate": "README §47：4h/1h 167→388；顺带查出 21 个 live-only + 18 个僵尸条目",
+   "next": "—"
+  },
+  {
+   "id": "path-4",
+   "item": "期权数据层",
+   "state": "done",
+   "gate": "README §45：已接进每日任务",
+   "next": "—"
+  },
+  {
+   "id": "path-5",
+   "item": "期权策略（买权利金的有限风险结构）",
+   "state": "waiting_data",
+   "gate": "**用户决定：移至 1.1**（2026-10-10）。理由：这条腿等的是 5–7 天 IV/RV 新鲜样本（不是工作），而 1.0 应当先封板跑起来。当前读数（10-10，同期限对齐后）：BTC −7.25 / ETH +7.18 / SOL −0.24 pp，中位 −0.24、1/3 为正；10-09 是 −12.41 / −1.16 / +2.52 —— **符号既不跨家族一致、也逐日漂移**，所以本来就还需要样本才能下结论",
+   "next": "**2026-10-11 更新**：样本已到 **4/5 天**（BTC 10-08..10-11 = 5.54 / 12.41 / 10.35 / 10.71 pp，门槛 1.5pp；ETH 0/5，符号相反）。但**闸门已不是阻塞点**——同日的三次零成本实测证明**这套模拟环境买不到期权**（README §69 / v1.1.0），所以这条等的是**可执行环境**（实盘或模拟盘流动性变化），不是更多样本。`options_gate.py` 仍每天自动判，开闸当天会留时间戳"
+  },
+  {
+   "id": "leg-tradfi-1",
+   "item": "TradFi 腿 · 第 1 步：先把「哪些 X* 真的是 TradFi」定下来",
+   "state": "done",
+   "gate": "README §62：三个判别法里两个被证伪（contTdSwTime 非空 122 个含 2Z/ACT；「代币化股票只在模拟盘」假）；`instCategory` 才是资产类别（live: 1 币 / 3 股 / 4 商品币），但**模拟盘那份不可用** —— 它与实盘在 8 个 id 上不一致，把 XRP 标成股票。无法从名称/元数据可靠判定，故回到显式名单：XPO(2024-07-24)/XUC(2024-11-04) 早于 2026-07-15 的股票计划 → 钉现货腿；XCU 有实盘永续且归 4（商品币）→ 留在 TradFi",
+   "next": "已新增 scripts/leg_identity.py（实盘目录 vs 模拟盘目录，逐行判定+失败即 rc=1）并接进每日任务；配置改动随**下次 runner 进程启动**生效 —— 当前无持仓、无 universe 成员受影响，故本轮不重启"
+  },
+  {
+   "id": "leg-tradfi-book",
+   "item": "TradFi 腿 · 第 2 步：这条腿到底能不能交易（台面/时段/标的质量）",
+   "state": "done",
+   "gate": "README §63：① **交易所拒绝下单**，sCode **54092**『请先在 Web/App 的 TradFi 页面确认免责声明，主/子账户需分别确认后才能用 API 交易』（加密现货路径不受影响，故非我方代码问题）；② 20 条路由标的里**只有 3 条有双边报价**（XMU 0.9bps、XNVDA 50.3bps、XINTC 4591bps），其余 17 条**只有买盘没有卖盘**，原始接口复核同样（XTSM bids=5/asks=0，XAMD 两边皆空）；③ 原来的 7 个标的是按『有没有 K 线文件』挑的，**6/7 是死线**（收盘价从不变化：XSPCX 100%、XMSTR 100%、XQQQ 98.3%、XMRVL 98.6%、XINTC 90.1%、XNVDA 85.1%）；④ 时段结构：XMU 真 7×24（765/900 根 1h 有成交），XNVDA 只有 33/900 且集中在美股开收盘",
+   "next": "已把 config-tradfi 的池子换成按『日线真实成交≥80% 且零变动<10%』筛出的 13 个，并删掉落在 [venues.binance_testnet] 下的重复 tradfi 块"
+  },
+  {
+   "id": "leg-tradfi",
+   "item": "TradFi 腿（30% 额度）",
+   "state": "done",
+   "gate": "**1.0 范围内完成**：腿已接入实盘配置（13 标的 + 短 warmup 日线策略 + 全库最紧档位）、订单路径已实测（往返 21 bps）、可交易性每日两次自动记录（`venue_availability.py`）。**它至今 0 成交不是未完成，而是外部事实**：13 个标的里当前只有 XMU 同时有 K 线（95 根）与双边盘口，其余 12 个场馆此刻不供数据（磁盘上却有 84+ 根历史）",
+   "next": "成交与执行质量由 `tradfi-fills` 一行持续跟踪。**池子的问题已结案（v1.0.6）**：盘中样本证明那 12 个标的在两个时段都不供数据，tier 已收窄到 XMU/USDT；换言之这条腿现在只剩『XMU 何时出第一笔』一个未知数"
+  },
+  {
+   "id": "tradfi-fills",
+   "item": "TradFi 第一批真实成交（执行成本是否真是 21 bps）",
+   "state": "waiting_data",
+   "gate": "策略回测 28 笔 / -0.14% / PF 0.34 —— 启用理由是用户要求承风险收数据，不是已证实的边缘；真实成交几乎都只会落在有双边报价的 XMU（XNVDA 50bps、XINTC 4591bps 都不可用）",
+   "next": "有成交后逐笔对比：实际成交价 vs 当时中间价、手续费、是否被深度闸门误挡；若执行本身有问题（例如滑点远大于 0.5bp）先修执行，而不是调参数"
+  },
+  {
+   "id": "band-orphan-spot",
+   "item": "BAND 现货腿（2,084.13 ≈ $471）是裸多：处置它（平掉 or 补对冲）",
+   "state": "done",
+   "gate": "README §61.3 / §62：**已执行**（2026-10-10 01:05）—— 市价平掉 2,084.132066 BAND @0.227898861944（到手 ≈$474.56，手续费 $0.47）→ reconcile_ledger_to_venue.py --yes 补账本 → pairs.json 去掉 \"seeded\" 记录 → 重启 runner（91076→92241，restored carry pair state [ACT, CRV]）",
+   "next": "已生效：新 run 不再出现 `leg_positions: spot 3 >= 3`，carry 拒绝理由回到业务闸门（BAND 深度不足 / ETHW 冲击 500.6bps / SUI·NEAR 贴水）；对账脚本对 ACT 的 10 倍单位假差异待修"
+  },
+  {
+   "id": "carry-slot-throughput",
+   "item": "carry 的现货名额吞吐：3/3 被占满导致合格标的进不来",
+   "state": "done",
+   "gate": "**已按用户决定执行（2026-10-10 13:50，v0.4.6）**：spot 3→5、derivatives 2→5（含每日笔数 3→5）、account 12→17（每日笔数 14→16）；过程中发现真凶是引擎把 tier 上限拿**全账户持仓数**去比，已修（只看本 tier）+ carry tier 5→10（一对 = 两条腿）",
+   "next": "已生效：重启后同一 tick 内 **SUI 与 NEAR 两对开成**，账面 5 对（CRV/ACT/LTC/SUI/NEAR）逐腿对冲相等，入场 basis −10.2 / +4.5 bps 均过闸门；该修复同时解除了 TradFi 腿与方向性入场的静默锁死"
+  },
+  {
+   "id": "passive-entry-fill-detection",
+   "item": "被动入场：判定『挂上/成交/撤掉』必须读订单自身记录，不能靠挂单列表缺席",
+   "state": "done",
+   "gate": "README §63：LTC 第一对真仓被买成两倍（约 $1,977 裸露 33 分钟，净成本 ~$6.3）—— 根因是『不在挂单列表里』把成交误判为撤销；已新增 CcxtVenue.order_state/OMS.order_state（state + accFillSz 为唯一权威）、删掉缺席启发式、查不到即拒绝回退；+2 条回归测试（273）",
+   "next": "观察下一次真实的被动入场：日志里应出现同一 client order id 只对应一笔现货单；若回退发生，原因是 order_state 明确回了 canceled 而不是『查不到』"
+  },
+  {
+   "id": "risk-equity-units",
+   "item": "统一风险引擎的权益口径（现在把空头按名义扣，和账本差一个对冲腿名义）",
+   "state": "done",
+   "gate": "README/changelog 2026-10-10T02:55：**已修**（v0.4.2）—— 新增 portfolio.marked_value 并由 PositionBook.equity() 与 runner._prepare_risk_account 共用；两口径原本差 $4,823.79（= 三条对冲腿名义），导致开新对时假报日亏 −2% 并暂停入场",
+   "next": "已重启生效（92494→93128，entries_paused=0）；新对开出时不再触发暂停；附带把 sizing 基数从低估 4.7% 纠正回真实值"
+  },
+  {
+   "id": "leg-options",
+   "item": "期权腿（20% 额度）",
+   "state": "waiting_data",
+   "gate": "**1.1 的前置已经全部就位，主工程还没开工**（2026-10-10 更新）：venue 适配 ✓（ctMult/最小单/单向持仓参数/instId↔ccxt 映射）、币本位权利金 ✓（0.0011070525 BTC ≈ $92，够 1 张最小单）、盘口 ✓（±10% × 13–48d，中位 2.16% / 平值 1.5%，全部双边）、结构说明书 ✓（docs/options-sleeve-spec.md）、参数开关 ✓（config/options_premium.json，enabled=false）、闸门每天自判 ✓。**未做的两件**：① runner 还没有期权腿的执行接线（没有『持有/买入/平掉一张期权』的路径——适配器只到『能报价、能映射符号』）；② 没有策略类，也没有下过一张真实期权单验证路径",
+   "next": "**2026-10-11 收口**：这条腿的工程与数据已随 **v1.1.0** 交付（适配 + 数据 + 实测约束），策略未接入的原因是**环境**——本模拟盘买不到期权（README §69）。等进入实盘阶段（或模拟盘流动性变化）再恢复为可执行：① runner 期权腿接线 ② 策略类 ③ 权利金进账本。在此之前 20% 额度保持空置——这是设计，不是故障"
+  },
+  {
+   "id": "options-leg-wiring",
+   "item": "1.1 · 让 runner 真的能持有一张期权（执行接线：买/持/平/记账）",
+   "state": "waiting_data",
+   "gate": "现状：`[venues.okx_demo_option]`、单位换算（1 张 = ctVal×ctMult = 0.01 BTC）、单向持仓参数、符号映射都已就绪并有测试，但**runner 没有期权腿的执行路径** —— 它按「现货/永续」两种腿设计（paired carry、方向性现货、深度闸门），期权既不是现货也不是永续：权利金以币支付、到期会变成币本位现货敞口、没有 posSide/reduceOnly。这一块是 1.1 剩下的**主要工程量**",
+   "next": "**改判为『等可执行环境』（2026-10-11，v1.1.0 收口时决定）**：接线本身是纯工程，但**在这套模拟环境里无法端到端验证**——买不到就没有成交、没有持仓、没有平仓，只能写单测与纸面推演；而且若将来走的是**实盘**，价格带/手续费/最小单/流动性都可能不同，按模拟盘写死的适配很可能要重做。所以不在无法验证的假设上堆代码。等出现有对手方的场所那一周再开工，顺序：① 用 1 张最小单跑通『下单→成交→记录价差/费用→平仓』；② 据此决定 runner 侧接入方式（新增一条期权腿 or 复用现有腿记账）；③ 让权利金**进账本**（否则永远是非托管库存——今天为此加了 reserved_inventory 兜底）"
+  },
+  {
+   "id": "carry-postonly",
+   "item": "carry 被动入场（post-only 现货腿）",
+   "state": "done",
+   "gate": "README §66/68：前置（post-only 会被执行 = cancelSource 31、撤单可用 = cancelSource 1）与实现（OMS.cancel/open_order_ids、paired._passive_spot、runner._passive_entry_price）都完成；四种结局有测试，**撤单无法确认时拒绝市价回退**（否则现货腿翻倍）",
+   "next": "已在 BAND/USDT（真 carry 标的）验证过；下一次 carry 入场会走『挂买一 → 等 6s → 撤 → 回退市价』，日志里找 `passive`/`entry refused` 确认实际走的是哪条分支"
+  },
+  {
+   "id": "depth-gate-all-entries",
+   "item": "把深度闸门（max_entry_impact_bps）从 carry 专属提升为**所有入场**",
+   "state": "done",
+   "gate": "README §67：新增 sizing.depth_refusal() + runner._entry_depth_refused()，carry 分支改为调用同一实现，非 carry 入场提交前也调用；『查不到深度』= 拒绝，cap=0 关闭（纸面/回测不受影响）",
+   "next": "已随重启生效（runner 89479→90224）；新增 6 条测试（257→263），含一条真跑 _handle_signal 的覆盖测试：单边簿 session_orders=0 / 深簿 session_orders=1"
+  },
+  {
+   "id": "carry-notional",
+   "item": "calibrate carry_notional_pct（现为刻意保守的 2%）",
+   "state": "waiting_data",
+   "gate": "changelog 2026-10-10T11:50：已有 **2 天**实测收入，但结构不合格 —— CRV 占两日收入 **97%**，其费率 **1,290.8 bps/天（≈每天 12.9% 名义）** 是池子中位（约 3 bps/天）的 **400 倍**且连续三天不回落，量级在真实市场不可能，**判定为模拟盘费率产物**；ACT 19.7 / LTC 2.0 bps/天才是接近中位的样本",
+   "next": "**明确推迟校准**（不按尖峰调 `carry_notional_pct`，现为刻意保守的 2%）；等出现跨标的、跨周、非尖峰的样本（10-11 实测：CRV 仍占当日资金费 98%，ACT/LTC 才是中位量级），或四道闸门筛出的 21 个标的中有若干进入中位区间再谈"
+  },
+  {
+   "id": "carry-spike",
+   "item": "验证「资金费尖峰会回落」（20 倍于稳态）",
+   "state": "waiting_data",
+   "gate": "**2026-10-11 更新：尖峰没有回落，反而更大** —— 今日（10-11，约 14 小时）资金费 **21 条 +$386.79**，其中 **CRV 一条腿 +$378.72（98%）**；稳态参照仍是 ACT 19.7 / LTC 2.0 bps/天。量级（每天十几个百分点名义）在真实市场不可能出现，**判定为模拟盘费率产物**",
+   "next": "维持改判：把它当**模拟盘环境事实**记录，不再等『回落到 $2–3/天』；真实可用的 carry 证据要看 ACT/LTC 这类中位量级标的的持续收入，以及 21 个合格标的的开仓情况。检测器（`carry_rotation.py`）每天输出各对中位与是否 stale，今天仍无提案"
+  },
+  {
+   "id": "housekeeping-status",
+   "item": "changelog 的 status 字段回填（多处修好未更新，导致进度判断出错）",
+   "state": "done",
+   "gate": "README §69：18 条按证据结清（open→done 9、fixed-pending-restart→done 9），每条加 `resolved_note` 写明判据；只改 status 不改写正文；改前已备份",
+   "next": "剩下 1 条 open 是真正待用户决定的（10-05 新币池/聪明钱/真钱）；**此后每轮收尾把 status 更新写进清单** —— 这正是误导的来源"
+  },
+  {
+   "id": "history-freshness",
+   "item": "磁盘日线历史的每日刷新（研究侧的唯一价格来源）",
+   "state": "done",
+   "gate": "README §70：所有 1d 文件曾冻在 2026-10-05（`ta data fetch` 是覆盖写），期权 RV 因此是常数；新增 `history.merge_bars()` + `scripts/refresh_daily_bars.py` 并接进每日任务，已把 BTC/ETH/SOL 900→903 根（最新 2026-10-08）",
+   "next": "每日任务里的 `refresh_daily_bars.py` 会在 options_cost 之后跑，所以 RV 最多滞后一天（30 天窗口里可忽略）；要更快就把刷新挪到步骤最前"
+  },
+  {
+   "id": "options-rv-horizon",
+   "item": "期权 IV−RV 的期限必须对齐（现在拿 7 天 IV 比 30 天 RV）",
+   "state": "done",
+   "gate": "README §71：改成先选合约再按该合约期限算 RV，新增 dte_days / rv_window_days / realized_dte_pct，并保留 RV30 与 prem30 两列做参考。SOL 由 −13.59 → **+2.52**（符号翻转），中位 −9.66 → −1.16",
+   "next": "—"
+  },
+  {
+   "id": "version-archive",
+   "item": "版本号归档机制（策略优化放进版本里做）",
+   "state": "done",
+   "gate": "**已升级为专业版本管理（v0.4.7）**：`VERSION` 单一来源（`scripts/version_sync.py --check` 强制 pyproject/`ta.__version__` 一致，此前三者漂移到 0.2.0）；生成式 `CHANGELOG.md`（scripts/changelog_md.py）；`docs/RELEASING.md` 定义版本映射与 7 步发布清单；git 仓库 `e4f4864` + tag v0.4.6；归档 archive/versions/ 保留 10 个不可改写的冻结快照",
+   "next": "**1.0.0 保留给第一阶段（五步路径）完成** —— 即 path-5 的期权样本闸门打开（约 10-13/14）；此后每个版本按 RELEASING.md 的 7 步走：测试 → 进度表 → 留痕 → VERSION → 冻结归档 → CHANGELOG → git commit+tag"
+  },
+  {
+   "id": "perp-ctval-in-pnl",
+   "item": "永续盈亏没有乘合约面值 ctVal（ACT 的盈亏被低估约 10 倍）",
+   "state": "done",
+   "gate": "README/changelog 2026-10-10T10:55（v0.4.5）：**已修** —— Position 新增 ct_val（默认 1.0）、unrealized 乘面值；CcxtVenue.contract_size() 从行情表读 contractSize 并用于 get_account；runner 重建资金簿后给永续持仓补齐 ct_val。ACT（ctVal 10）那一腿的盈亏不再被低估 10 倍",
+   "next": "已随重启生效（99064→516）；3 条测试（286）；现货路径默认 1.0、零影响"
+  },
+  {
+   "id": "runner-liveness-watchdog",
+   "item": "看门狗判『交易循环是否还在做决策』（最后一个 tick 过久即告警）",
+   "state": "done",
+   "gate": "README/changelog 2026-10-10T09:35（v0.4.3）：新增 runner_stale_minutes=15.0，用账本最新 equity 事件时间戳算年龄，超时 critical；阈值取 15 是因为重启预热最慢实测约 12 分钟；+3 测试（278）",
+   "next": "已在当前代理中断事故中实时验证：看板报 `runner_stale_minutes critical 25.50 分钟（阈值 15.00）` —— 这类故障今后不再需要人工看时间戳发现"
+  },
+  {
+   "id": "venue-outage-resilience",
+   "item": "断网时的三级韧性：启动不崩、预热不磨、tick 快速失败",
+   "state": "done",
+   "gate": "README/changelog 2026-10-10T10:00（v0.4.4）：connect() 不再让 load_markets 抛穿（否则 KeepAlive 每 10 秒重启一次，142 次启动横幅）；_markets_loaded 改为从 ccxt 派生（网络恢复即自愈）；prime() 连续 5 个标的全失败就提前返回（不抛）；refresh() 连续 5 个失败就整 pass 判定 degraded。+5 测试（283）",
+   "next": "已生产验证：崩溃循环停止（err.log 不再增长、pid 99064 稳定）；交易恢复仍取决于用户侧代理；恢复后 tick 应在约 1 分钟内重新出数据（而不是等之前那个 40 分钟的 pass）"
+  },
+  {
+   "id": "okx-api-ip-whitelist",
+   "item": "OKX API key 的 IP 白名单不认当前代理出口 IP（50110 复发）",
+   "state": "done",
+   "gate": "2026-10-10：用户把 209.9.200.64 加入 OKX API key 白名单后恢复 —— 最后一条 IP 错误 10:40:50、第一个恢复 tick 10:43:28；看门狗自动清空（critical 104 分钟 → 无 breach）",
+   "next": "已恢复；停摆期间的数据已补齐（资金费账单 +$23.00、费率历史 140 更新、日线 903→904）。**防复发**：代理换节点时要同步更新白名单，或固定使用已放行的节点"
+  },
+  {
+   "id": "venue-availability-track",
+   "item": "『场馆此刻供不供数据』的每日自动记录（选标的不能只看磁盘）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T12:15：新增 scripts/venue_availability.py（tradable/one-sided/quote-only/absent/bars-only 五态）并接进每日任务（09:10 时段外 / 21:10 时段内）；基线 tradable=1（XMU）、quote-only=11、absent=1（XAMD）；+2 测试（288）",
+   "next": "**已给出答案（v1.0.6）**：盘中那一行（13:46Z）与盘外完全一致 → 12 个标的是『不供数据』，tier 已收窄。这条记录继续每天跑，其价值变成『场馆哪天重新供数据，第一天就知道』"
+  },
+  {
+   "id": "release-tooling",
+   "item": "版本与代码管理的专业化（VERSION/CHANGELOG/RELEASING/git + 每日校验）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T14:20（v0.4.7）：VERSION 单一来源 + version_sync --check；生成式 CHANGELOG.md + --check；docs/RELEASING.md（1.0.0 = 第一阶段完成；之后 MAJOR/MINOR/PATCH）；git init + e4f4864 + tag v0.4.6；每日任务新增 3 个校验步骤",
+   "next": "1.0.0 等 path-5 闸门（约 10-13/14）；之后每轮收尾按 RELEASING.md 的 7 步清单执行，不再靠记忆"
+  },
+  {
+   "id": "tradfi-tier-narrow",
+   "item": "1.0.x · TradFi tier 收窄到真正能交易的标的",
+   "state": "done",
+   "gate": "13 个标的里只有 XMU 同时有 K 线与双边盘口，其余 12 个在 1d/1h/15m 上都是 0 根（11 个有买无卖）。**但所有观测都在盘外**：changelog 2026-10-10T18:55 核对时区后发现，每日任务两个槽位 09:10 / 21:10 CST = 01:10 / 13:10 UTC，而美股常规时段是 13:30–20:00 UTC（21:30–04:00 CST）—— **两个槽位都不在盘中**，所以这条决策链按现有排期永远拿不到输入",
+   "next": "**已结案（changelog 2026-10-10T23:20，v1.0.6）**：盘中样本到手（13:46Z，开盘后 16 分钟），12 个标的在两个时段都 0 根 → 判为『根本不供数据』而非『时段受限』；`[universe.symbols_by_tier].tradfi` 已收窄到 **XMU/USDT**，`Config.validate()` 通过，runner 已重启生效。场馆哪天开始供数据，`scripts/tradfi_tier.py --write` 会把它放回 keep 列表"
+  },
+  {
+   "id": "tradfi-session-slot",
+   "item": "tradfi 决策的前置：在美股时段内加一次采集（现有两个槽位都在盘外）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T18:55：美股常规时段 = 13:30–20:00 UTC = 21:30–04:00 CST，而每日任务是 09:10 / 21:10 CST —— 21:10 比开盘早 20 分钟，**没有任何一次采集落在盘中**。旧代码的 `13 <= hour` 还会把它误标成盘中（已修）",
+   "next": "**已按方案②落地**（changelog 2026-10-10T19:10）：第 5 个 launchd 任务 `com.tradingagent.tradfi-session`，23:10 / 01:10 CST = 15:10 / 17:10 UTC（都在盘中），只跑 `venue_availability.py --write`（~15 秒）。已装好并验证（runs=1、exit 0、store 3→4 行），原有四服务未动。今晚 23:10 落第一条盘中样本"
+  },
+  {
+   "id": "reconcile-tool-units",
+   "item": "1.0.x · 对账脚本的 ACT 10 倍单位假差异",
+   "state": "done",
+   "gate": "**已修（v1.0.1）**：`_venue_swap_positions` 曾把场馆仓位换算成 base 单位，而账本存的是张 —— ACT（ctVal 10）因此报 `ledger=-22912 venue=-229120` 的假差异。改成两侧统一用张；实测五条永续腿现在全部 ok、脚本报 nothing to correct。+2 测试（292）",
+   "next": "已提交并发 1.0.1；这条通道继续接收运营中发现的工具/风控修复"
+  },
+  {
+   "id": "options-venue-adapter",
+   "item": "1.1 · 期权腿 venue 适配（下单路径）",
+   "state": "done",
+   "gate": "**已完成（2026-10-10）**：① `[venues.okx_demo_option]` + `validate()` 放开 option；② 期权不下发 posSide/reduceOnly（单向持仓）但仍带 tdMode=cross；③ `ContractSpec` 补 `ctMult`（1 张 = ctVal×ctMult = 0.01 BTC，此前差 100 倍）；④ `_venue_symbol()` 做 instId ↔ ccxt 统一符号映射（按目录反查）并覆盖所有 ccxt 调用点；+3 测试（295 全绿）",
+   "next": "下单路径本身已就绪；买第一张之前的两项前置里，`options-book-survey` **已完成**（浅档价差中位 2.16%，不再是阻断项），只剩 `options-fund-premium-coin`（账户没有 BTC/ETH，币本位权利金拿不出币付；`_UM` 美元结算家族已实测无盘口，只剩换币一条路）"
+  },
+  {
+   "id": "options-minimal-structure",
+   "item": "1.1 · 期权策略（买权利金的有限风险结构）",
+   "state": "waiting_data",
+   "gate": "**2026-10-11 更新**：样本到 **4/5 天**（BTC 10-08..10-11 = 5.54 / 12.41 / 10.35 / 10.71 pp，每天单独都远超 1.5pp 门槛；ETH 0/5，最新 −1.70）。**方向必须是买方**（最大损失=权利金），与『风险最小化』一致",
+   "next": "结构与参数都不用现场设计（`docs/options-sleeve-spec.md` §3/§4，含 2026-10-11 新增的第 7 条：不能市价、不能按卖一价买、只能挂带内限价）。**但仍等可执行环境**：本模拟盘三次实测都买不到（README §69）。闸门即便如此也不再是唯一条件"
+  },
+  {
+   "id": "options-sleeve-spec",
+   "item": "1.1 前置 · 最小结构说明书（结构/闸门/退出/张数）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T17:40：`docs/options-sleeve-spec.md`。币本位单腿 long call/put、平值 ±2.5%、DTE 25–45、标的 BTC/ETH；成本墙换算成波动率点后门槛定为 **RV−IV ≥1.5pp 连续 5 天**（σ=60% 时 1pp≈1.7% 权利金，而往返价差 1.5–2.2%）；退出 −60%/+100%/DTE≤7；张数单笔 ≤0.5% 权益、合计 ≤2%、首次只 1 张",
+   "next": "唯一开放项是方向过滤器（日线 EMA20），已注明是最弱一环，1.1.1 用『平值跨式 + 永续对冲 delta』替代；执行仍卡在 `options-fund-premium-coin`（换 ~$100 USDT→BTC）"
+  },
+  {
+   "id": "options-gate-evaluator",
+   "item": "1.1 前置 · 闸门每天自动判决（把 §4.1 的不等式变成可执行脚本）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T16:47：`scripts/options_gate.py` 每天按 family 算『当前连续达标天数』（今天坏就归零），追加 `data/options/gate.jsonl`，已接进每日任务。首判：**BTC 连 3/5 天**（5.54 / 12.41 / 7.65），**ETH 连 0/5**（最新 −6.79，符号相反）→ 闸门关闭",
+   "next": "每天继续累积：BTC 若保持，最早 10-12/13 达到 5 天；ETH 要先让 RV−IV 连续为正。开闸那天 gate.jsonl 会留下时间戳，再按说明书 §4 开门（前置仍是换 ~$100 USDT→BTC）"
+  },
+  {
+   "id": "options-sleeve-config",
+   "item": "1.1 前置 · 参数落到 `config/options_premium.json`（`enabled=false`），闸门脚本改读它",
+   "state": "done",
+   "gate": "changelog 2026-10-10T18:30：说明书 §4 的全部数字（DTE 25–45 / 平值 ±2.5% / 价差 ≤3% 且双边 ≥2 档 / 单笔 ≤0.5% 权益、合计 ≤2% / −60%、+100%、DTE≤7 / 闸门 5 天 1.5pp）只在一处存在。刻意做成数据文件（同 `config/alerts.json` 的理由：改阈值不动代码、写错退化到默认值）；`options_gate.py` 读它并把 `enabled` 与选档规则一起打印",
+   "next": "开闸日三步都在纸面上：① 把 `enabled` 改 true；② 换 ~$100 USDT→BTC；③ 用 1 张最小单跑通『下单→成交→记录价差/费用→平仓』。测试 `test_the_shipped_config_file_ships_disabled` 会守住第 ① 步不被手滑执行"
+  },
+  {
+   "id": "carry-rotation-rule",
+   "item": "1.2 · carry 换腿规则（名额 5/5 满，轮换是唯一进场方式）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T16:20：**检测侧已落地**（`scripts/carry_rotation.py`，只读、离线、已接进每日任务）。四条硬判定：中位数而非均值、窗口内每一天都要低于 floor、持仓 <24h 不动、`breakeven = 44.9/(候选−当前)` 必须 <30 天。首次实测（3 天窗、floor 1.0）：ACT 1.5 / CRV −0.24 / LTC 0.114 / NEAR 2.485 / SUI 2.269 bps/天 → 不提换腿；CRV 三日序列 3 / −3.004 / −0.24，**中位数已转负**",
+   "next": "第二半是『让 runner 真的执行换腿』—— 属于会改交易行为的策略决定，**等用户拍板**（见下一条）。检测侧会持续记录，CRV 若明天仍为负就第一次满足 stale 判定"
+  },
+  {
+   "id": "carry-rotation-execution",
+   "item": "1.2 · 换腿执行：工具已就绪（`scripts/carry_rotate.py`，默认 dry-run），开启与否等用户决定",
+   "state": "done",
+   "gate": "**执行工具已落地（changelog 2026-10-10T22:10）**：`scripts/carry_rotate.py` 只做『平旧不开新』，三条防护写死（两腿必须齐全 / 先买回永续再卖现货 / 单笔 ≤5% 权益、每日 ≤1 次），默认 dry-run，只有手动 `--yes` 才动仓；开新对交还 runner 的 carry 入场逻辑。实际执行路径与已在 2026-10-08 实跑过的 `carry_unwind_all.py` 相同",
+   "next": "**已启用（2026-10-11 用户决定）**：执行放在 **runner 内部**（`_check_carry_rotation` 每 tick 读 `data/carry/rotation.jsonl`，命中就用 runner 自己的 `PairedExecutor.close_pair()` 平掉），**只平旧、绝不开新**；三条护栏写死：只接受 runner 真实持有的对、名义 ≤ 权益 5%、每日 ≤ 1 次（拒绝也回原因）。配置开关 `[strategies.carry_funding] rotation_enabled = true`，可随时关。触发仍由检测器给（连续 3 天中位 <1 bp/天且回本 <30 天）；今日无提案，链路待命"
+  },
+  {
+   "id": "onchain-1h-hypothesis",
+   "item": "1.3 · 链上 +1h 高换手假设的正式判定",
+   "state": "waiting_data",
+   "gate": "每轮事件研究里『20+ 桶中位 −1.3~−1.6% vs 低桶 ~0%』方向连续同向，但**低换手桶只有 6–7 个代币**，未达『两侧各 ≥20 代币』的判据；+5m 覆盖仅 1%，属结构性不可测",
+   "next": "等低换手桶累积到 ≥20 个代币再看是否提出；即使成立，方向是做空而 DEX 无借券，执行上暂时不可得"
+  },
+  {
+   "id": "onchain-cost-wall",
+   "item": "1.3 · 链上执行的成本墙（$200 单往返 1.4%）",
+   "state": "waiting_data",
+   "gate": "已两次证明频率换不来正收益；链上任何方向性信号必须先跨过 1.4% 的往返成本，目前没有信号做到",
+   "next": "只把链上当作研究/信号源；除非出现『扣掉 1.4% 仍为正』的样本，否则不进执行层"
+  },
+  {
+   "id": "options-probe",
+   "item": "1.1 · 期权合约与最小单的只读探测（写适配器前的事实）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T16:10：新增 `scripts/options_probe.py`（公开端点、不签名不下单）。事实：BTC-USD 1336 个合约；币本位 spec ctVal=1/ctMult=0.01/minSz=1/tick 0.0001/settle=BTC；最小单 0.0006 BTC ≈ $49.52；ETH 同类 ≈ $2–18；盘口 5x5 双边。**并修掉我自己第一版把 ctVal 当乘数导致的 100 倍高估**",
+   "next": "适配器按这些事实写；`_UM` 美元结算家族的报价待核"
+  },
+  {
+   "id": "options-book-survey",
+   "item": "1.1 前置 · 模拟盘期权盘口调查（宽度中位与尾部）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T15:50：**已量完**（`scripts/options_book_survey.py`，60 个报价）。BTC/ETH 在 ±10% 行权价、13–48d 上：**全部双边**，spread/mid 中位 **2.16%**、p90 5.13%、买方单边中位 1.08%（BTC 2.26% / ETH 1.96%）。早先那个『≈59%』的单点是 −17.7% 的深实值档，不在这个带内 —— 浅档是 2% 量级，深档宽一个数量级",
+   "next": "1.1 接策略时用这条临时阈值：**只做单边价差 ≤ 2% 的档**（≈ spread/mid ≤ 4%，覆盖约 90% 的样本），深度档与深实值/深虚不进候选；阈值等有了 IV−RV 判据再算成与模型收益挂钩的数"
+  },
+  {
+   "id": "options-fund-premium-coin",
+   "item": "1.1 前置 · 备好币本位权利金（账户没有 BTC/ETH）",
+   "state": "done",
+   "gate": "账户非零币种只有 USDT（$90.7k）与 carry 腿的币，**没有 BTC/ETH**；而 OKX 期权是币本位，最小一单约 0.0006 BTC ≈ $50 必须以 BTC 支付。**二选一的 (b) 已实测否决**（changelog 2026-10-10T15:55）：美元结算的 `BTC-USD_UM` 有 634 个 live 合约，但抽 6 个到期的认购**没有一个有卖价**（2 个只有 1 档 5 美元的买价，其余空簿），同一时刻币本位对照合约是 4x4 档、价差 1.65%",
+   "next": "**已完成（2026-10-10T19:30）**：`scripts/options_fund_premium.py` 买入 **0.00120705 BTC @ 82,843.90**，手续费 $0.099997（≈10 bps），账户现有 0.0012070525 BTC ≈ 够买 2 张最小单。**副作用（已知且刻意）**：这份库存暂不属于任何策略 → 看板常挂 `unmanaged_notional ≈ $99.97` warn + 每轮一条 `position BTC/USDT` 对账差异；把它记进账本会更糟（策略会把它当仓位卖掉，见 changelog 19:30）"
+  },
+  {
+   "id": "daily-job-retry",
+   "item": "每日任务的有界重试与补跑清单（10-10 09:10 五步 rc≠0、无自动补跑）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T15:15：一次代理抖动就把当天那一步判死。现在每步 3 次 / 间隔 60 秒（`--attempts` / `--retry-sleep`，或 `TA_DAILY_ATTEMPTS` / `TA_DAILY_RETRY_SLEEP`），异常也算一次失败；收尾把仍失败的写进 `data/daily_job_status.json` 并在日志打 `NEEDS RERUN`。步骤清单上移到模块级 `INPROCESS_STEPS` / `SCRIPT_STEPS`",
+   "next": "已生效于 09:10 / 21:10 两个槽位（下次自动运行即带重试）。若某步连续多天进 `needs_rerun`，那是确定性故障而不是抖动，按点名去修 —— 本轮就是这么做才挖出 `.env` 加载器那条"
+  },
+  {
+   "id": "daily-job-env-loader",
+   "item": "定时步骤的凭据加载：凡 `build_venue` 的步骤必须自带 `.env` 加载器",
+   "state": "done",
+   "gate": "changelog 2026-10-10T15:18：launchd 单元只导出代理、不导出密钥，`venue_availability.py`（今天才进任务）与 `refresh_daily_bars.py` 因此**必然**抛 `API key is not set`。加载器统一到 `ta.config.load_env_file`，两个脚本补 `--env-file` 并在 `Config.load` 前调用；回归测试改走 `daily_research` 自己的步骤表，凡 `build_venue` 必检 `load_env_file` 且必须是同一个函数对象",
+   "next": "已实测：带 launchd 环境整轮 14/14 步首跑全绿（含新接入的 carry_rotation）；`venue_availability` 已追加一行（XMU tradable / 11 quote-only / 1 absent）。今晚 21:10 是第一次带美股时段的记录，直接喂 `tradfi-tier-narrow`"
+  },
+  {
+   "id": "daily-job-visibility",
+   "item": "把『需补跑清单』接进看板（v1.0.2 只写了状态文件，没有读它的一方）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T17:05：看板新增 `services.daily_job`（缺文件/坏 JSON 都退化到 None）+ 一行渲染 + redflags 的 warn『每日任务需补跑』。重启后立刻读出修复前那次运行留下的真实状态（needs_rerun=[refresh_daily_bars.py]），随后带 launchd 环境重跑 14/14 全绿、红旗消失",
+   "next": "以后任何一天只要重试后仍有失败步骤，看板会直接点名；`data/daily_job_status.json` 的 `age_hours` 也一并显示，避免把『上次运行』误读成『现在』"
+  },
+  {
+   "id": "reserved-inventory",
+   "item": "1.1 前置 · 让系统认识『保留库存』（$100 BTC 现在无人认领，看板常挂 warn）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T19:30：手工买来的 BTC 未入账 → `ta_unmanaged_notional 99.97` 触发看门狗 warn，且每轮对账报 `position BTC/USDT: local=2.5e-09 venue=0.0012070525`。两条告警都是**真的**（确实有 $100 不在任何策略名下），但会一直挂着直到期权腿能自己持有它",
+   "next": "**已实现（changelog 2026-10-10T22:40，方案②）**：`config/reserved_inventory.json`（symbol → reason + max_usd），runner 把声明内且不超上限的持仓记成 `ta_reserved_notional` 并从告警里剔除（`unmanaged_notional` 数值不变），对账按符号跳过、金额照报；实测 breaches 归零。仍是**不要把它记进账本**（那会让策略把它当仓位卖出）。1.1 期权腿接管后，这个条目可以从文件里删掉"
+  },
+  {
+   "id": "spot-td-mode-51000",
+   "item": "1.0.x · 现货下单偶发 51000：runner 偶尔拿着 tdMode=cash 在 acctLv=3 账户上下单（原判断『reduce_only 导致』已推翻）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T20:05（修正 19:35 的判断）：现货**卖出路径本身是好的** —— 同形状请求（sell + reduce_only）在探针里 12:00:19 成交。真实缺陷在运行期状态：`spot_td_mode` 由 `connect()` 从 acctLv 解析，**解析不到时兜底为 `cash`**，而 cash 在 acctLv=3 账户上被 OKX 拒（51000）—— 同一 sCode 今天出现三次：04:43:18 / 04:45:54（OKB/USDT **buy**）与 11:16:08（BTC/USDT sell）",
+   "next": "**已修（changelog 2026-10-10T20:35）**：`resolve_spot_td_mode()` + `td_mode_resolved` 状态位（解析失败不再静默退到 cash）、`_create_order()` 在现货 tdMode 被拒时重解析并重试一次、runner 启动期对未解析状态直接告警；+5 测试（333 全绿）；重启后实测无告警、ticks 恢复。若将来再出现 51000，日志会直接给出一行『spot tdMode was NOT resolved』——那时看的是探针为何失败（代理/权限），而不是再去猜下单参数"
+  },
+  {
+   "id": "refresh-pass-budget",
+   "item": "1.0.x · 行情刷新轮次的墙钟预算（慢场馆不再能把一个 tick 拖成 86 分钟）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T21:45：21:30 那次 86 分钟停摆里**一次失败都没有** —— 每个符号都在第二次尝试（~40s 超时）成功，所以 `consecutive_failure_limit` 永远不触发，pass 走完 63 个符号用掉 86 分钟。新增 `LiveFeed.pass_budget_seconds`（默认 120s，0=不限）：refresh 进入每个符号前检查墙钟，超预算即 `VenueDegraded`（复用既有降级路径，暂停新入场）",
+   "next": "已上线（runner 24658 重启后单 tick ~1 分钟）。仍待观察：预算触发时会否与 carry 被动入场的 6 秒等待叠加成『假降级』；若频繁触发，下一步是把预算做成配置项并按实测调（当前 120s 是从 63 符号 × 单符号最坏 40s 推出来的）"
+  },
+  {
+   "id": "dashboard-batch-job-coverage",
+   "item": "1.0.x · 看板只登记 3 个常驻服务，另两个批量任务（newlisting / tradfi-session）不在看板上",
+   "state": "done",
+   "gate": "2026-10-10 巡检时发现：`KNOWN_SERVICES` 里只有 runner/watcher/dashboard，而今天的第 4、第 5 个 launchd 任务（`com.tradingagent.newlisting` 每日 09:10/21:10、`com.tradingagent.tradfi-session` 每日 23:10/01:10）**只在 launchctl 里可见**。批量任务不能按『端口活否』判活（它们大部分时间就是不该在跑），所以直接塞进现有 jobs 列表会让 all_alive 永久为假——这也正是当初没加它们的原因",
+   "next": "**已实现（changelog 2026-10-10T22:40）**：`services.batch_jobs` 独立列表，按『日志新鲜度（26h 阈值）+ 上次结论』判活，研究任务复述 data/daily_job_status.json 的结论；超时进 redflags，不混进常驻服务的 all_alive。实测两项都非 stale。以后再加批量任务，只需往 `BATCH_JOBS` 里加一行"
+  },
+  {
+   "id": "tradfi-watch-scope",
+   "item": "1.0.x · 采集范围 = tier ∪ 已排除清单（收窄 tier 不该顺手删掉『它回来了』的证据）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T23:35 记的问题：tier 从 13 收窄到 1 之后，第一次采样只覆盖 XMU 一个标的，那 12 个被移除的标的从此没有任何东西在看。修法：`venue_availability.py` 默认采样集合改为 `watch_symbols(tier, data/universe/tradfi_tier.json)`（tier 在前、报告里出现过的接在后面、去重）",
+   "next": "**已完成（changelog 2026-10-11T10:20）**：实测名单恢复到 13 个；不用改 plist——任务调的是同一个脚本，默认值已变，下一次 23:10 槽位即生效。若将来新增/移除标的，只需更新 tier 与报告，采集自动跟随"
+  },
+  {
+   "id": "funding-sync-cadence",
+   "item": "1.0.x · 资金费入账频率：每天 2 次 → 每小时（残余漂移的根因是同步节奏）",
+   "state": "done",
+   "gate": "changelog 2026-10-11T10:55：资金费每天结算 3 次/持仓，而每日任务只在 09:10 / 21:10 同步 → 两次之间的残余整天漂、每天弹两次；10-10 看门狗因此把长期 info 升级为 warn（8 小时 −$86，其中 24 条资金费账单 +$264.68 当时未记）",
+   "next": "**已落地**：第 6 个 launchd 任务 `com.tradingagent.funding-sync`（`StartInterval=3600`、RunAtLoad、`sync_funding.py --yes`，按 billId 幂等）。实测 runs=1 / exit 0 / 『already holds 75』；看板列为第 3 个批量任务（3h 阈值）。那个 $50 阈值**刻意没动**——它是判据而不是 bug。下一步：观察未来 24h 残余是否只在间隙内小幅摆动、不再触发『在漂移』"
+  },
+  {
+   "id": "options-account-enable",
+   "item": "1.1 前置 · 开通期权交易（账户层被 sCode 51198 挡住，需用户在 Web/App 确认）",
+   "state": "done",
+   "gate": "changelog 2026-10-11T11:55：零成本探针（限价买 50% below bid → 立刻撤）第一次真的发出期权订单，两次都直接 rejected，**sCode 51198**『Visit the options trading page on the app or web, then …』。这不是参数错（那会是 51000/51008），而是**账户权限层** —— 与 README §62 的 TradFi 54092（需先确认免责声明，主/子账户分别确认）同一类",
+   "next": "**已完成（2026-10-11）**：用户开通后复测，限价单被接受并成功撤销（`submit -> status=open`、`cancel -> True`、`state ('canceled', 0.0)`），51198 消失。**但同日的进一步实测显示这个环境买不到期权**（见下一条 `options-demo-liquidity`），所以 1.1 的下一步不在账户侧了"
+  },
+  {
+   "id": "options-demo-liquidity",
+   "item": "1.1 · 模拟环境能否买入期权（实测结论：不能）",
+   "state": "done",
+   "gate": "changelog 2026-10-11T12:55：三条路都试完、零成本 —— ① 市价买被拒（`50016`）；② 按卖一价 0.038 挂限价买被价格带拒（`51006`：`max buy price 0.0245, min sell price 0.0001`，49% 价差是显示产物）；③ 挂在买一价 0.023 等 **25 分钟无人成交**（撤单干净）",
+   "next": "**判定：1.1 在模拟环境交付「适配 + 数据」，不交易**（说明书 §4 第 7 条已写明三条硬约束与这条判定）。`options_rest_probe.py --minutes N --yes` 可随时零成本重跑以观察流动性是否变化；若将来在实盘或有对手方的环境跑，说明书 §4/§5 的入场与退出形式按第 7 条执行（限价、带内、超时必撤）"
+  },
+  {
+   "id": "options-1.1-close",
+   "item": "1.1 收口（v1.1.0）：适配 + 数据层交付，策略因环境不可交易而暂不接入",
+   "state": "done",
+   "gate": "changelog 2026-10-11T13:15（v1.1.0）：1.1 原定『期权策略 + 期权腿 venue 适配』，实交『适配 + 数据 + 实测约束』——三条交易所硬约束（不能市价 50016 / 不能按卖一价买 51006 价格带 / 只能挂带内等人卖）把策略挡在环境之外，而非工程之内。README §69 为完整证据",
+   "next": "等三类变化之一再回来：① 出现有对手方的场所（实盘，需单独授权）；② 模拟盘流动性变化（`options_rest_probe.py` 零成本可验）；③ 闸门（BTC 4/5）继续累积但已不是唯一条件。届时按说明书 §4 第 7 条执行限价/带内/超时必撤"
+  },
+  {
+   "id": "project-scope-hold",
+   "item": "项目定名与挂起政策：多资产组合策略（当前 100% 仓位）；剩余 waiting_data 等在实盘阶段再更新",
+   "state": "done",
+   "gate": "用户决定（2026-10-11，含当日追加确认）：① 项目定名为**多资产组合策略**，四条腿共用一份风控/账本/闸门，当前 100% 仓位属于它；② 未来新增**新币策略**另立新项目（预定名**新币主观量化策略**），不混入本项目；③ 版本管理法则不变（仍按 RELEASING.md 的 7 步与语义化版本）；④ 表上剩余的 waiting_data 项**不再逐轮更新**，等实盘后再统一重估；⑤ **目录名与 git 仓库路径保持 `trading-agent` 不改**——项目名只在文档层生效",
+   "next": "维护：README 顶部与 docs/RELEASING.md 已写入项目名与边界；代码目录名保持 `trading-agent`（5 个 launchd 单元的 WorkingDirectory 指着它）。再启动时：若决定进入实盘，把实盘相关项从挂起恢复成可执行，并在新项目里从零建立『新币主观量化策略』的证据标准"
+  },
+  {
+   "id": "carry-income-report",
+   "item": "carry 真实收入的「两个口径对照」报告（非尖峰篮子）：市场费率 vs 模拟盘到账",
+   "state": "done",
+   "gate": "用户 2026-10-11 同意先算一份非尖峰标的的 carry 真实收入报告；越算越发现 `income.jsonl` 本身口径错（滚动窗口重复计费、bps 少除窗口天数），一并修掉",
+   "next": "每天由 `daily_research.py` 跑 `scripts/carry_income_report.py --write` 累积到 `data/carry/income_report.json`（代理不通时退化为只读费率面板，不会让任务变红）。结论：市场费率 ~2.03 bps/天、44.9 bps 往返回本 22.2 天、30 天净 +15.9 bps → **低于自己的 20 bps 边际门槛**，今天不该新开 carry 对，也不该触发换腿。等 §70.6 第 5 条门槛（非尖峰 ≥30 天实测，现只有 4 天）满"
+  }
+ ]
+}

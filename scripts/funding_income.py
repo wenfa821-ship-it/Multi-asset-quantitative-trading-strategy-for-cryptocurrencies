@@ -16,6 +16,15 @@ snapshots the answer once a day so the prediction can be checked against a serie
 instead of memory - and so `carry_notional_pct` can later be calibrated from
 realised income rather than from the rate history.
 
+2026-10-11 correction (README 71): the window here is ROLLING, so consecutive
+rows overlap and **summing them double-counts settlements** - and when the account
+has fewer than 100 funding bills the page comes back whole, which made a
+`--days 2` row silently cover three days. Two consequences, both fixed here:
+each row now records the window it actually covers (`window_from`/`window_to`/
+`window_days`), and `bps_per_day` divides by that real window instead of
+pretending the sum is one day. Anything that wants a per-day series should read
+`scripts/carry_income_report.py`, which re-buckets the raw bills by UTC day.
+
 Idempotent per UTC day. Read-only against the venue.
 
     python3 scripts/funding_income.py            # report
@@ -57,8 +66,27 @@ def funding_bills(venue, days: int = 7) -> list[dict]:
     return out
 
 
-def summarise(bills: list[dict], positions: dict[str, float]) -> dict:
-    """Per-symbol income and the implied bps/day against the live perp notional."""
+def window_days(bills: list[dict], default: float = 1.0) -> float:
+    """How many days the bills actually span - never assume the requested window.
+
+    The bill page comes back whole when the account has fewer than `limit` rows,
+    so `--days 2` can hand back three days of history. Dividing by the requested
+    window would then overstate the rate by 50%.
+    """
+    stamps = [float(b["ts"]) for b in bills if b.get("ts")]
+    if len(stamps) < 2:
+        return default
+    return max((max(stamps) - min(stamps)) / 86_400_000.0, 1.0 / 24.0)
+
+
+def summarise(bills: list[dict], positions: dict[str, float],
+              window: float | None = None) -> dict:
+    """Per-symbol income and the implied bps/day against the live perp notional.
+
+    `window` is the number of days the bills span; `None` means "treat the sample
+    as one day", which is what the pre-2026-10-11 callers did.
+    """
+    span = 1.0 if window is None else max(float(window), 1.0 / 24.0)
     by_symbol: dict[str, dict] = collections.defaultdict(lambda: {"usdt": 0.0, "settlements": 0})
     for bill in bills:
         inst = str(bill.get("instId") or "")
@@ -72,7 +100,7 @@ def summarise(bills: list[dict], positions: dict[str, float]) -> dict:
             entry["bps_per_day"] = None
             continue
         entry["notional_usd"] = round(notional, 2)
-        entry["bps_per_day"] = round(entry["usdt"] / notional * 10_000.0, 2)
+        entry["bps_per_day"] = round(entry["usdt"] / notional / span * 10_000.0, 2)
     return dict(by_symbol)
 
 
@@ -109,7 +137,8 @@ def main() -> int:
     finally:
         venue.close()
 
-    summary = summarise(bills, notional)
+    span = window_days(bills)
+    summary = summarise(bills, notional, window=span)
     total = sum(v["usdt"] for v in summary.values())
     day = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     print(f"{'contract':<20}{'USDT':>12}{'settles':>9}{'notional':>11}{'bps/day':>10}")
@@ -119,10 +148,16 @@ def main() -> int:
         bps_text = f"{bps:.1f}" if bps is not None else "n/a"
         print(f"{inst:<20}{entry['usdt']:>+12.4f}{entry['settlements']:>9}"
               f"{notional_text:>11}{bps_text:>10}")
-    print(f"\ntotal over the last {args.days}d: {total:+.4f} USDT")
+    stamps = [float(b["ts"]) for b in bills if b.get("ts")]
+    first = datetime.datetime.fromtimestamp(min(stamps) / 1000, datetime.UTC).strftime("%m-%d %H:%M") if stamps else "n/a"
+    last = datetime.datetime.fromtimestamp(max(stamps) / 1000, datetime.UTC).strftime("%m-%d %H:%M") if stamps else "n/a"
+    print(f"\ntotal {total:+.4f} USDT over {span:.2f}d (requested {args.days}d; "
+          f"bills span {first} .. {last} UTC)")
 
-    row = {"date": day, "days": args.days, "total_usdt": round(total, 6),
-           "by_contract": summary}
+    row = {"date": day, "days": args.days, "window_days": round(span, 3),
+           "window_from": min(stamps) if stamps else None,
+           "window_to": max(stamps) if stamps else None,
+           "total_usdt": round(total, 6), "by_contract": summary}
     target = PROJECT / args.out
     if not args.write:
         print("DRY RUN - re-run with --write")

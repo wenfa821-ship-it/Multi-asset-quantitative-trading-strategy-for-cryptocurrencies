@@ -132,6 +132,14 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # on; this is what the venue paid, and it is the only way to test the
     # 2026-10-09 prediction that the spike fades back to ~3 bps/day.
     ("funding_income.py", ["--write"]),
+    # ...and the two of them side by side, which is the number a sizing decision
+    # needs (2026-10-11, README 71). `income.jsonl` cannot answer it: its rows are
+    # rolling windows, so adding them double-counts. This re-buckets the raw bills
+    # by UTC day, divides by the market's own rate history, and drops any name
+    # whose demo credit is an artefact - CRV's is 325x the market rate, ACT's 6x.
+    # Exits 0 with the rate panel alone if the proxy is down, so it cannot make the
+    # job flaky.
+    ("carry_income_report.py", ["--write"]),
     # The progress table at the top of README.md is the single source of truth for
     # "what is next"; --check fails (rc=1) when it no longer matches
     # docs/progress.json, so drift shows up in this job's log instead of in a

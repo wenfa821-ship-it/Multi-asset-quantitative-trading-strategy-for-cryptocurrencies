@@ -1,10 +1,10 @@
 # Changelog
 
-当前版本：**v1.1.0**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.1**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-11T13:27 起，9 条留痕）
+## Unreleased（自 2026-10-11T13:27 起，11 条留痕）
 
 - `2026-10-11T13:35` **ops** 每日复盘的『数字半边』自动化：`daily_review.py` 从写死日期的脚本改成对任意日期可复现的生成器
 - `2026-10-11T13:45` **ops** 把每日复盘的数字步骤接进每日任务：`daily_review.py --write` → `docs/reviews/<date>.md`（复盘不再靠我记得跑）
@@ -15,6 +15,8 @@
 - `2026-10-11T16:35` **research** 组合级复盘（README §70）：亏损三块拆开、参数/数据/执行/网络逐条过一遍，并把『切实盘』写成 6 条可度量门槛
 - `2026-10-11T16:55` **bug** 更正 §70 的一条参数结论：『费用假设低估一半』是错的 —— 现货场馆早已写入实测的 10 bps，真正的缺口是回测用 8 bps
 - `2026-10-11T17:15` **research** 按实盘费率复跑四条策略（README §70.7）：有样本的两条**仍然为负**（trend_breakout −1.70% / 94 笔、perp_trend_funding −1.61% / 180 笔），另三条样本不足
+- `2026-10-11T18:05` **bug** `data/funding/income.jsonl` 的口径有三个错：滚动窗口逐行相加会重复计费、`bps_per_day` 少除一个窗口天数、窗口跨度根本没记录
+- `2026-10-11T18:20` **research** 非尖峰标的的 carry 真实收入（README §71）：**市场费率口径 2.03 bps/天、44.9 bps 往返 22.2 天回本**；模拟盘到账 CRV 是市场的 **325x**、ACT **6.4x**
 
 ## v1.1.0 — 2026-10-11T13:27
 
