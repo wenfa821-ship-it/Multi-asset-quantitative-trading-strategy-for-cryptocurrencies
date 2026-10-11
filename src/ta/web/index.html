@@ -192,6 +192,7 @@
 
   <section class="span12"><h2>待评估清单（过闸了，但还没有人真正看过）</h2>
     <div id="nc-awaiting"></div>
+    <div id="nc-decision" style="margin-top:10px"></div>
     <div class="muted" style="margin-top:6px">证据标准要求<b>放弃也要记录</b>（与买入同权），
       否则样本是幸存者偏差。判断由人来做：做 → <code>new_thesis.py</code>，
       不做 → <code>record_skip.py</code>（理由同样必须可复核）。</div>
@@ -447,6 +448,24 @@ function renderNewcoin(nc) {
       <td class="num">${esc(String(r.holder_count || '—'))}</td>
       <td class="dim">${esc(String(r.observed_at || '').slice(5, 16))}</td>
     </tr>`).join('')}</tbody></table>` : ''}`;
+
+  // 决策工作表：把"待评估"变成一眼能判断的一行（事实 + 余量 + 可复核的风险提示）。
+  // 它**不给出做/不做** —— 判断由人来做。
+  const dec = nc.decision || {};
+  $('#nc-decision').innerHTML = (dec.rows || []).length ? `
+    <div class="muted" style="margin-bottom:4px">逐行事实与余量（决定由人下；做 → new_thesis.py，
+      不做 → record_skip.py）：</div>
+    <table><thead><tr><th>链</th><th>标的</th><th class="num">换手比</th>
+      <th class="num">集中度余量</th><th class="num">年龄</th><th>风险提示（每条可复核）</th>
+    </tr></thead><tbody>${(dec.rows || []).map(r => `<tr>
+      <td class="dim">${esc(r.chain)}</td><td><b>${esc(r.symbol)}</b></td>
+      <td class="num">${r.margins.turnover_ratio == null ? '—'
+        : r.margins.turnover_ratio.toFixed(2) + 'x'}</td>
+      <td class="num">${r.margins.concentration_headroom_pp == null ? '—'
+        : r.margins.concentration_headroom_pp + 'pp'}</td>
+      <td class="num">${r.margins.age_days == null ? '—' : Number(r.margins.age_days).toFixed(1)}天</td>
+      <td class="dim">${esc((r.risks || []).join('；'))}</td>
+    </tr>`).join('')}</tbody></table>` : '';
 
   const sample = nc.sample || {};
   const gates = sample.gates || {};
