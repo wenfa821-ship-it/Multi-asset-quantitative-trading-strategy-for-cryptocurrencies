@@ -1,5 +1,5 @@
 {
- "note": "渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。",
+ "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
  "updated": "2026-10-10",
  "rows": [
   {
@@ -393,6 +393,13 @@
    "state": "done",
    "gate": "changelog 2026-10-11T13:15（v1.1.0）：1.1 原定『期权策略 + 期权腿 venue 适配』，实交『适配 + 数据 + 实测约束』——三条交易所硬约束（不能市价 50016 / 不能按卖一价买 51006 价格带 / 只能挂带内等人卖）把策略挡在环境之外，而非工程之内。README §69 为完整证据",
    "next": "等三类变化之一再回来：① 出现有对手方的场所（实盘，需单独授权）；② 模拟盘流动性变化（`options_rest_probe.py` 零成本可验）；③ 闸门（BTC 4/5）继续累积但已不是唯一条件。届时按说明书 §4 第 7 条执行限价/带内/超时必撤"
+  },
+  {
+   "id": "project-scope-hold",
+   "item": "项目定名与挂起政策：多资产组合策略（当前 100% 仓位）；剩余 waiting_data 等在实盘阶段再更新",
+   "state": "done",
+   "gate": "用户决定（2026-10-11）：① 项目定名为**多资产组合策略**，四条腿共用一份风控/账本/闸门，当前 100% 仓位属于它；② 未来新增**新币策略**另立新项目（预定名**新币主观量化策略**），不混入本项目；③ 版本管理法则不变（仍按 RELEASING.md 的 7 步与语义化版本）；④ 表上剩余的 waiting_data 项**不再逐轮更新**，等实盘后再统一重估",
+   "next": "维护：README 顶部与 docs/RELEASING.md 已写入项目名与边界；代码目录名保持 `trading-agent`（5 个 launchd 单元的 WorkingDirectory 指着它）。再启动时：若决定进入实盘，把实盘相关项从挂起恢复成可执行，并在新项目里从零建立『新币主观量化策略』的证据标准"
   }
  ]
 }
