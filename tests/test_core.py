@@ -1734,6 +1734,63 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class CancelByClientOrderIdTests(unittest.TestCase):
+    """A client order id is not an order id, and a fresh process has neither.
+
+    Measured 2026-10-11: after `options_round_trip.py` rested a limit buy, the
+    cancel from a NEW process failed (`cancel_order` returned False) and the order
+    stayed on the book - an orphan with real notional. The runner never saw it
+    because the runner is the process that placed it; anything that rests an order
+    and exits has to be able to name it the way the venue does.
+    """
+
+    class _Exchange:
+        def __init__(self) -> None:
+            self.calls: list[tuple] = []
+
+        def cancel_order(self, order_id, symbol, params=None):
+            self.calls.append((order_id, symbol, params))
+            if order_id is None and not params:
+                raise RuntimeError("no id and no params")
+            return {"id": "ok"}
+
+    def _venue(self):
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        exchange = self._Exchange()
+
+        class Fake:
+            ex = exchange
+            _orders: dict = {}
+
+            def _venue_symbol(self, symbol: str) -> str:
+                return symbol
+
+            cancel_order = CcxtVenue.cancel_order
+
+        return Fake(), exchange
+
+    def test_a_client_id_is_passed_as_clordid(self) -> None:
+        venue, exchange = self._venue()
+        self.assertTrue(venue.cancel_order("TAoptpc1", "BTC/USD:BTC-261030-82000-C"))
+        order_id, symbol, params = exchange.calls[0]
+        self.assertIsNone(order_id)
+        self.assertEqual(params, {"clOrdId": "TAoptpc1"})
+        self.assertEqual(symbol, "BTC/USD:BTC-261030-82000-C")
+
+    def test_a_known_venue_id_still_wins(self) -> None:
+        from ta.models import Order
+
+        venue, exchange = self._venue()
+        venue._orders["c1"] = Order(
+            client_order_id="c1", symbol="X", side="buy", qty=1.0, type="limit",
+            price=1.0, status="open", venue_order_id="V9",
+        )
+        venue.cancel_order("c1", "BTC/USD:BTC-261030-82000-C")
+        self.assertEqual(exchange.calls[0][0], "V9")
+        self.assertIsNone(exchange.calls[0][2])
+
+
 class AvailabilityWatchScopeTests(unittest.TestCase):
     """Narrowing the tier must not narrow what we WATCH.
 

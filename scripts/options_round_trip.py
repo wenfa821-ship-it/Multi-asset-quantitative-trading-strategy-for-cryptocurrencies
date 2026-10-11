@@ -235,17 +235,54 @@ def main() -> int:
         "outside_spec_dte_band": outside_spec_band,
         "book_bid": bid, "book_ask": ask, "book_mid": mid,
     }
-    print("\n=== BUY ===")
+    # LIMIT, crossing the ask - not market. Measured 2026-10-11: OKX refuses
+    # `ordType=market` on options outright with sCode 50016 "instId and ordType
+    # don't match", so the taker has to name a price. A buy at the ask is the
+    # crossing limit that means "pay the ask".
+    def band_from(message: str) -> tuple[float | None, float | None]:
+        """OKX puts the executable band inside a 51006 rejection:
+        'max buy price: 0.0245, min sell price: 0.0001'. The displayed ask is NOT
+        the price you may pay - measured 2026-10-11 on this contract, the ask sat at
+        0.038 while the maximum buyable price was 0.0245, which is why a market
+        order is refused (50016) and a limit at the ask is refused too (51006).
+        """
+        import re as _re
+
+        high = _re.search(r"max buy price: ([0-9.]+)", message)
+        low = _re.search(r"min sell price: ([0-9.]+)", message)
+        return (float(high.group(1)) if high else None,
+                float(low.group(1)) if low else None)
+
+    print(f"\n=== BUY (limit @ ask {ask}) ===")
     buy = venue.place_order(OrderRequest(
         client_order_id=f"TAoptrb{stamp}", symbol=symbol, side="buy",
-        qty=qty_base, type="market", tag="options-roundtrip:buy"))
-    print(f"  submit -> status={buy.status} reason={(buy.reason or '-')[:160]}")
+        qty=qty_base, type="limit", price=ask, tag="options-roundtrip:buy"))
+    if buy.status == "rejected" and "51006" in str(buy.reason):
+        max_buy, _min_sell = band_from(str(buy.reason))
+        if max_buy:
+            print(f"  ask {ask} is outside the venue's band; retrying at the "
+                  f"maximum buyable price {max_buy}")
+            result["ask_was_outside_band"] = True
+            result["max_buy_price"] = max_buy
+            ask = max_buy
+            buy = venue.place_order(OrderRequest(
+                client_order_id=f"TAoptrb{stamp}b", symbol=symbol, side="buy",
+                qty=qty_base, type="limit", price=max_buy, tag="options-roundtrip:buy"))
+            stamp = stamp  # client id for the fill lookup is chosen below
+            buy_id = f"TAoptrb{stamp}b"
+        else:
+            buy_id = f"TAoptrb{stamp}"
+    else:
+        buy_id = f"TAoptrb{stamp}"
+    # Print the venue's whole message: OKX puts the executable band inside a
+    # rejection ("max buy price ..."), and that number is the actionable part.
+    print(f"  submit -> status={buy.status} reason={(buy.reason or '-')[:400]}")
     if buy.status == "rejected":
         result["error"] = f"buy rejected: {buy.reason}"
         _record(args, result)
         venue.close()
         return 2
-    buy_row = wait_for_fill(venue, symbol, f"TAoptrb{stamp}")
+    buy_row = wait_for_fill(venue, symbol, buy_id)
     if buy_row is None:
         print("  fill not confirmed - NOT selling (an option is a position, not a mistake)")
         result["error"] = "buy fill unconfirmed"
@@ -260,16 +297,22 @@ def main() -> int:
     result.update({"buy_contracts": buy_filled, "buy_price": buy_avg,
                    "buy_fee": buy_fee, "buy_fee_ccy": buy_fee_ccy})
 
-    print("=== SELL (closing the same size immediately) ===")
+    print(f"=== SELL (limit @ bid {bid}, closing the same size immediately) ===")
     sell = venue.place_order(OrderRequest(
         client_order_id=f"TAoptrs{stamp}", symbol=symbol, side="sell",
-        qty=buy_filled * base_per_contract, type="market", tag="options-roundtrip:sell"))
+        qty=buy_filled * base_per_contract, type="limit", price=bid,
+        tag="options-roundtrip:sell"))
     print(f"  submit -> status={sell.status} reason={(sell.reason or '-')[:160]}")
     sell_row = None if sell.status == "rejected" else wait_for_fill(venue, symbol, f"TAoptrs{stamp}")
     if sell_row is None:
-        print("  SELL NOT CONFIRMED - a long option is still open; it expires worthless "
-              "at worst, but close it by hand or re-run this script")
-        result["error"] = f"sell not confirmed: {sell.reason}"
+        # A limit sell that does not fill is a fact about the demo book, not a code
+        # bug: pull it so nothing is left resting, and leave the long position on.
+        pulled = venue.cancel_order(f"TAoptrs{stamp}", symbol) if sell.status != "rejected" else False
+        print(f"  SELL DID NOT FILL at the bid ({bid}) - cancelled={pulled}. "
+              f"That means the demo bid is not executable; the long option is still open "
+              f"(expires worthless at worst).")
+        result["error"] = f"sell unfilled at bid {bid}: {sell.reason}"
+        result["sell_unfilled_at_bid"] = True
         _record(args, result)
         venue.close()
         return 3

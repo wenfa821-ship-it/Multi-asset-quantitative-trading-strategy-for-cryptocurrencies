@@ -856,10 +856,22 @@ class CcxtVenue(Venue):
             if order and order.venue_order_id:
                 self.ex.cancel_order(order.venue_order_id, self._venue_symbol(symbol))
             else:
-                self.ex.cancel_order(client_order_id, self._venue_symbol(symbol))
+                # A client order id is NOT an order id. Measured 2026-10-11: from a
+                # FRESH process (the runner was not the one that rested the order, so
+                # `self._orders` is empty) OKX refuses `ordId=<clOrdId>`, the order
+                # stays resting, and `cancel_order` returned False - an orphan with
+                # real notional. The venue takes `clOrdId` as a parameter, so say so.
+                self.ex.cancel_order(
+                    None, self._venue_symbol(symbol), {"clOrdId": client_order_id}
+                )
             return True
         except Exception:
-            return False
+            # Fall back to the plain form: some ccxt paths resolve the id themselves.
+            try:
+                self.ex.cancel_order(client_order_id, self._venue_symbol(symbol))
+                return True
+            except Exception:
+                return False
 
     def cancel_all(self, symbols: list[str]) -> int:
         count = 0
