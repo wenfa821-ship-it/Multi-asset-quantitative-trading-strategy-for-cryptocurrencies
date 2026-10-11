@@ -181,6 +181,13 @@
       同一批快照全来自一天，仍然不能用来调阈值 —— 所以这里数的是<b>日期</b>与<b>不同标的</b>。</div>
   </section>
 
+  <section class="span12"><h2>筛选漏斗（累计）：把「不好」与「不知道」分开</h2>
+    <div id="nc-funnel"></div>
+    <div class="muted" style="margin-top:6px">「不知道」是<b>我们的覆盖缺口</b>，不是币的问题：
+      补字段每轮只覆盖 20~80 个候选，而每轮记录 300~400 个。
+      只有 age / turnover / liquidity 三道在做真正的质量判断。</div>
+  </section>
+
   <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
     <div id="nc-raw"></div>
     <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
@@ -380,6 +387,29 @@ function renderNewcoin(nc) {
       <td class="num">${v.max_net_bps == null ? '—' : v.max_net_bps}</td>
       <td class="num">${(v.per_token || {}).win_rate == null ? '—' : (v.per_token.win_rate * 100).toFixed(0) + '%'}</td>
     </tr>`).join('')}</tbody></table>` : '<div class="muted">台账还空着（等第一个窗口走完）。</div>';
+
+  const fu = nc.funnel || {};
+  const fuCum = fu.cumulative || {};
+  const fuGates = fuCum.gates || {};
+  $('#nc-funnel').innerHTML = fuCum.considered ? `
+    <div class="kpis" style="margin-bottom:8px">
+      ${ncKpi('累计候选', String(fuCum.considered), '过闸 ' + (fuCum.passed || 0))}
+      ${ncKpi('过闸率', fuCum.pass_rate == null ? '—' : (fuCum.pass_rate * 100).toFixed(1) + '%',
+              '被拒 ' + (fuCum.rejected || 0))}
+      ${ncKpi('被拒含缺数据', fuCum.missing_share_of_rejections == null ? '—'
+              : (fuCum.missing_share_of_rejections * 100).toFixed(1) + '%',
+              '我们的覆盖缺口，不是币的问题')}
+    </div>
+    <table><thead><tr><th>闸门</th><th class="num">拦下</th><th class="num">因为「不好」</th>
+      <th class="num">因为「不知道」</th><th class="num">不知道占比</th></tr></thead>
+    <tbody>${Object.entries(fuGates).sort((a, b) =>
+        (b[1].value + b[1].missing) - (a[1].value + a[1].missing)).map(([gate, b]) => {
+      const total = b.value + b.missing;
+      return `<tr><td><b>${esc(gate)}</b></td><td class="num">${total}</td>
+        <td class="num">${b.value}</td>
+        <td class="num">${b.missing ? '<span class="down">' + b.missing + '</span>' : 0}</td>
+        <td class="num">${total ? (b.missing / total * 100).toFixed(0) + '%' : '—'}</td></tr>`;
+    }).join('')}</tbody></table>` : '<div class="muted">还没有漏斗数据。</div>';
 
   const sample = nc.sample || {};
   const gates = sample.gates || {};
