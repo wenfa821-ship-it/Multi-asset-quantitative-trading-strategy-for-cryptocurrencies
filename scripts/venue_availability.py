@@ -60,11 +60,34 @@ def classify(bars: int, bid: float | None, ask: float | None) -> str:
     return "bars-only"
 
 
+def watch_symbols(tradfi_tier: list[str], report_path: Path) -> list[str]:
+    """The tier PLUS the symbols the tracker has already ruled out.
+
+    Narrowing the tier also narrowed what this sampler looked at: measured
+    2026-10-10, the first run after `tradfi` went from 13 symbols to 1 sampled
+    exactly one symbol - which quietly deleted the only evidence that could ever
+    bring a symbol back ("the venue serves it again"). The excluded list already
+    exists in `data/universe/tradfi_tier.json`; this reads it instead of hardcoding
+    names in a plist.
+    """
+    out = list(tradfi_tier)
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out
+    for symbol in (report.get("symbols") or {}):
+        if symbol not in out:
+            out.append(str(symbol))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config-dir", default="config")
     ap.add_argument("--venue", default="okx_demo")
     ap.add_argument("--symbols", default="", help="comma separated; default = the tradfi tier")
+    ap.add_argument("--tier-report", default="data/universe/tradfi_tier.json",
+                    help="adds the symbols that report has ruled out, so a comeback is visible")
     ap.add_argument("--out", default="data/universe/availability.jsonl")
     ap.add_argument("--env-file", default=".env", help="credentials, read like the runner does")
     ap.add_argument("--write", action="store_true")
@@ -77,7 +100,10 @@ def main() -> int:
     config = Config.load(args.config_dir)
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     if not symbols:
-        symbols = list(config.universe.symbols_by_tier.get("tradfi") or [])
+        symbols = watch_symbols(
+            list(config.universe.symbols_by_tier.get("tradfi") or []),
+            PROJECT / args.tier_report,
+        )
 
     venue = build_venue(config, args.venue)
     venue.connect()

@@ -358,6 +358,13 @@
    "state": "done",
    "gate": "2026-10-10 巡检时发现：`KNOWN_SERVICES` 里只有 runner/watcher/dashboard，而今天的第 4、第 5 个 launchd 任务（`com.tradingagent.newlisting` 每日 09:10/21:10、`com.tradingagent.tradfi-session` 每日 23:10/01:10）**只在 launchctl 里可见**。批量任务不能按『端口活否』判活（它们大部分时间就是不该在跑），所以直接塞进现有 jobs 列表会让 all_alive 永久为假——这也正是当初没加它们的原因",
    "next": "**已实现（changelog 2026-10-10T22:40）**：`services.batch_jobs` 独立列表，按『日志新鲜度（26h 阈值）+ 上次结论』判活，研究任务复述 data/daily_job_status.json 的结论；超时进 redflags，不混进常驻服务的 all_alive。实测两项都非 stale。以后再加批量任务，只需往 `BATCH_JOBS` 里加一行"
+  },
+  {
+   "id": "tradfi-watch-scope",
+   "item": "1.0.x · 采集范围 = tier ∪ 已排除清单（收窄 tier 不该顺手删掉『它回来了』的证据）",
+   "state": "done",
+   "gate": "changelog 2026-10-10T23:35 记的问题：tier 从 13 收窄到 1 之后，第一次采样只覆盖 XMU 一个标的，那 12 个被移除的标的从此没有任何东西在看。修法：`venue_availability.py` 默认采样集合改为 `watch_symbols(tier, data/universe/tradfi_tier.json)`（tier 在前、报告里出现过的接在后面、去重）",
+   "next": "**已完成（changelog 2026-10-11T10:20）**：实测名单恢复到 13 个；不用改 plist——任务调的是同一个脚本，默认值已变，下一次 23:10 槽位即生效。若将来新增/移除标的，只需更新 tier 与报告，采集自动跟随"
   }
 ]
 }

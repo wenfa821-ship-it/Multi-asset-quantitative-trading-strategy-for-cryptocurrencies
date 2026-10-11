@@ -1734,6 +1734,44 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class AvailabilityWatchScopeTests(unittest.TestCase):
+    """Narrowing the tier must not narrow what we WATCH.
+
+    Measured 2026-10-10: the first sampler run after `tradfi` went from 13 symbols
+    to 1 sampled exactly one symbol, deleting the only evidence that could bring a
+    symbol back. The excluded list already exists in the tier report.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "venue_availability", PROJECT / "scripts" / "venue_availability.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_tier_is_the_baseline_and_the_excluded_are_added(self) -> None:
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tradfi_tier.json"
+            path.write_text(json.dumps({
+                "symbols": {"XMU/USDT": {}, "XTSM/USDT": {}, "XIWM/USDT": {}},
+            }), encoding="utf-8")
+            symbols = module.watch_symbols(["XMU/USDT"], path)
+        self.assertEqual(symbols, ["XMU/USDT", "XTSM/USDT", "XIWM/USDT"])
+
+    def test_a_missing_or_broken_report_falls_back_to_the_tier(self) -> None:
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(module.watch_symbols(["XMU/USDT"], Path(tmp) / "no.json"),
+                             ["XMU/USDT"])
+            broken = Path(tmp) / "broken.json"
+            broken.write_text("{not json", encoding="utf-8")
+            self.assertEqual(module.watch_symbols(["XMU/USDT"], broken), ["XMU/USDT"])
+
+
 class CashAttributionTests(unittest.TestCase):
     """The residual question needs measurement, and measurement needs conventions.
 
