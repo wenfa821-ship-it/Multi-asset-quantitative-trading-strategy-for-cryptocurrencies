@@ -185,7 +185,9 @@
     <div id="nc-funnel"></div>
     <div class="muted" style="margin-top:6px">「不知道」是<b>我们的覆盖缺口</b>，不是币的问题：
       补字段每轮只覆盖 20~80 个候选，而每轮记录 300~400 个。
-      只有 age / turnover / liquidity 三道在做真正的质量判断。</div>
+      只有 age / turnover / liquidity 三道在做真正的质量判断。
+      <b>「数不成立」</b>= 不可能的值（例如 GT 把 sui 池子的创建时间报成 1970 → 池子「57 岁」），
+      已从「不好」里单独分出，并进 <code>data/candidates/rejections.jsonl</code> 的判决台账。</div>
   </section>
 
   <section class="span12"><h2>待评估清单（过闸了，但还没有人真正看过）</h2>
@@ -408,13 +410,16 @@ function renderNewcoin(nc) {
               '我们的覆盖缺口，不是币的问题')}
     </div>
     <table><thead><tr><th>闸门</th><th class="num">拦下</th><th class="num">因为「不好」</th>
-      <th class="num">因为「不知道」</th><th class="num">不知道占比</th></tr></thead>
+      <th class="num">因为「不知道」</th><th class="num">数不成立</th>
+      <th class="num">不知道占比</th></tr></thead>
     <tbody>${Object.entries(fuGates).sort((a, b) =>
         (b[1].value + b[1].missing) - (a[1].value + a[1].missing)).map(([gate, b]) => {
-      const total = b.value + b.missing;
+      const anom = b.anomaly || 0;
+      const total = b.value + b.missing + anom;
       return `<tr><td><b>${esc(gate)}</b></td><td class="num">${total}</td>
         <td class="num">${b.value}</td>
         <td class="num">${b.missing ? '<span class="down">' + b.missing + '</span>' : 0}</td>
+        <td class="num">${anom ? '<span class="up">' + anom + '</span>' : 0}</td>
         <td class="num">${total ? (b.missing / total * 100).toFixed(0) + '%' : '—'}</td></tr>`;
     }).join('')}</tbody></table>` : '<div class="muted">还没有漏斗数据。</div>';
 
