@@ -372,6 +372,13 @@
    "state": "done",
    "gate": "changelog 2026-10-11T10:55：资金费每天结算 3 次/持仓，而每日任务只在 09:10 / 21:10 同步 → 两次之间的残余整天漂、每天弹两次；10-10 看门狗因此把长期 info 升级为 warn（8 小时 −$86，其中 24 条资金费账单 +$264.68 当时未记）",
    "next": "**已落地**：第 6 个 launchd 任务 `com.tradingagent.funding-sync`（`StartInterval=3600`、RunAtLoad、`sync_funding.py --yes`，按 billId 幂等）。实测 runs=1 / exit 0 / 『already holds 75』；看板列为第 3 个批量任务（3h 阈值）。那个 $50 阈值**刻意没动**——它是判据而不是 bug。下一步：观察未来 24h 残余是否只在间隙内小幅摆动、不再触发『在漂移』"
+  },
+  {
+   "id": "options-account-enable",
+   "item": "1.1 前置 · 开通期权交易（账户层被 sCode 51198 挡住，需用户在 Web/App 确认）",
+   "state": "not_started",
+   "gate": "changelog 2026-10-11T11:55：零成本探针（限价买 50% below bid → 立刻撤）第一次真的发出期权订单，两次都直接 rejected，**sCode 51198**『Visit the options trading page on the app or web, then …』。这不是参数错（那会是 51000/51008），而是**账户权限层** —— 与 README §62 的 TradFi 54092（需先确认免责声明，主/子账户分别确认）同一类",
+   "next": "**需你在 OKX 网页或 App 的期权交易页完成开通/免责声明确认**（主/子账户可能都要）。完成后我再跑一次 `scripts/options_order_path_check.py --yes`（仍是零成本：挂远价、立刻撤）确认 51198 消失；那之后才谈那个 $15 的往返探针与 1.1 的策略开关"
   }
 ]
 }
