@@ -160,6 +160,11 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # paying" into a daily series instead of a memory. Acting on it is a separate
     # user-approved step; this only records what the rule WOULD do.
     ("carry_rotation.py", ["--write"]),
+    # The NUMBERS half of the daily review, written to docs/reviews/<date>.md. It
+    # reviews the PREVIOUS complete CST day (so the 09:10 run closes yesterday, and
+    # the 21:10 run rewrites the same file - idempotent by construction). The prose
+    # stays a judgement call: this only makes the arithmetic reproducible.
+    ("daily_review.py", ["--write"]),
     # 1.1's gate (docs/options-sleeve-spec.md 4.1) evaluated daily instead of
     # remembered: RV(30d) - IV >= 1.5pp for 5 consecutive days. One row per day, so
     # the day the gate opens is a timestamp rather than someone's recollection.

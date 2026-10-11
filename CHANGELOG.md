@@ -4,9 +4,10 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-11T13:27 起，1 条留痕）
+## Unreleased（自 2026-10-11T13:27 起，2 条留痕）
 
 - `2026-10-11T13:35` **ops** 每日复盘的『数字半边』自动化：`daily_review.py` 从写死日期的脚本改成对任意日期可复现的生成器
+- `2026-10-11T13:45` **ops** 把每日复盘的数字步骤接进每日任务：`daily_review.py --write` → `docs/reviews/<date>.md`（复盘不再靠我记得跑）
 
 ## v1.1.0 — 2026-10-11T13:27
 
