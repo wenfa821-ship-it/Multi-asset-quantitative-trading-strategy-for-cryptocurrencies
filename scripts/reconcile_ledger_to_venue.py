@@ -34,7 +34,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
-from ta.config import Config  # noqa: E402
+from ta.config import Config, load_env_file  # noqa: E402
 from ta.models import Fill  # noqa: E402
 from ta.portfolio import Ledger, PositionBook  # noqa: E402
 from ta.venues import build_venue  # noqa: E402
@@ -189,6 +189,10 @@ def main() -> int:
     args = ap.parse_args()
 
     config = Config.load(args.config_dir)
+    # Same trap as the daily job (README 50.4): a manual run from a shell that has
+    # not sourced .env built the venue without credentials and died at the first
+    # call, which is how `--explain-cash` failed on 2026-10-11.
+    load_env_file(PROJECT / ".env")
     ledger_path = PROJECT / args.ledger
     rows = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     done = {r.get("symbol") for r in rows if MARKER in str(r.get("client_order_id") or "")}

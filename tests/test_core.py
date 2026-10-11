@@ -1734,6 +1734,62 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class CashAttributionTests(unittest.TestCase):
+    """The residual question needs measurement, and measurement needs conventions.
+
+    2026-10-11: bills carry `pnl + fee`, which for a spot trade is the FEE, not the
+    notional - so summing every bill does not reproduce a cash flow. Only funding
+    (type 8) is pure cash. Getting this wrong is how a diagnostic invents a leak.
+    """
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "cash_residual_attribution", PROJECT / "scripts" / "cash_residual_attribution.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_our_flow_counts_fills_as_cash_and_funding_separately(self) -> None:
+        module = self._module()
+        rows = [
+            {"kind": "fill", "ts": 20, "side": "buy", "qty": 2.0, "price": 10.0,
+             "fee": 0.1, "fee_ccy": "USDT"},
+            {"kind": "fill", "ts": 21, "side": "sell", "qty": 1.0, "price": 12.0,
+             "fee": 0.05, "fee_ccy": "USDT"},
+            {"kind": "funding", "ts": 22, "amount": 3.0},
+            {"kind": "fill", "ts": 5, "side": "buy", "qty": 9.0, "price": 9.0},  # outside window
+        ]
+        flow = module.our_cash_flow(rows, start_ms=10)
+        self.assertEqual(flow["fills"], 2)
+        self.assertAlmostEqual(flow["trade"], -20.0 + 12.0)
+        self.assertAlmostEqual(flow["fees"], -0.15)
+        self.assertAlmostEqual(flow["funding"], 3.0)
+        self.assertAlmostEqual(flow["total"], -8.0 - 0.15 + 3.0)
+
+    def test_bills_are_grouped_by_type_and_subtype(self) -> None:
+        module = self._module()
+        bills = [
+            {"type": "8", "subType": "174", "ccy": "USDT", "pnl": 10.0, "fee": 0.0},
+            {"type": "8", "subType": "174", "ccy": "USDT", "pnl": 5.0, "fee": 0.0},
+            {"type": "2", "subType": "1", "ccy": "USDT", "pnl": 0.0, "fee": -1.0},
+        ]
+        grouped = module.summarise_bills(bills)
+        self.assertEqual(grouped[("8", "174")]["count"], 2)
+        self.assertAlmostEqual(grouped[("8", "174")]["amount"], 15.0)
+        self.assertAlmostEqual(grouped[("2", "1")]["amount"], -1.0)
+
+    def test_a_spot_trade_bill_is_a_fee_not_a_notional(self) -> None:
+        module = self._module()
+        # 3 SUI at ~1.08 is ~3.25 USDT of notional, but the bill only carries the fee.
+        grouped = module.summarise_bills([
+            {"type": "2", "subType": "1", "ccy": "USDT", "pnl": 0.0, "fee": -0.002},
+        ])
+        self.assertAlmostEqual(grouped[("2", "1")]["amount"], -0.002)
+
+
 class OptionsRoundTripSelectionTests(unittest.TestCase):
     """The contract choice is a rule, so it is testable without a venue.
 
