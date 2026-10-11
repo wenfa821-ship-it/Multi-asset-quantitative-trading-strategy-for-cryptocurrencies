@@ -169,6 +169,12 @@
     <div id="nc-candidates"></div>
   </section>
 
+  <section class="span12"><h2>按链覆盖（样板池现在是跨链的）</h2>
+    <div id="nc-chains"></div>
+    <div class="muted" style="margin-top:6px">「集中度 0/x」不是没风险，是<b>没数据</b>：
+      拿不到持有人结构的链，它的候选会被判「缺数据」拒绝。这张表就是下一步该补哪条链的依据。</div>
+  </section>
+
   <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
     <div id="nc-raw"></div>
     <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
@@ -322,6 +328,16 @@ function renderNewcoin(nc) {
       <td class="num">${h.records}</td>
       <td class="${h.records ? '' : 'down'}">${esc(h.last_ts || '今天没有记录')}</td></tr>`).join('')}
     </tbody></table>` : '<div class="muted">还没有原始记录。</div>';
+
+  const chains = (nc.candidates && nc.candidates.chains) || [];
+  $('#nc-chains').innerHTML = chains.length ? `
+    <table><thead><tr><th>链</th><th class="num">记录</th><th class="num">补字段</th>
+      <th class="num">集中度</th><th class="num">合约安全</th><th class="num">过闸</th>
+    </tr></thead><tbody>${chains.map(c => `<tr><td><b>${esc(c.chain)}</b></td>
+        <td class="num">${c.recorded}</td><td class="num">${c.enriched}</td>
+        <td class="num ${c.concentration ? '' : 'down'}">${c.concentration}</td>
+        <td class="num">${c.safety}</td><td class="num">${c.passed}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="muted">还没有跨链数据。</div>';
 
   const s = nc.scores || {};
   const summary = s.summary || {};
