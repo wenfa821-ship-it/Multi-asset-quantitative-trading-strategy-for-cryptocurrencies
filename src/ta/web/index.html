@@ -323,7 +323,7 @@ function renderNewcoin(nc) {
     ? ('记录 n=' + mine1.n + '（胜率 ' + Math.round((mine1.win_rate || 0) * 100) + '%）'
        + ' vs 全体中位 ' + (base1.median_net_bps == null ? '—' : Math.round(base1.median_net_bps) + ' bps')
        + '／' + (base1.distinct_tokens || 0) + ' 标的')
-    : '24h 窗口还没走完';
+    : '1h 还没有跨度对得上标签的样本';   // 窗口走完了也可能没样本：旧测量用小时线量 1h，已排除
   const tsValue = mine1.n
     ? ((mine1.median_net_bps >= 0 ? '+' : '') + Math.round(mine1.median_net_bps) + ' bps')
     : '等窗口';
@@ -415,9 +415,14 @@ function renderNewcoin(nc) {
     <table><thead><tr><th>窗口</th><th class="num">n</th><th class="num">不同标的</th>
       <th class="num">其中多次</th><th class="num">中位净(按标的)</th>
       <th class="num">中位净(按测量)</th><th class="num">p90(按标的)</th>
-      <th class="num">最大</th><th class="num">胜率(按标的)</th></tr></thead>
+      <th class="num">最大</th><th class="num">胜率(按标的)</th>
+      <th class="num">实测跨度(中位)</th></tr></thead>
     <tbody>${Object.entries(ledHorizons).map(([h, v]) => `<tr>
-      <td>${esc(h)}</td><td class="num">${v.n || 0}</td>
+      <td>${esc(h)}${(v.off_window && v.off_window.n) ? '<div class="dim" style="font-size:11px">'
+          + '另有 ' + v.off_window.n + ' 条跨度对不上标签，已排除'
+          + ((v.off_window.measured_hours && v.off_window.measured_hours.median != null)
+             ? '（实测 ' + v.off_window.measured_hours.median + 'h）' : '') + '</div>' : ''}</td>
+      <td class="num">${v.n || 0}</td>
       <td class="num">${v.distinct_tokens || 0}</td>
       <td class="num">${v.tokens_with_multiple == null ? '—' : v.tokens_with_multiple}</td>
       <td class="num"><b>${(v.per_token || {}).median_net_bps == null ? '—' : v.per_token.median_net_bps}</b></td>
@@ -425,6 +430,8 @@ function renderNewcoin(nc) {
       <td class="num">${(v.per_token || {}).p90_net_bps == null ? '—' : v.per_token.p90_net_bps}</td>
       <td class="num">${v.max_net_bps == null ? '—' : v.max_net_bps}</td>
       <td class="num">${(v.per_token || {}).win_rate == null ? '—' : (v.per_token.win_rate * 100).toFixed(0) + '%'}</td>
+      <td class="num">${(v.measured_hours && v.measured_hours.median != null)
+          ? v.measured_hours.median + 'h' : '—'}</td>
     </tr>`).join('')}</tbody></table>` : '<div class="muted">台账还空着（等第一个窗口走完）。</div>';
 
   const fu = nc.funnel || {};
