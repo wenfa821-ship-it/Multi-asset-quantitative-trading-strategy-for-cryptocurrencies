@@ -170,7 +170,11 @@ def main() -> int:
               f"最新 {info['latest_date']} RV−IV = {latest} pp · 样本 {info['sample_days']} 天")
         print("      " + "  ".join(f"{d}:{v}" for d, v in info["series"]))
     opened = [f for f, i in runs.items() if i["open"]]
-    print("\n" + (f"闸门开启：{', '.join(opened)} —— 可按说明书 §4 开门"
+    # 2026-10-12: 闸门开了**不等于**可以下单 —— 这是同一处过时口径的第三处（说明书 §6 与
+    # config 注释今天已改）。执行能力是**环境**问题：这套模拟盘买不到期权（README §69），
+    # 而那件事与闸门无关。所以这里把两件事一起说，免得下一个人只读到「可按 §4 开门」。
+    print("\n" + (f"闸门开启：{', '.join(opened)} —— 但**开门仍取决于环境**："
+                  f"本模拟盘买不到期权（README §69），§4 的下单前 6 条只在有对手方的场所才有意义"
                   if opened else "闸门关闭：不接策略，1.1 只交付适配+数据"))
     print(f"选档：DTE {entry.get('min_dte')}–{entry.get('max_dte')} · 平值 ±{entry.get('max_strike_offset_pct')}% · "
           f"价差 ≤{entry.get('max_spread_pct')}%（≥{entry.get('min_book_levels')} 档）· "
