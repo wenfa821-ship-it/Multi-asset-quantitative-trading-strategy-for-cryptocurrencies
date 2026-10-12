@@ -108,3 +108,62 @@ def load_funding_dir(directory: str | Path) -> dict[str, FundingSeries]:
     if not base.is_dir():
         return {}
     return {p.stem: load_funding(p) for p in sorted(base.glob("*.jsonl"))}
+
+
+def series_key(symbol: str) -> str | None:
+    """'CRV/USDT:USDT' -> 'CRV-USDT_USDT'（费率文件的 stem）；现货腿返回 None。"""
+    text = str(symbol)
+    if not text.endswith(":USDT"):
+        return None
+    return text.replace(":USDT", "").replace("/", "-") + "_USDT"
+
+
+def income_from_rates(
+    positions: dict,
+    marks: dict,
+    series_by_symbol: dict[str, FundingSeries],
+    start_ms: int,
+    end_ms: int,
+) -> dict:
+    """按**公开费率**算这一篮子持仓在窗口内的资金费（多付空收）。
+
+    为什么需要它（2026-10-12）：场馆账单口径是**模拟盘自己**的费率 —— CRV 实测一天
+    $555、而公开费率只值 $0.85（248 倍），结算频率也不同（模拟盘每小时 / 实盘每 8 小时），
+    甚至实盘费率为负的日子模拟盘照样付钱。所以「收益率」只能引用这一口径；
+    账单那一栏是**事实**（钱确实进了账户），但不能当结论。
+
+    两个诚实性约束：费率文件每天才刷新一次 → `partial`/`series_through` 说明窗口被覆盖到哪
+    （别把一个"还没到结算时刻"的 0 读成"今天没有资金费"）；缺费率文件 → 进 `missing_series`，
+    不是 0。
+    """
+    by_symbol: dict[str, float] = {}
+    missing: list[str] = []
+    for symbol, qty in (positions or {}).items():
+        key = series_key(str(symbol))
+        if key is None:
+            continue                                   # 现货腿不付资金费
+        series = series_by_symbol.get(key)
+        if series is None:
+            missing.append(key)
+            continue
+        try:
+            mark = float((marks or {}).get(str(symbol).replace(":USDT", "")))
+            notional = abs(float(qty) * mark)
+        except (TypeError, ValueError):
+            missing.append(key)
+            continue
+        if not notional:
+            continue
+        received = -1.0 if float(qty) > 0 else 1.0     # 多头付、空头收
+        pct = sum((series.rate_at(ts) or 0.0) for ts in series.timestamps
+                  if start_ms < ts <= end_ms)
+        by_symbol[str(symbol)] = round(received * pct * notional, 4)
+    covered_to = max((s.timestamps[-1] for s in series_by_symbol.values() if s.timestamps),
+                     default=None)
+    return {
+        "total": round(sum(by_symbol.values()), 4),
+        "by_symbol": by_symbol,
+        "missing_series": sorted(set(missing)),
+        "series_through": covered_to,
+        "partial": bool(covered_to is not None and covered_to < end_ms),
+    }

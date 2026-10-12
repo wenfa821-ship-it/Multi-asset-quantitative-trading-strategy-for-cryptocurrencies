@@ -84,11 +84,11 @@ def backfilled_funding(rows: list[dict], start_ms: int, end_ms: int) -> dict:
 def _funding_series(directory: Path) -> dict:
     """费率序列（`ta.funding`）；从 scripts/ 直接跑时 src 不在 sys.path 上。"""
     try:
-        from ta.funding import load_funding_dir
+        from ta.funding import income_from_rates, load_funding_dir
     except ImportError:
         sys.path.insert(0, str(PROJECT / "src"))
-        from ta.funding import load_funding_dir  # noqa: PLC0415
-    return load_funding_dir(directory)
+        from ta.funding import income_from_rates, load_funding_dir  # noqa: PLC0415
+    return load_funding_dir(directory), income_from_rates
 
 
 def live_rate_funding(
@@ -105,7 +105,7 @@ def live_rate_funding(
     `|qty × mark|`；空头收正费率、多头付 —— 方向按 `positions` 的符号定。
     """
     directory = Path(funding_dir) if funding_dir else PROJECT / "data" / "history" / "funding"
-    series_by_symbol = _funding_series(directory)
+    series_by_symbol, income_from_rates = _funding_series(directory)
     if not series_by_symbol:
         return {"available": False, "total": None, "by_symbol": {},
                 "reason": f"没有费率文件（{directory}）"}
@@ -117,45 +117,11 @@ def live_rate_funding(
                 "reason": "当日没有 equity 记录，拿不到持仓名义"}
 
     last = equity_rows[-1]
-    positions = last.get("positions") or {}
-    marks = last.get("marks") or {}
-    by_symbol: dict[str, float] = {}
-    missing: list[str] = []
-    for symbol, qty in positions.items():
-        name = str(symbol)
-        if not name.endswith(":USDT"):
-            continue                       # 现货腿没有资金费
-        stem = name.replace(":USDT", "").replace("/", "-") + "_USDT"
-        series = series_by_symbol.get(stem)
-        if series is None:
-            missing.append(stem)
-            continue
-        mark = marks.get(name.replace(":USDT", ""))
-        try:
-            notional = abs(float(qty) * float(mark))
-        except (TypeError, ValueError):
-            missing.append(stem)
-            continue
-        received = -1.0 if float(qty) > 0 else 1.0     # 多头付、空头收
-        total_pct = 0.0
-        for ts in series.timestamps:
-            if start_ms < ts <= end_ms:
-                total_pct += series.rate_at(ts) or 0.0
-        by_symbol[name] = round(received * total_pct * notional, 4)
-
-    # 费率文件每天才刷新一次，所以**今天的窗口天然只覆盖到上次刷新**。
-    # 不披露这一点，一个"还没到结算时刻"的 0.0000 会被读成"今天没有资金费" ——
-    # 0 与不知道必须分开（这条纪律在这个项目里已经踩过多次）。
-    covered_to = max((s.timestamps[-1] for s in series_by_symbol.values() if s.timestamps),
-                     default=None)
-    return {
-        "available": True,
-        "total": round(sum(by_symbol.values()), 4),
-        "by_symbol": by_symbol,
-        "missing_series": sorted(set(missing)),
-        "series_through": covered_to,
-        "partial": bool(covered_to is not None and covered_to < end_ms),
-    }
+    # 口径计算只有一份实现（`ta.funding.income_from_rates`）—— 复盘与看板共用，
+    # 免得两处各写一遍然后在某天悄悄漂开。
+    return {"available": True,
+            **income_from_rates(last.get("positions") or {}, last.get("marks") or {},
+                                series_by_symbol, start_ms, end_ms)}
 
 
 def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:

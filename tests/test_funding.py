@@ -95,6 +95,31 @@ def test_venue_funding_rates_outside_the_live_range_get_flagged():
     assert implausible_rates({}) == {}
 
 
+def test_income_from_rates_pays_longs_and_pays_shorts_the_other_way():
+    """公开费率口径：多头付、空头收；缺费率文件进 missing 而不是 0。"""
+    from ta.funding import income_from_rates, series_key
+
+    when = 10 * EIGHT
+    series = FundingSeries(symbol="AAA-USDT_USDT")
+    series.add(when, 0.0001)
+    series = series.finalise()
+    short = {"AAA/USDT:USDT": -1000.0}
+    marks = {"AAA/USDT": 2.0}
+    got = income_from_rates(short, marks, {"AAA-USDT_USDT": series}, when - HOUR, when)
+    assert got["total"] == pytest_approx(0.2)          # $2,000 名义 × 0.01%
+    assert got["partial"] is False
+    long = {"AAA/USDT:USDT": 1000.0}
+    assert income_from_rates(long, marks, {"AAA-USDT_USDT": series},
+                             when - HOUR, when)["total"] == pytest_approx(-0.2)
+    # 现货腿不付资金费；缺费率文件的腿进 missing，绝不算成 0
+    mixed = income_from_rates(
+        {"AAA/USDT": 1000.0, "BBB/USDT:USDT": -5.0}, marks, {}, when - HOUR, when)
+    assert mixed["total"] == 0.0
+    assert mixed["missing_series"] == ["BBB-USDT_USDT"]
+    assert series_key("AAA/USDT:USDT") == "AAA-USDT_USDT"
+    assert series_key("AAA/USDT") is None
+
+
 def pytest_approx(value):
     import pytest
 

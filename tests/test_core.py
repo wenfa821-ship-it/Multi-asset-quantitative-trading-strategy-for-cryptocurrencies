@@ -1426,6 +1426,49 @@ class DashboardTests(unittest.TestCase):
             (work / "config" / "alerts.json").write_text("{not json", encoding="utf-8")
             self.assertEqual(DashboardData(work / "config").thresholds(), DEFAULT_THRESHOLDS)
 
+    def test_the_dashboard_says_the_bill_based_funding_is_a_demo_rate(self) -> None:
+        """2026-10-12 定性：模拟盘的资金费与实盘差两个数量级（CRV 实测 248 倍），
+        所以看板必须自己把两个口径并排说出来 —— 否则下一个人还会拿账单当收益率。
+
+        造一个小项目：账本里 24 小时内有一笔 $40 的账单，而按公开费率只该值 $0.02。
+        """
+        import datetime
+        import json as _json
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            (work / "data" / "history" / "funding").mkdir(parents=True)
+            now = datetime.datetime.now(datetime.UTC)
+            when = int(now.timestamp() * 1000)
+            (work / "data" / "history" / "funding" / "AAA-USDT_USDT.jsonl").write_text(
+                _json.dumps({"ts": when - 3600_000, "rate": 0.0001}) + "\n",
+                encoding="utf-8")
+            rows = [
+                {"kind": "equity", "ts": when, "equity": 1000.0,
+                 "positions": {"AAA/USDT": 100.0, "AAA/USDT:USDT": -100.0},
+                 "marks": {"AAA/USDT": 2.0}},
+                {"kind": "funding", "ts": when, "symbol": "AAA/USDT:USDT", "amount": 40.0},
+            ]
+            (work / "data" / f"ledger.okx_demo.jsonl").write_text(
+                "\n".join(_json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            data = DashboardData(work / "config")
+            basis = data.funding_basis()
+            self.assertTrue(basis["available"], basis)
+            self.assertAlmostEqual(basis["demo_usd"], 40.0, places=4)   # 账单口径
+            self.assertAlmostEqual(basis["live_usd"], 0.02, places=4)   # 公开费率口径
+            self.assertGreater(basis["ratio"], 1000)
+            titles = [f["title"] for f in data.redflags()]
+            self.assertIn("资金费口径：账单是模拟盘费率", titles)
+            detail = [f["detail"] for f in data.redflags()
+                      if f["title"] == "资金费口径：账单是模拟盘费率"][0]
+            self.assertIn("公开费率口径", detail)
+            self.assertIn("只能用公开费率", detail)
+
     def _stub_summary(self, data, **over: object) -> None:
         base = {
             "drawdown_pct": 0.0,

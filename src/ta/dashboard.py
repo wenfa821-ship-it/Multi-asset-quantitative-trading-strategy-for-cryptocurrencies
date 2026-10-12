@@ -901,6 +901,50 @@ class DashboardData:
         self._onchain_cache = (time.time(), payload)
         return payload
 
+    def funding_basis(self, hours: float = 24.0) -> dict[str, Any]:
+        """资金费的两个口径：场馆账单（模拟盘费率）vs 公开费率（结论口径）。
+
+        2026-10-12 定性：模拟盘给 CRV 的资金费是公开费率的 **约 248 倍**，结算频率也不同
+        （每小时 vs 每 8 小时），甚至实盘费率为负的日子模拟盘照样付钱。钱是真的（进了账户），
+        但**它不能证明任何策略收益**。这句话必须由看板自己说出来 —— 否则下一个人还会拿
+        账单当收益，而这正是 10-11 那天 +0.700% 的来源。
+
+        只读本地文件（账本 + 费率序列），不联网；口径计算只有一份实现
+        （`ta.funding.income_from_rates`，复盘脚本用同一份）。
+        """
+        import time as _time
+
+        from .funding import income_from_rates, load_funding_dir
+
+        now_ms = int(_time.time() * 1000)
+        start_ms = now_ms - int(hours * 3_600_000)
+        ledger = self._ledger()
+        demo = sum(
+            float(e.get("amount") or 0.0)
+            for e in ledger
+            if e.get("kind") == "funding" and start_ms <= int(e.get("ts") or 0) <= now_ms
+        )
+        out: dict[str, Any] = {"window_hours": hours, "demo_usd": round(demo, 4),
+                               "live_usd": None, "ratio": None, "level": "info"}
+        equity = [e for e in ledger if e.get("kind") == "equity"]
+        if not equity:
+            return {**out, "available": False, "reason": "账本里没有 equity 记录"}
+        series = load_funding_dir(self.config.path("data/history/funding"))
+        if not series:
+            return {**out, "available": False, "reason": "没有费率文件（data/history/funding）"}
+        live = income_from_rates(equity[-1].get("positions") or {},
+                                 equity[-1].get("marks") or {}, series, start_ms, now_ms)
+        out.update({"available": True, "live_usd": live["total"], "partial": live["partial"],
+                    "series_through": live["series_through"],
+                    "missing_series": live["missing_series"]})
+        if demo and live["total"] <= 0:
+            out["level"] = "warn"                       # 连方向都不一样，必须说
+        elif live["total"]:
+            ratio = demo / live["total"]
+            out["ratio"] = round(ratio, 1)
+            out["level"] = "warn" if abs(ratio) >= 5 else "info"
+        return out
+
     def redflags(self) -> list[dict[str, Any]]:
         """The same checks the 2-hourly inspection runs, computed live."""
         ledger = self._ledger()
@@ -1026,6 +1070,29 @@ class DashboardData:
                     "level": "info",
                     "title": "网络降级计数",
                     "detail": f"累计 {int(degraded)} 次（每次约暂停开仓 2 分钟）",
+                }
+            )
+        basis = self.funding_basis()
+        if basis.get("available") and basis.get("level") == "warn":
+            live_text = (f"${basis['live_usd']:,.4f}"
+                         if basis.get("live_usd") is not None else "n/a")
+            if basis.get("ratio") is None:
+                detail = (f"最近 {basis['window_hours']:g}h 模拟盘到账 "
+                          f"${basis['demo_usd']:,.2f}，公开费率口径 {live_text} —— **方向相反**")
+            else:
+                detail = (f"最近 {basis['window_hours']:g}h 模拟盘到账 "
+                          f"${basis['demo_usd']:,.2f} vs 公开费率口径 {live_text}"
+                          f"（{basis['ratio']:,.0f} 倍）")
+            if basis.get("partial") and basis.get("series_through"):
+                through = datetime.datetime.fromtimestamp(
+                    int(basis["series_through"]) / 1000).strftime("%m-%d %H:%M")
+                detail += f"；费率序列只到 {through}，实盘口径是**下界**"
+            flags.append(
+                {
+                    "level": "info",
+                    "title": "资金费口径：账单是模拟盘费率",
+                    "detail": detail + "；**收益率结论只能用公开费率口径**"
+                                       "（2026-10-12 定性，见 README §16）",
                 }
             )
         flags.extend(self.alert_breaches())
