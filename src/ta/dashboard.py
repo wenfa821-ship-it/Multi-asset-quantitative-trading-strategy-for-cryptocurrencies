@@ -324,6 +324,53 @@ def cash_residuals(ledger: list[dict[str, Any]]) -> list[float]:
     return out
 
 
+def cash_series(ledger: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    """每个周期一条 `(our flow, venue cash)`，oldest first（纯函数）。
+
+    2026-10-12 加它，是因为「**换口径**」与「**钱真的在动**」在这两个数上的形状不同：
+
+    * 钱动了（资金费到账）：`our flow` 与 `venue cash` **一起**变 → 残余不变；
+    * 我们换了期望口径（例如今天把资金费并进 flow）：`our flow` **跳**、`venue cash` **不动**
+      → 残余跳一下 —— 那不是漂移，是模型变了。
+
+    实测：12:22:54 那次 flow 从 −11,283.88 跳到 −11,035.02（+248.85），而 venue 一动没动，
+    于是残余从 $828 变成 $1,053，看板据此喊了 8 小时的"在漂移"。
+    """
+    out: list[tuple[float, float]] = []
+    for event in ledger:
+        if event.get("kind") != "risk":
+            continue
+        if str(event.get("action")) != "reconciliation mismatch":
+            continue
+        for diff in event.get("diffs") or []:
+            text = str(diff)
+            if not text.startswith("cash delta"):
+                continue
+            flow = re.search(r"\+\s*our flow\s+(-?[\d.eE+]+)", text)
+            venue = re.search(r"but venue shows\s+(-?[\d.eE+]+)", text)
+            if flow and venue:
+                out.append((float(flow.group(1)), float(venue.group(1))))
+    return out
+
+
+def basis_step_index(
+    series: list[tuple[float, float]], *, tolerance: float = CASH_RESIDUAL_DRIFT_USD
+) -> int:
+    """最后一个「换口径」点在序列中的位置（0 = 没有换过）。
+
+    判据：相邻两条里 `our flow` 变了、而 `venue cash` **几乎没变** —— 钱不可能只动我们这边。
+    容差用一个远小于资金费单笔的量级（默认 $50，与残余漂移阈值同一个数），
+    因为真实的资金费到账会**同时**推动两边、差不出 $50。
+    """
+    last = 0
+    for index in range(1, len(series)):
+        prev_flow, prev_venue = series[index - 1]
+        flow, venue = series[index]
+        if abs(flow - prev_flow) > tolerance and abs(venue - prev_venue) <= tolerance:
+            last = index
+    return last
+
+
 def position_diff_count(diffs: list[Any]) -> int:
     return sum(1 for d in diffs if str(d).startswith("position "))
 
@@ -1122,6 +1169,13 @@ class DashboardData:
             if position_diff_count(event.get("diffs")):
                 current_from = index + 1
         stable_checks = recent_checks[current_from:]
+        # 2026-10-12: 再切一刀 —— **换过口径的那一段不跟前一段比**。判据写在
+        # `basis_step_index`：我们的 flow 跳了而场馆现金没动，那是模型变了不是钱在动。
+        # 不切的话，一次口径修正会让看板喊 8 小时的"在漂移"（今天实测），
+        # 而"喊了 8 分钟就该停"的告警纪律在这个项目里已经写下过。
+        series = cash_series(stable_checks)
+        if series:
+            stable_checks = stable_checks[basis_step_index(series):]
         residuals = cash_residuals(stable_checks)
         if residuals:
             level, detail = cash_residual_flag(residuals)

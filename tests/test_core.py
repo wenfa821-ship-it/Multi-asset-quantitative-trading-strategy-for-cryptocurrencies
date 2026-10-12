@@ -1517,6 +1517,42 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(old.get("接管成交（历史）"), "info")
         self.assertEqual(old.get("killed（历史）"), "info")
 
+    def test_a_basis_change_is_not_mistaken_for_drift(self) -> None:
+        """2026-10-12：我们**换了期望口径**（把资金费并进 `our flow`）之后，看板喊了
+        "现金对账残余在漂移"，窗口波动正是那次跳跃的 $248.85 —— 但那是模型变了，不是钱在动。
+
+        `cash_series` 把每个周期的 `(our flow, venue cash)` 拿出来，`basis_step_index` 找
+        最后一个「flow 跳了而 venue 没动」的点；切掉它之前的那一段，残余序列就只在新口径内比较。
+        """
+        from ta.dashboard import basis_step_index, cash_residual_flag, cash_residuals
+        from ta.dashboard import cash_series as series_of
+
+        def event(flow: float, venue: float, ts: int) -> dict:
+            return {
+                "kind": "risk", "action": "reconciliation mismatch", "ts": ts,
+                "diffs": [f"cash delta: expected {103358.46688886615 + flow} "
+                          f"(baseline 103358.46688886615 + our flow {flow}) "
+                          f"but venue shows {venue}"],
+            }
+
+        # 四小时：资金费每小时到账 $10（flow 与 venue 一起动）→ 残余稳定在 $830
+        normal = [event(-11000 - 10 * i, 103358.46688886615 - 11000 - 10 * i - 830, i)
+                  for i in range(4)]
+        self.assertEqual(basis_step_index(series_of(normal)), 0)      # 没有换过口径
+        self.assertEqual(cash_residual_flag(cash_residuals(normal))[0], "info")
+
+        # 第五个小时：我们换了口径（flow 跳 +250）、场馆一动没动 → 残余跳到 $1,080
+        stepped = normal + [event(-11000 - 40 + 250,
+                                  103358.46688886615 - 11000 - 40 - 830, 4)]
+        cut = basis_step_index(series_of(stepped))
+        self.assertEqual(cut, 4)
+        # 不切：窗口里混着两种口径 → 被喊"在漂移"（这正是实测发生的事）
+        self.assertEqual(cash_residual_flag(cash_residuals(stepped))[0], "warn")
+        # 切掉换口径之前那一段：只有新口径的数据 → 稳定
+        level, detail = cash_residual_flag(cash_residuals(stepped[cut:]))
+        self.assertEqual(level, "info")
+        self.assertIn("波动 $0.00", detail)
+
     def test_a_position_diff_flag_expires_instead_of_sticking_forever(self) -> None:
         """2026-10-12 我自己造出的一次：外部换币 → 场馆有 BTC、回放账本没有 → 位置差 →
         卖回后两边已经一致，但看板那条 warn 还挂着。
