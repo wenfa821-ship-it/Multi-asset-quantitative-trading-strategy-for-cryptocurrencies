@@ -353,6 +353,30 @@ class Ledger:
                 elif kind == "blocked":
                     self._blocked[str(event.get("reason", "")).split(":")[0]] += 1
 
+    def reload(self) -> int:
+        """Re-read the file, keeping this process's own state consistent.
+
+        2026-10-12 (the reconciliation residual, finally): the ledger is APPEND-ONLY
+        and **several processes write to it** - the runner, `sync_funding.py` (hourly
+        launchd job), the daily job. `__init__` reads it once, so a long-running
+        runner could not see the funding rows written by anyone else: its
+        `rebuild_book()` flow stayed frozen at startup while the venue kept receiving
+        funding, and every bill looked like a fresh "cash residual". That is why the
+        watchdog flipped between info and warn for days, and why the residual kept
+        "drifting" without a trade in sight.
+
+        Reloading gives a **superset** of what we had (our own writes are in the file
+        too), so it is safe to call before any read-only derivation. Returns the
+        number of events now held.
+        """
+        self.events = []
+        self._order_ids = set()
+        self._blocked = Counter()
+        self._fills = []
+        self._fees = 0.0
+        self._load()
+        return len(self.events)
+
     # ---- writing -----------------------------------------------------------
     def record(self, kind: str, **payload: Any) -> dict[str, Any]:
         event = {"ts": now_ms(), "kind": kind, "run_id": self.run_id, "venue": self.venue, **payload}

@@ -3520,6 +3520,39 @@ class FundingAccountingTests(unittest.TestCase):
             self.assertEqual(rows[0]["bill_ts"], 1786000000000)
             self.assertNotIn("bill_ts", rows[1])
 
+    def test_reload_picks_up_rows_written_by_another_process(self) -> None:
+        """2026-10-12 对账残余的最终根因：账本是**多进程**写的（runner / funding-sync /
+        每日任务），而 `Ledger.__init__` 只读一次文件 —— 于是长跑的 runner 看不见别的
+        进程写进来的资金费，它的 `our flow` 冻结在启动那一刻，场馆每收一笔资金费就变成
+        一条「现金残余」，看门狗只好在 info/warn 之间来回翻。
+
+        `reload()` 回读文件后两边看同一份账；重复回读不会重复计数。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.jsonl"
+            runner_view = Ledger(path, run_id="runner", venue="okx_demo")
+            runner_view.record_funding("AAA/USDT:USDT", 1.0, "bill-1")
+            before = runner_view.rebuild_book(base_ccy="USDT", venue="okx_demo").cash
+
+            other = Ledger(path, run_id="funding-sync", venue="okx_demo")
+            other.record_funding("AAA/USDT:USDT", 2.5, "bill-2")
+
+            # 不回读 = 旧行为：别人的行看不见，账目少 2.5
+            stale = runner_view.rebuild_book(base_ccy="USDT", venue="okx_demo").cash
+            self.assertAlmostEqual(stale, before, places=9)
+
+            count = runner_view.reload()
+            fresh = runner_view.rebuild_book(base_ccy="USDT", venue="okx_demo").cash
+            self.assertAlmostEqual(fresh, before + 2.5, places=9)
+            self.assertEqual(count, len(runner_view.events))
+
+            # 回读两次不会翻倍
+            runner_view.reload()
+            self.assertAlmostEqual(
+                runner_view.rebuild_book(base_ccy="USDT", venue="okx_demo").cash,
+                before + 2.5, places=9,
+            )
+
     def test_a_bill_id_makes_the_sync_idempotent(self) -> None:
         from scripts.sync_funding import new_funding_bills
 

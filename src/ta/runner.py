@@ -1711,6 +1711,11 @@ class TradingRunner:
         """
         try:
             raw = self.venue.get_account()
+            # 2026-10-12: 账本是**多进程**写的（runner / funding-sync / 每日任务），而
+            # `Ledger.__init__` 只读一次。不回读的话，别的进程写的资金费这一行对 runner
+            # 永远不可见 —— 它的 `our flow` 冻结在启动那一刻，场馆每收一笔资金费就变成一条
+            # 「现金残余」，看门狗只好在 info/warn 之间来回翻。对账前先回读，让两边看同一份账。
+            self.ledger.reload()
             local_book = self.ledger.rebuild_book(
                 base_ccy=self.config.app.base_currency, venue=self.ledger.venue
             )
@@ -1776,6 +1781,7 @@ class TradingRunner:
             pass
 
         try:
+            self.ledger.reload()          # 关机路径同样要看见别的进程写的行（见 check_reconciliation）
             local_book = self.ledger.rebuild_book(
                 base_ccy=self.config.app.base_currency, venue=self.ledger.venue
             )
