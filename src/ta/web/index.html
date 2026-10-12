@@ -308,11 +308,27 @@ function renderNewcoin(nc) {
 
   const counts = (nc.progress && nc.progress.counts) || {};
   const total = Object.values(counts).reduce((a, c) => a + c, 0);
+  // 2026-10-12: 论点前向打分 —— 「我们记下来的判断」 vs 「全体候选」，同一个成本口径。
+  // 这条比盈亏更早说明问题：如果记下来的并不比全体好，代筛提供的是决策时间、不是方向。
+  const ts = nc.thesis_scores || {};
+  const tsByHorizon = {};
+  (ts.horizons || []).forEach(h => { tsByHorizon[h.horizon] = h; });
+  const base1 = (ts.baseline || {})['1h'] || {};
+  const mine1 = tsByHorizon['1h'] || {};
+  const tsHint = mine1.n
+    ? ('记录 n=' + mine1.n + '（胜率 ' + Math.round((mine1.win_rate || 0) * 100) + '%）'
+       + ' vs 全体中位 ' + (base1.median_net_bps == null ? '—' : Math.round(base1.median_net_bps) + ' bps')
+       + '／' + (base1.distinct_tokens || 0) + ' 标的')
+    : '24h 窗口还没走完';
+  const tsValue = mine1.n
+    ? ((mine1.median_net_bps >= 0 ? '+' : '') + Math.round(mine1.median_net_bps) + ' bps')
+    : '等窗口';
   $('#nc-bars').innerHTML = [
     ncKpi('版本', 'v' + esc(nc.version), '包 ' + esc(nc.package_version || '?')),
     ncKpi('进度', (counts.done || 0) + '/' + total, Object.entries(counts).map(([k,v]) => `${NC_STATE[k] || k} ${v}`).join(' · ')),
     ncKpi('今日候选', String((nc.candidates && nc.candidates.rows || []).length),
       '过闸 ' + ((nc.candidates && nc.candidates.passed) || 0) + ' 个'),
+    ncKpi('论点前向 1h', tsValue, tsHint),
   ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
   ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
       '时间盒 + 执行/数据，门槛 ≤30%'),
