@@ -879,8 +879,18 @@ async function refresh() {
     $('#updated').textContent = String(e);
   }
 }
-refresh();
-setInterval(refresh, 15000);
+// 2026-10-12: 原来是 setInterval(refresh, 15000) —— 固定 15 秒发一次，**不等上一次
+// 返回**。实测 /api/snapshot 一次要 60~190 秒（并发下更久），于是浏览器手里越堆越多
+// （lsof 上看到 5 条 ESTABLISHED），堆得越多每个请求越慢，自己把自己按在地上。
+// 改成「上一次返回之后再排下一次」：并发永远是 1，慢的时候自动降频。
+let refreshing = false;
+async function poll() {
+  if (refreshing) return;            // 手动点刷新时不重入
+  refreshing = true;
+  try { await refresh(); } finally { refreshing = false; }
+  setTimeout(poll, 15000);
+}
+poll();
 // Browsers throttle timers in background tabs, so a tab left alone can show a
 // stale snapshot when you come back to it. Refresh the moment it becomes visible.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

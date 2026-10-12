@@ -385,6 +385,11 @@ class DashboardData:
         self._services_cache: tuple[float, dict[str, Any]] | None = None
         self._live_cache: tuple[float, dict[str, Any]] | None = None
         self._live_exchange: Any = None
+        # 2026-10-12：/api/snapshot 的单飞缓存。原来每个请求都重算一整份（实测进程内
+        # 冷 2.7s + 场馆调用 5s），而页面每 15s 轮询、慢的时候还会堆积 5 条并发 →
+        # 彼此拖到 60~190 秒，之后就再也追不上轮询节奏了。这里让 N 个并发**共用一次构建**。
+        self._snap_cache: tuple[float, dict[str, Any]] | None = None
+        self._snap_lock = threading.Lock()
 
     def _live_client(self) -> Any:
         """Build the venue client ONCE and reuse it.
@@ -1403,6 +1408,26 @@ class DashboardData:
             return False
 
     # ---- one payload for the page -----------------------------------------
+    def snapshot_cached(self, ttl: float = 5.0) -> dict[str, Any]:
+        """`snapshot()` 的单飞 + 短 TTL 版本 —— HTTP 层用这个，别直接调 `snapshot()`。
+
+        2026-10-12 实测：进程内整份快照冷 2.7s（其中场馆调用 5s 级、缓存 15s），
+        而页面每 15s 轮询一次；一旦某次超过 15s，浏览器就会再发一条，堆到 5 条并发
+        （lsof 上看得到），之后彼此拖慢到 60~190 秒，永久追不上 —— 看板看起来"取数失败"。
+        这里做两件事：① TTL 内的请求直接吃缓存；② 缓存过期时只有**一个**线程构建，
+        其余等待后复用结果（单飞），所以并发数不再放大成本。
+        """
+        now = time.time()
+        if self._snap_cache and (now - self._snap_cache[0]) < ttl:
+            return self._snap_cache[1]
+        with self._snap_lock:
+            now = time.time()
+            if self._snap_cache and (now - self._snap_cache[0]) < ttl:
+                return self._snap_cache[1]
+            payload = self.snapshot()
+            self._snap_cache = (time.time(), payload)
+            return payload
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "generated_at": int(__import__("time").time() * 1000),
@@ -1504,7 +1529,9 @@ class _Handler(BaseHTTPRequestHandler):
                 html = (WEB_DIR / "index.html").read_bytes()
                 self._send(200, html, "text/html; charset=utf-8")
             elif path == "/api/snapshot":
-                payload = json.dumps(self.data.snapshot(), ensure_ascii=False, default=str)
+                # 单飞 + 5s TTL：页面 15s 轮询、并发多客户端时，N 个请求只构建一次
+                payload = json.dumps(self.data.snapshot_cached(), ensure_ascii=False,
+                                     default=str)
                 self._send(200, payload.encode("utf-8"), "application/json; charset=utf-8")
             elif path == "/api/newcoin":
                 payload = json.dumps(self.data.newcoin(), ensure_ascii=False, default=str)

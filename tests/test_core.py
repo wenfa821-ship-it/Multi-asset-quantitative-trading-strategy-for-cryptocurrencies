@@ -1469,6 +1469,50 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("公开费率口径", detail)
             self.assertIn("只能用公开费率", detail)
 
+    def test_concurrent_snapshot_requests_share_one_build(self) -> None:
+        """2026-10-12：页面每 15s 轮询、慢的时候堆到 5 条并发（lsof 上看得见 5 条
+        ESTABLISHED），彼此拖慢到 60~190 秒。修法是 HTTP 层用 `snapshot_cached()`：
+        TTL 内吃缓存，过期时只有**一个**线程构建，其余等它 —— 并发不再放大成本。
+        """
+        import threading as _threading
+        import time as _time
+
+        from ta.dashboard import DashboardData
+
+        data = DashboardData(CONFIG_DIR)
+        calls = {"n": 0}
+        lock = _threading.Lock()
+
+        def fake_snapshot():
+            with lock:
+                calls["n"] += 1
+            _time.sleep(0.05)                  # 假装这是一次真实的构建
+            return {"generated_at": calls["n"]}
+
+        data.snapshot = fake_snapshot          # type: ignore[method-assign]
+        results: list[dict] = []
+        rlock = _threading.Lock()
+
+        def one() -> None:
+            payload = data.snapshot_cached(ttl=5.0)
+            with rlock:
+                results.append(payload)
+
+        threads = [_threading.Thread(target=one) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(calls["n"], 1, "6 个并发只该构建一次")
+        self.assertEqual(len(results), 6)
+        self.assertEqual({r["generated_at"] for r in results}, {1})
+        # TTL 内再请求：还是那一次构建
+        data.snapshot_cached(ttl=5.0)
+        self.assertEqual(calls["n"], 1)
+        # TTL 过期后：重新构建
+        data.snapshot_cached(ttl=0.0)
+        self.assertEqual(calls["n"], 2)
+
     def _stub_summary(self, data, **over: object) -> None:
         base = {
             "drawdown_pct": 0.0,
