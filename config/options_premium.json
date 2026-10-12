@@ -1,6 +1,6 @@
 {
   "_note": "1.1 期权腿参数（设计见 docs/options-sleeve-spec.md）。刻意是数据文件而不是代码：改一个阈值不该需要动代码，写错也该退化到内置默认值，而不是让脚本崩掉 —— 与 config/alerts.json 的看门狗阈值同一个理由。",
-  "_enabled_note": "enabled=false 是刻意的：runner 目前没有期权执行路径（期权腿的 venue 适配只到『能报价、能映射符号』），而且闸门此刻是关闭的（BTC 连 3/5 天、ETH 连 0/5）。开闸日只需要把这里改成 true，并先完成 options-fund-premium-coin（换约 $100 USDT→BTC）。",
+  "_enabled_note": "enabled=false 是刻意的，两条理由（2026-10-12 更新）：① runner 没有期权执行路径（适配只到『能报价、能映射符号』），而这个字段**只有 scripts/options_gate.py 会读** —— 改成 true 不会带来任何交易；② 更硬的一条：**这套模拟环境买不到期权**（README 69：市价被拒 50016、按卖一价被拒 51006、挂买一价等 25 分钟无人成交；2026-10-12 又用 12 分钟挂单复测，同样无人卖）。所以闸门 2026-10-12 首次成立（BTC 5/5 天）也**不**改这里 —— 要等的是有对手方的场所，不是判据。此前那条『开闸日改成 true 并先换 ~$100 USDT→BTC』的注释已过期：那笔库存 10-10 买入、10-11 卖回、10-12 复测后再次卖回，见 docs/options-sleeve-spec.md §6。",
   "enabled": false,
   "families": ["BTC-USD", "ETH-USD"],
   "gate": {

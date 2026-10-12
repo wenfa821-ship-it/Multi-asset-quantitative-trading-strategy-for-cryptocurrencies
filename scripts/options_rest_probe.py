@@ -69,6 +69,10 @@ def main() -> int:
     load_env_file(PROJECT / ".env")
     venue = build_venue(config, args.venue)
     venue.connect()
+    if not venue.ensure_markets():                # 同上：没有目录就没法选合约
+        print(f"no option catalogue - the venue did not answer "
+              f"({getattr(venue, 'last_connect_error', '') or 'unknown'})")
+        return 1
 
     base_ccy = args.family.split("-")[0]
     spot = float((venue.ex.publicGetMarketTicker(

@@ -162,6 +162,26 @@ class CcxtVenue(Venue):
         if self.market_type == "spot":
             self.resolve_spot_td_mode()
 
+    def ensure_markets(self) -> bool:
+        """Explicitly load the full catalogue; False = the venue did not answer.
+
+        `connect()` deliberately tolerates a failed `load_markets()` (a degraded
+        start beats a crash-restart loop), so `self.ex.markets` can legitimately be
+        None. Scripts that NEED the catalogue (picking a contract, converting by
+        `contractSize`) must therefore ask for it — measured 2026-10-12:
+        `options_order_path_check.py` walked straight into
+        `AttributeError: 'NoneType' object has no attribute 'values'`, which reads
+        like a broken script when it is really a missing catalogue.
+        """
+        if self.ex.markets:
+            return True
+        try:
+            self.ex.load_markets()
+        except Exception as exc:  # noqa: BLE001 - caller reports, we do not raise
+            self.last_connect_error = f"{type(exc).__name__}: {exc}"
+            return False
+        return bool(self.ex.markets)
+
     @property
     def _markets_loaded(self) -> bool:
         """Whether ccxt has a market catalogue - derived, never tracked.

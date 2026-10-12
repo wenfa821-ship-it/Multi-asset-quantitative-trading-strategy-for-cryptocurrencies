@@ -77,6 +77,13 @@ def main() -> int:
     load_env_file(PROJECT / ".env")
     venue = build_venue(config, args.venue)
     venue.connect()
+    # `connect()` 容忍 load_markets() 失败（降级启动），但这里**必须要全量目录**才能
+    # 选合约 —— 2026-10-12 实测：不补这一句就会 AttributeError: 'NoneType' has no
+    # attribute 'values'，看起来像脚本坏了，其实只是目录没加载。
+    if not venue.ensure_markets():
+        print(f"no option catalogue - the venue did not answer "
+              f"({getattr(venue, 'last_connect_error', '') or 'unknown'})")
+        return 1
 
     base_ccy = args.family.split("-")[0]
     spot = float((venue.ex.publicGetMarketTicker(

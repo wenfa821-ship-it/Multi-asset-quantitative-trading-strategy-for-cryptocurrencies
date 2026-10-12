@@ -1995,6 +1995,47 @@ class DailyReviewGeneratorTests(unittest.TestCase):
             self.assertIn("没有费率文件", empty["reason"])
 
 
+class EnsureMarketsTests(unittest.TestCase):
+    """2026-10-12：`connect()` 刻意容忍 `load_markets()` 失败（降级启动优于
+    crash-restart 循环，10-10 那次 142 个启动横幅就是教训），所以 `ex.markets`
+    可能是 None。需要全量目录的脚本必须**显式要一次** —— 实测
+    `options_order_path_check.py` 直接 `AttributeError: 'NoneType' has no attribute
+    'values'`，看起来像脚本坏了，其实只是目录没加载。
+    """
+
+    def _venue(self, error: Exception | None = None):
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        class Ex:
+            def __init__(self) -> None:
+                self.markets = None
+                self.calls = 0
+
+            def load_markets(self):
+                self.calls += 1
+                if error is not None:
+                    raise error
+                self.markets = {"BTC-USD-261030-82000-C": {"id": "ok"}}
+                return self.markets
+
+        venue = CcxtVenue.__new__(CcxtVenue)      # 只测这一条路径，不建真客户端
+        venue.ex = Ex()
+        venue.last_connect_error = ""
+        return venue
+
+    def test_it_loads_once_and_returns_true(self) -> None:
+        venue = self._venue()
+        self.assertTrue(venue.ensure_markets())
+        self.assertEqual(venue.ex.calls, 1)
+        self.assertTrue(venue.ensure_markets())    # 已有目录：不再打网络
+        self.assertEqual(venue.ex.calls, 1)
+
+    def test_a_dead_catalogue_returns_false_instead_of_raising(self) -> None:
+        venue = self._venue(error=RuntimeError("proxy boom"))
+        self.assertFalse(venue.ensure_markets())
+        self.assertIn("proxy boom", venue.last_connect_error)
+
+
 class CancelByClientOrderIdTests(unittest.TestCase):
     """A client order id is not an order id, and a fresh process has neither.
 
