@@ -957,29 +957,70 @@ class DashboardData:
         metrics = self.live_metrics()
         flags: list[dict[str, Any]] = []
 
-        ghost = [
+        now_ms = int(time.time() * 1000)
+        # 2026-10-12: 三条扫**全量历史**的检查（幽灵卖单 / 接管成交 / 熔断与强平）原来是
+        # 「一旦发生过就永远报同一个级别」。那是把**审计发现**当成**现状**报：一次已经
+        # 处理过的旧事会永久压在 critical 上，而这恰好会训练出「红旗看多了就不看」——
+        # 本项目最怕的那种失效。改成**新鲜度决定音量**：24 小时内按原级别（那是"现在"），
+        # 更早降为 info 并带上「最近一次」的日期 —— 不隐藏，但不再喊狼。
+        def split_fresh(events: list[dict], within_hours: float = 24.0) -> tuple[list, list]:
+            fresh, older = [], []
+            for event in events:
+                ts = event.get("ts")
+                age_h = ((now_ms - int(ts)) / 3_600_000.0
+                         if isinstance(ts, (int, float)) else None)
+                (older if age_h is not None and age_h > within_hours else fresh).append(event)
+            return fresh, older
+
+        def stamp(events: list[dict]) -> str:
+            ts = max((int(e.get("ts") or 0) for e in events), default=0)
+            if not ts:
+                return "时间未知"
+            return datetime.datetime.fromtimestamp(ts / 1000).strftime("%m-%d %H:%M")
+
+        ghost_all = [
             e
             for e in ledger
             if e.get("kind") == "order"
             and e.get("side") == "sell"
             and float(e.get("qty") or 0.0) in (1.0, 100.0)
         ]
+        ghost, ghost_old = split_fresh(ghost_all)
         if ghost:
             flags.append(
                 {
                     "level": "critical",
                     "title": "幽灵卖单",
-                    "detail": f"账本出现 {len(ghost)} 笔 1.0/100.0 的卖出 —— 可能卖掉手动底仓",
+                    "detail": f"24 小时内出现 {len(ghost)} 笔 1.0/100.0 的卖出 —— 可能卖掉手动底仓",
+                }
+            )
+        elif ghost_old:
+            flags.append(
+                {
+                    "level": "info",
+                    "title": "幽灵卖单（历史）",
+                    "detail": f"历史上出现过 {len(ghost_old)} 笔 1.0/100.0 的卖出，"
+                              f"最近一次 {stamp(ghost_old)}（已不在 24 小时窗口内，仅存档）",
                 }
             )
 
-        adopted = [e for e in ledger if e.get("tag") == "adopted"]
+        adopted_all = [e for e in ledger if e.get("tag") == "adopted"]
+        adopted, adopted_old = split_fresh(adopted_all)
         if adopted:
             flags.append(
                 {
                     "level": "warn",
                     "title": "出现接管成交",
-                    "detail": f"{len(adopted)} 笔 tag=adopted —— 接管逻辑被打开了",
+                    "detail": f"24 小时内 {len(adopted)} 笔 tag=adopted —— 接管逻辑被打开了",
+                }
+            )
+        elif adopted_old:
+            flags.append(
+                {
+                    "level": "info",
+                    "title": "接管成交（历史）",
+                    "detail": f"历史 {len(adopted_old)} 笔 tag=adopted，最近一次 "
+                              f"{stamp(adopted_old)}",
                 }
             )
 
@@ -1014,19 +1055,34 @@ class DashboardData:
                 }
             )
 
-        blocked = Counter(
-            str(e.get("action")) for e in ledger if e.get("kind") == "risk"
-        )
+        risk_events = [e for e in ledger if e.get("kind") == "risk"]
+        blocked = Counter(str(e.get("action")) for e in risk_events)
         # "reconciliation mismatch" is deliberately NOT in this list: it fires on a
         # schedule, so counting it says nothing. It is judged below on whether the
         # residual is DRIFTING.
         for title in ("killed", "daily loss flatten"):
-            if blocked.get(title):
+            if not blocked.get(title):
+                continue
+            fresh_hits, old_hits = split_fresh(
+                [e for e in risk_events if str(e.get("action")) == title])
+            # 2026-10-01 那次 kill switch 是**故意实测**（清单里明确写着"不是事故"）——
+            # 历史计数降为 info 之后，它至少不会再把 critical 位占着。
+            if fresh_hits:
                 flags.append(
                     {
                         "level": "warn" if title != "killed" else "critical",
                         "title": title,
-                        "detail": f"账本中出现 {blocked[title]} 次",
+                        "detail": f"24 小时内出现 {len(fresh_hits)} 次"
+                                  f"（历史累计 {blocked[title]} 次）",
+                    }
+                )
+            elif old_hits:
+                flags.append(
+                    {
+                        "level": "info",
+                        "title": f"{title}（历史）",
+                        "detail": f"历史累计 {blocked[title]} 次，最近一次 "
+                                  f"{stamp(old_hits)}（已不在 24 小时窗口内）",
                     }
                 )
 

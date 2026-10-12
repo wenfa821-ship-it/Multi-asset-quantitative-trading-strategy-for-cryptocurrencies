@@ -1469,6 +1469,54 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("公开费率口径", detail)
             self.assertIn("只能用公开费率", detail)
 
+    def test_history_flags_get_quieter_instead_of_staying_critical_forever(self) -> None:
+        """2026-10-12：三条扫**全量历史**的检查（幽灵卖单 / 接管成交 / 熔断与强平）
+        原来是「一旦发生过就永远报同一级别」——那是把**审计发现**当**现状**报，
+        会训练出「红旗看多了就不看」。改成**新鲜度决定音量**：24 小时内按原级别，
+        更早降为 info 并带「最近一次」的日期（不隐藏，只降音量）。
+        """
+        import datetime
+        import json as _json
+
+        from ta.dashboard import DashboardData
+
+        def ledger_rows(age_hours: float) -> list[dict]:
+            when = int((datetime.datetime.now(datetime.UTC)
+                        - datetime.timedelta(hours=age_hours)).timestamp() * 1000)
+            return [
+                {"kind": "equity", "ts": when, "equity": 1000.0},
+                {"kind": "order", "ts": when, "symbol": "BTC/USDT", "side": "sell",
+                 "qty": 1.0, "tag": "manual"},
+                {"kind": "fill", "ts": when, "symbol": "BTC/USDT", "side": "buy",
+                 "qty": 1.0, "tag": "adopted"},
+                {"kind": "risk", "ts": when, "action": "killed",
+                 "reason": "kill switch file present on disk"},
+            ]
+
+        def levels(age_hours: float) -> dict[str, str]:
+            with tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp) / "project"
+                (work / "config").mkdir(parents=True)
+                for toml in CONFIG_DIR.glob("*.toml"):
+                    shutil.copy(toml, work / "config" / toml.name)
+                (work / "data").mkdir(parents=True, exist_ok=True)
+                (work / "data" / "ledger.okx_demo.jsonl").write_text(
+                    "\n".join(_json.dumps(r) for r in ledger_rows(age_hours)) + "\n",
+                    encoding="utf-8")
+                return {f["title"]: f["level"]
+                        for f in DashboardData(work / "config").redflags()}
+
+        fresh = levels(1.0)
+        self.assertEqual(fresh.get("幽灵卖单"), "critical")
+        self.assertEqual(fresh.get("出现接管成交"), "warn")
+        self.assertEqual(fresh.get("killed"), "critical")
+
+        old = levels(72.0)                       # 三天前：只存档，不再占 critical/warn
+        self.assertNotIn("幽灵卖单", old)
+        self.assertEqual(old.get("幽灵卖单（历史）"), "info")
+        self.assertEqual(old.get("接管成交（历史）"), "info")
+        self.assertEqual(old.get("killed（历史）"), "info")
+
     def test_a_position_diff_flag_expires_instead_of_sticking_forever(self) -> None:
         """2026-10-12 我自己造出的一次：外部换币 → 场馆有 BTC、回放账本没有 → 位置差 →
         卖回后两边已经一致，但看板那条 warn 还挂着。
