@@ -13,8 +13,15 @@ a spike.
 That produced a falsifiable prediction worth recording daily: **when the spike
 fades, the daily income should fall back to the $2-3 level per pair.** This script
 snapshots the answer once a day so the prediction can be checked against a series
-instead of memory - and so `carry_notional_pct` can later be calibrated from
-realised income rather than from the rate history.
+instead of memory.
+
+**Calibration basis (2026-10-12):** the original plan was to calibrate
+`carry_notional_pct` from realised income (these bills) rather than from the rate
+history. That plan is now **inverted** - the conclusion below shows the bills are
+demo-venue money, so calibration must use the **live rate series** instead. Every
+row written here therefore carries BOTH: `total_usdt`/`by_contract` (what the
+venue actually paid = fact) and `live_rate_usd`/`live_rate_by_symbol` (what the
+market rate implies = the only number a calibration may use).
 
 2026-10-11 correction (README 71): the window here is ROLLING, so consecutive
 rows overlap and **summing them double-counts settlements** - and when the account
@@ -82,6 +89,41 @@ def implausible_rates(summary: dict, limit: float = PLAUSIBLE_BPS_PER_DAY) -> di
         for inst, entry in summary.items()
         if entry.get("bps_per_day") is not None and entry["bps_per_day"] > limit
     }
+
+
+def live_rate_summary(
+    ledger_path: Path, start_ms: int, end_ms: int, funding_dir: Path | None = None
+) -> dict:
+    """同一窗口的**公开费率口径**（结论口径）：账本最后一行持仓 × 费率序列。
+
+    2026-10-12：这一栏存在的理由是「校准」——`carry_notional_pct` 将来要用实现收益校
+    准，而实现收益（场馆账单）实测是模拟盘费率（CRV 248 倍、且实盘为负时照样付钱）。
+    所以每一行必须**同时**带两个口径，看的人不用记得哪条能用：账单=事实，公开费率=结论。
+    """
+    from ta.funding import income_from_rates, load_funding_dir
+
+    series = load_funding_dir(Path(funding_dir) if funding_dir
+                              else PROJECT / "data" / "history" / "funding")
+    if not series:
+        return {"available": False, "total": None, "by_symbol": {},
+                "reason": f"没有费率文件（{funding_dir or 'data/history/funding'}）"}
+    rows: list[dict] = []
+    try:
+        for line in Path(ledger_path).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    except OSError:
+        return {"available": False, "total": None, "by_symbol": {},
+                "reason": f"读不到账本（{ledger_path}）"}
+    equity = [r for r in rows if r.get("kind") == "equity"]
+    if not equity:
+        return {"available": False, "total": None, "by_symbol": {},
+                "reason": "账本里没有 equity 记录，拿不到持仓名义"}
+    last = equity[-1]
+    return {"available": True,
+            **income_from_rates(last.get("positions") or {}, last.get("marks") or {},
+                                series, start_ms, end_ms)}
 sys.path.insert(0, str(PROJECT / "src"))
 
 from ta.config import Config, load_env_file  # noqa: E402
@@ -205,10 +247,32 @@ def main() -> int:
         print("  这些数**不能**当作收益率，也不能用来校准 carry 额度 —— "
               "要费率就读公开费率序列（scripts/carry_rotation.py）。")
 
+    # 同一窗口的公开费率口径（结论口径）—— 校准必须用这一栏，见 docstring。
+    live = {"available": False, "total": None, "reason": "窗口缺少账单时刻"}
+    if stamps:
+        live = live_rate_summary(config.data_dir / f"ledger.{args.venue}.jsonl",
+                                 int(min(stamps)), int(max(stamps)))
+    if live.get("available"):
+        tail = ""
+        if live.get("partial") and live.get("series_through"):
+            through = datetime.datetime.fromtimestamp(
+                int(live["series_through"]) / 1000, datetime.UTC).strftime("%m-%d %H:%M")
+            tail = f"；费率序列只到 {through}（下界）"
+        print(f"\n同一窗口的**公开费率口径**（结论口径）：{live['total']:+.4f} USDT{tail}")
+        print("  校准 carry 额度只能用这一栏；上面那张表是模拟盘到账（事实，不是收益率）。")
+    elif live.get("reason"):
+        print(f"\n公开费率口径：拿不到（{live['reason']}）")
+
     row = {"date": day, "days": args.days, "window_days": round(span, 3),
            "window_from": min(stamps) if stamps else None,
            "window_to": max(stamps) if stamps else None,
-           "total_usdt": round(total, 6), "by_contract": summary}
+           "total_usdt": round(total, 6), "by_contract": summary,
+           # 2026-10-12 加的第二个口径：与 total_usdt 并列写进每一行，
+           # 这样未来做校准的人**不可能**只拿到模拟盘那个数。
+           "live_rate_usd": live.get("total"),
+           "live_rate_by_symbol": live.get("by_symbol") or {},
+           "live_rate_partial": live.get("partial"),
+           "live_rate_reason": live.get("reason")}
     target = PROJECT / args.out
     if not args.write:
         print("DRY RUN - re-run with --write")

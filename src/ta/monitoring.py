@@ -15,6 +15,19 @@ from .util import iso
 
 _NAME_SAFE = re.compile(r"[^a-zA-Z0-9_]")
 
+# Counters the runner is known to own. `Counter` has no keys until they are
+# incremented, so a counter that never fired is simply **absent** from /metrics -
+# and absence is indistinguishable from "the metric was renamed or deleted".
+# The 2-hourly inspection hit exactly that on 2026-10-12: it looked for
+# `ta_orders_submitted_total` / `ta_fills_total` / `ta_venue_degraded_total`,
+# found none of them, and could not tell "0 since this process started" from
+# "monitoring is broken". Declaring them here makes 0 visible.
+EXPECTED_COUNTERS: tuple[str, ...] = (
+    "ta_orders_submitted_total",
+    "ta_fills_total",
+    "ta_venue_degraded_total",
+)
+
 
 class Metrics:
     """Tiny Prometheus-text-format registry (no third-party dependency)."""
@@ -35,7 +48,9 @@ class Metrics:
 
     def render(self) -> str:
         lines: list[str] = []
-        for name, value in sorted(self.counters.items()):
+        declared = {self._clean(name) for name in EXPECTED_COUNTERS}
+        for name in sorted(set(self.counters) | declared):
+            value = self.counters.get(name, 0.0)
             lines.append(f"# TYPE {name} counter")
             lines.append(f"{name} {value}")
         for name, value in sorted(self.gauges.items()):
@@ -124,4 +139,3 @@ def format_report(report: dict[str, Any]) -> str:
         lines.append(f"  {key:<18} {rendered}")
     lines.append("─" * 60)
     return "\n".join(lines)
-

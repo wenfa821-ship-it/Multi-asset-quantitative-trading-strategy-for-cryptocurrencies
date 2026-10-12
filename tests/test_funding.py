@@ -120,6 +120,55 @@ def test_income_from_rates_pays_longs_and_pays_shorts_the_other_way():
     assert series_key("AAA/USDT") is None
 
 
+def test_declared_counters_are_visible_even_before_they_fire():
+    """2026-10-12 巡检踩到的盲区：`Counter` 里没有键的计数器**根本不出现**在 /metrics，
+    于是「自进程启动以来为 0」和「指标被改名/删了」长得一模一样（那天清单里
+    `ta_orders_submitted_total` / `ta_fills_total` / `ta_venue_degraded_total` 全部对不上）。
+    声明过的计数器必须永远可读，值就是 0。
+    """
+    from ta.monitoring import EXPECTED_COUNTERS, Metrics
+
+    metrics = Metrics()
+    metrics.inc("ta_ticks_total", 7)          # 真实的计数器照旧
+    out = metrics.render()
+    for name in EXPECTED_COUNTERS:
+        assert f"{name} 0.0" in out, name
+        assert f"# TYPE {name} counter" in out
+    assert "ta_ticks_total 7" in out
+    metrics.inc("ta_fills_total", 3)          # 触发之后显示真值，不是 0
+    assert "ta_fills_total 3" in metrics.render()
+
+
+def test_live_rate_summary_reads_the_ledger_and_the_rate_files(tmp_path):
+    """校准输入必须同时带两个口径：账单（事实）与公开费率（结论）。
+    这条守的是后者的计算路径 —— 从账本最后一行拿持仓与标记价，乘费率序列。"""
+    import json as _json
+
+    from scripts.funding_income import live_rate_summary
+
+    when = 10 * EIGHT
+    ledger = tmp_path / "ledger.okx_demo.jsonl"
+    ledger.write_text("\n".join([
+        _json.dumps({"kind": "equity", "ts": when - HOUR, "equity": 1000.0}),
+        _json.dumps({"kind": "equity", "ts": when, "equity": 1000.0,
+                     "positions": {"AAA/USDT": 1000.0, "AAA/USDT:USDT": -1000.0},
+                     "marks": {"AAA/USDT": 2.0}}),
+    ]) + "\n", encoding="utf-8")
+    funding = tmp_path / "funding"
+    funding.mkdir()
+    (funding / "AAA-USDT_USDT.jsonl").write_text(
+        _json.dumps({"ts": when, "rate": 0.0001}) + "\n", encoding="utf-8")
+    got = live_rate_summary(ledger, when - HOUR, when, funding_dir=funding)
+    assert got["available"] is True
+    assert got["total"] == pytest_approx(0.2)          # 空头 $2,000 名义 × 0.01%
+    assert got["by_symbol"] == {"AAA/USDT:USDT": 0.2}
+    assert got["partial"] is False                      # 费率序列覆盖到窗口末尾
+    # 缺费率文件：说清楚拿不到，绝不算成 0
+    missing = live_rate_summary(ledger, when - HOUR, when, funding_dir=tmp_path / "nope")
+    assert missing["available"] is False and missing["total"] is None
+    assert "没有费率文件" in missing["reason"]
+
+
 def pytest_approx(value):
     import pytest
 
