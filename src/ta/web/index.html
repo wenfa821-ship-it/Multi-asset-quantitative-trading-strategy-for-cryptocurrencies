@@ -318,10 +318,18 @@ function renderNewcoin(nc) {
   const tsByHorizon = {};
   (ts.horizons || []).forEach(h => { tsByHorizon[h.horizon] = h; });
   const base1 = (ts.baseline || {})['1h'] || {};
+  // 2026-10-13: 对照池必须点名 —— 兄弟项目量到的候选里只有 8% 过闸，它的「全体」其实是另一个币种池
+  const baseSample = (() => {
+    const by = base1.by_sample || {};
+    const keys = Object.keys(by);
+    if (!keys.length || (keys.length === 1 && keys[0] === 'deep')) return '深度样本';
+    return keys.map(k => k === 'passing' ? '过闸样本' : (k === 'deep' ? '深度样本' : k)).join('+');
+  })();
   const mine1 = tsByHorizon['1h'] || {};
   const tsHint = mine1.n
     ? ('记录 n=' + mine1.n + '（胜率 ' + Math.round((mine1.win_rate || 0) * 100) + '%）'
-       + ' vs 全体中位 ' + (base1.median_net_bps == null ? '—' : Math.round(base1.median_net_bps) + ' bps')
+       + ' vs 对照[' + baseSample + ']中位 '
+       + (base1.median_net_bps == null ? '—' : Math.round(base1.median_net_bps) + ' bps')
        + '／' + (base1.distinct_tokens || 0) + ' 标的')
     : '1h 还没有跨度对得上标签的样本';   // 窗口走完了也可能没样本：旧测量用小时线量 1h，已排除
   const tsValue = mine1.n
