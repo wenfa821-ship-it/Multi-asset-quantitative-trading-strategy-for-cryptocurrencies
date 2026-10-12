@@ -327,12 +327,21 @@ function renderNewcoin(nc) {
   const tsValue = mine1.n
     ? ((mine1.median_net_bps >= 0 ? '+' : '') + Math.round(mine1.median_net_bps) + ' bps')
     : '等窗口';
+  // 2026-10-12: 失效条件回看 —— 条件写在开仓那一刻，这里报的是「有几条触发、还没结案」。
+  // pending>0 就是待办（要人跑一次 --close）；判不了（池子对不上）单独报，不当 0 看。
+  const inv = nc.invalidations || {};
+  const invClosest = (inv.closest || [])[0];
+  const invHint = inv.generated_at
+    ? ('判定 ' + (inv.checked || 0) + ' 条 · 判不了 ' + (inv.blind || 0) + ' 条'
+       + (invClosest ? ' · 最近 ' + invClosest.symbol + ' ' + invClosest.deepest_pct + '%' : ''))
+    : '还没跑（该项目 scripts/check_invalidations.py --write）';
   $('#nc-bars').innerHTML = [
     ncKpi('版本', 'v' + esc(nc.version), '包 ' + esc(nc.package_version || '?')),
     ncKpi('进度', (counts.done || 0) + '/' + total, Object.entries(counts).map(([k,v]) => `${NC_STATE[k] || k} ${v}`).join(' · ')),
     ncKpi('今日候选', String((nc.candidates && nc.candidates.rows || []).length),
       '过闸 ' + ((nc.candidates && nc.candidates.passed) || 0) + ' 个'),
     ncKpi('论点前向 1h', tsValue, tsHint),
+    ncKpi('失效条件', (inv.pending ? inv.pending + ' 条待结案' : '0 条待结案'), invHint),
   ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
   ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
       '时间盒 + 执行/数据，门槛 ≤30%'),
