@@ -68,6 +68,33 @@ def test_load_dir_is_empty_when_missing(tmp_path):
     assert set(load_funding_dir(tmp_path)) == set()
 
 
+def test_venue_funding_rates_outside_the_live_range_get_flagged():
+    """2026-10-12: the demo venue pays CRV ~248x the live rate, hourly instead of
+    every 8h, and paid us on a day the live rate was negative. `bps_per_day` comes
+    from the venue bills, so anything above the plausible live range has to be
+    flagged in the output - otherwise it reads as a return and gets calibrated into
+    `carry_notional_pct`.
+
+    The threshold is generous on purpose (live funding is ~1-3 bps/day; 50 bps/day
+    would already be ~180% annualised), so a real market rate never trips it while
+    the demo's 954-1400 bps/day always does.
+    """
+    from scripts.funding_income import PLAUSIBLE_BPS_PER_DAY, implausible_rates
+
+    summary = {
+        "CRV-USDT-SWAP": {"usdt": 370.29, "notional_usd": 2644.46, "bps_per_day": 1400.24},
+        "ACT-USDT-SWAP": {"usdt": 5.85, "notional_usd": 2298.82, "bps_per_day": 25.47},
+        "NEAR-USDT-SWAP": {"usdt": 0.28, "notional_usd": 2031.61, "bps_per_day": 1.36},
+        "BAND-USDT-SWAP": {"usdt": 5.59, "notional_usd": None, "bps_per_day": None},
+    }
+    assert set(implausible_rates(summary)) == {"CRV-USDT-SWAP"}
+    assert implausible_rates(summary)["CRV-USDT-SWAP"] > PLAUSIBLE_BPS_PER_DAY
+    # 25 bps/day is already 8x a typical live rate but still inside the guard's
+    # deliberately wide band - the flag is for "venue rule", not "unusual day".
+    assert "ACT-USDT-SWAP" not in implausible_rates(summary)
+    assert implausible_rates({}) == {}
+
+
 def pytest_approx(value):
     import pytest
 

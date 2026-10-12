@@ -25,6 +25,27 @@ each row now records the window it actually covers (`window_from`/`window_to`/
 pretending the sum is one day. Anything that wants a per-day series should read
 `scripts/carry_income_report.py`, which re-buckets the raw bills by UTC day.
 
+2026-10-12 conclusion: **the "spike" prediction above is FALSIFIED.** That
++$298.94 day was called a spike, and the prediction was that income would fall
+back to the $2-3 per pair per day level when it faded. It did not fade - five days
+on, the level is still two orders of magnitude above the live rate (CRV: bills
+**$986.26** over 10-08..10-12 vs **$3.97** implied by the live 8h rate = **248x**).
+Three measurements say the demo's funding is not the live market's funding in
+level *or* in sign:
+
+* **cadence**: the demo settles CRV **hourly** and ACT **every 4h**; the live
+  venue settles both every 8h;
+* **level**: CRV's per-settlement implied rate is 0.20-0.30%/hour (median 0.30%),
+  against a live rate of 0.01% per 8 hours;
+* **sign**: on 10-09, when the live rates were NEGATIVE (we should have PAID), the
+  demo paid us **+$323.07**.
+
+Therefore **`bps_per_day` in this file may not be quoted as a return, and may not
+be used to calibrate `carry_notional_pct`** - use the rate series instead
+(`scripts/carry_rotation.py` reads the live rate). `implausible_rates()` flags
+anything above `PLAUSIBLE_BPS_PER_DAY`, so the anomaly shows up in the output
+instead of depending on whoever reads it remembering this paragraph.
+
 Idempotent per UTC day. Read-only against the venue.
 
     python3 scripts/funding_income.py            # report
@@ -42,6 +63,25 @@ import time
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
+
+# Live perpetual funding almost never exceeds ~10 bps/day (that would be ~36%
+# annualised), so 50 is already generous: anything above it is a **venue-rule
+# difference**, not a market rate (see the 2026-10-12 conclusion in the docstring).
+PLAUSIBLE_BPS_PER_DAY = 50.0
+
+
+def implausible_rates(summary: dict, limit: float = PLAUSIBLE_BPS_PER_DAY) -> dict:
+    """Which contracts' bps/day are outside the plausible live range (pure).
+
+    Exists because '8.8% of notional in one day' was written down as a spike and
+    then never re-examined: a flag in the output is cheaper than a paragraph
+    nobody re-reads.
+    """
+    return {
+        inst: entry.get("bps_per_day")
+        for inst, entry in summary.items()
+        if entry.get("bps_per_day") is not None and entry["bps_per_day"] > limit
+    }
 sys.path.insert(0, str(PROJECT / "src"))
 
 from ta.config import Config, load_env_file  # noqa: E402
@@ -153,6 +193,17 @@ def main() -> int:
     last = datetime.datetime.fromtimestamp(max(stamps) / 1000, datetime.UTC).strftime("%m-%d %H:%M") if stamps else "n/a"
     print(f"\ntotal {total:+.4f} USDT over {span:.2f}d (requested {args.days}d; "
           f"bills span {first} .. {last} UTC)")
+
+    # 2026-10-12：这套数来自**场馆账单**，而模拟盘的资金费与实盘既不同幅也不同向
+    # （CRV 实测 248 倍，且实盘为负的日子模拟盘照样付钱）。超区间就必须当场标出来，
+    # 否则它很容易被当成"收益率"，或者被拿去校准 carry 额度。
+    weird = implausible_rates(summary)
+    if weird:
+        print(f"\n⚠ 疑似模拟盘口径（bps/day > {PLAUSIBLE_BPS_PER_DAY:g}）："
+              + "、".join(f"{k} {v:.0f}" for k, v in sorted(weird.items(),
+                                                          key=lambda kv: -kv[1])))
+        print("  这些数**不能**当作收益率，也不能用来校准 carry 额度 —— "
+              "要费率就读公开费率序列（scripts/carry_rotation.py）。")
 
     row = {"date": day, "days": args.days, "window_days": round(span, 3),
            "window_from": min(stamps) if stamps else None,
