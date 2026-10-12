@@ -1831,6 +1831,82 @@ class DailyReviewGeneratorTests(unittest.TestCase):
         self.assertEqual(stats["blocked_total"], 1)
         self.assertEqual(stats["legs"], (1, 1))
 
+    def test_a_batch_sync_is_reported_as_backfilled_not_as_todays_income(self) -> None:
+        """2026-10-12：10-11 那天 09:10 一分钟内入账 6 条 CRV 账单（$233.24），
+        它们是之前几次结算的欠账，却整笔算进了当日 +0.700%。
+
+        `bill_ts`（账单自己的时刻）回答"这笔钱哪天挣的"，`ts` 只回答"哪天写的"。
+        旧行没有 `bill_ts`，必须报未知而不是当成当日收入。
+        """
+        module = self._module()
+        import datetime
+
+        start, end = module.day_window("2026-10-10")
+        written_today = int(datetime.datetime(2026, 10, 10, 9, 10,
+                                             tzinfo=module.CST).timestamp() * 1000)
+        settled_yesterday = written_today - 26 * 3600 * 1000
+        rows = [
+            # written today, settled two days ago -> backfilled
+            {"kind": "funding", "ts": written_today, "bill_ts": settled_yesterday,
+             "amount": 43.0, "symbol": "CRV/USDT:USDT"},
+            # written today, settled today -> today's income
+            {"kind": "funding", "ts": written_today, "bill_ts": written_today,
+             "amount": 5.0, "symbol": "CRV/USDT:USDT"},
+            # old row: no bill_ts at all -> unknown, never guessed as today's
+            {"kind": "funding", "ts": written_today, "amount": 1.0,
+             "symbol": "ACT/USDT:USDT"},
+        ]
+        stats = module.summarise(rows, start, end)
+        self.assertAlmostEqual(stats["funding_total"], 49.0)      # bill-based fact
+        self.assertEqual(stats["funding_backfilled"]["count"], 1)
+        self.assertAlmostEqual(stats["funding_backfilled"]["total"], 43.0)
+        self.assertEqual(stats["funding_backfilled"]["unknown_bill_ts"], 1)
+        text = module.markdown("2026-10-10", stats)
+        self.assertIn("补记", text)
+        self.assertIn("43.0000", text)
+
+    def test_live_rate_funding_uses_the_public_rate_not_the_venue_bills(self) -> None:
+        """结论口径：空头永续收正费率、多头付；缺费率文件时报"拿不到"而不是猜。"""
+        module = self._module()
+        import datetime
+        import json as _json
+
+        start, end = module.day_window("2026-10-10")
+        when = int(datetime.datetime(2026, 10, 10, 8, 0,
+                                    tzinfo=module.CST).timestamp() * 1000)
+        rows = [
+            {"kind": "equity", "ts": when, "equity": 100.0,
+             "positions": {"AAA/USDT": 1000.0, "AAA/USDT:USDT": -1000.0},
+             "marks": {"AAA/USDT": 2.0}},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            # 空头名义 $2,000、费率 0.01% → 收 $0.20
+            (directory / "AAA-USDT_USDT.jsonl").write_text(
+                _json.dumps({"ts": when, "rate": 0.0001}) + "\n", encoding="utf-8")
+            got = module.live_rate_funding(rows, start, end, funding_dir=directory)
+            self.assertTrue(got["available"])
+            self.assertAlmostEqual(got["total"], 0.2, places=6)
+            self.assertAlmostEqual(got["by_symbol"]["AAA/USDT:USDT"], 0.2, places=6)
+            # 费率文件只到 08:00，窗口到 24:00 → 必须披露"数字是下界"，
+            # 不能让人把一个"还没到结算时刻"的 0 读成"今天没有资金费"
+            self.assertTrue(got["partial"])
+            self.assertEqual(got["series_through"], when)
+
+            # 多头同一个费率 → 付 $0.20
+            long_rows = [dict(rows[0],
+                              positions={"AAA/USDT": -1000.0, "AAA/USDT:USDT": 1000.0})]
+            self.assertAlmostEqual(
+                module.live_rate_funding(long_rows, start, end,
+                                         funding_dir=directory)["total"], -0.2, places=6)
+
+            # 没有费率文件 → 说清楚拿不到，不算 0
+            empty = module.live_rate_funding(rows, start, end,
+                                             funding_dir=directory / "nope")
+            self.assertFalse(empty["available"])
+            self.assertIsNone(empty["total"])
+            self.assertIn("没有费率文件", empty["reason"])
+
 
 class CancelByClientOrderIdTests(unittest.TestCase):
     """A client order id is not an order id, and a fresh process has neither.
@@ -3344,6 +3420,18 @@ class FundingAccountingTests(unittest.TestCase):
             ledger.record_funding("BAND/USDT:USDT", 1.0, "bill-1")
             self.assertEqual(ledger.fills_for(venue="okx_demo"), [])
             self.assertEqual(len(ledger.events_for(venue="okx_demo")), 1)
+
+    def test_a_funding_row_keeps_the_venues_own_settlement_time(self) -> None:
+        """`ts` 是写入时刻、`bill_ts` 是场馆结算时刻 —— 只有后者能回答
+        「这笔钱是哪天挣的」（2026-10-12 复盘补记那一栏就靠它）。
+        老调用不带 `bill_ts` 时不写这个字段，读者按未知处理。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = self._ledger(tmp)
+            ledger.record_funding("CRV/USDT:USDT", 43.0, "bill-1", bill_ts=1786000000000)
+            ledger.record_funding("ACT/USDT:USDT", 1.0, "bill-2")
+            rows = ledger.events_for(venue="okx_demo")
+            self.assertEqual(rows[0]["bill_ts"], 1786000000000)
+            self.assertNotIn("bill_ts", rows[1])
 
     def test_a_bill_id_makes_the_sync_idempotent(self) -> None:
         from scripts.sync_funding import new_funding_bills

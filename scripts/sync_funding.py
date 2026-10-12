@@ -130,6 +130,9 @@ def main() -> int:
             symbol_of(str(bill.get("instId"))),
             float(bill.get("pnl") or 0.0),
             str(bill.get("billId") or ""),
+            # The venue's own settlement time, so a daily review can tell "earned
+            # today" from "written today but settled earlier" (2026-10-12).
+            bill_ts=int(bill.get("ts") or 0) or None,
         )
     book = ledger.rebuild_book(base_ccy="USDT", venue=args.venue)
     print(f"recorded {len(fresh)} row(s), {total:+.6f} USDT")

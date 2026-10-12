@@ -371,12 +371,22 @@ class Ledger:
         self.record("fill", **fill.dict())
 
     def record_funding(
-        self, symbol: str, amount: float, bill_id: str = "", ccy: str = "USDT"
+        self, symbol: str, amount: float, bill_id: str = "", ccy: str = "USDT",
+        bill_ts: int | None = None,
     ) -> None:
         """One settled funding payment, identified by the venue's own bill id so a
-        re-run of the sync can never double-count it."""
+        re-run of the sync can never double-count it.
+
+        `bill_ts` is the venue's own settlement time, which is NOT the same as the
+        row's `ts` (the moment we wrote it). 2026-10-12: without it a batch sync looks
+        like income earned on the day it was written - the 10-11 review counted
+        $233.24 settled days earlier as that day's funding. Rows written before this
+        field existed simply have no `bill_ts`; readers must treat that as unknown.
+        """
+        extra = {"bill_ts": int(bill_ts)} if bill_ts else {}
         self.record(
-            "funding", symbol=symbol, amount=float(amount), ccy=ccy, bill_id=bill_id
+            "funding", symbol=symbol, amount=float(amount), ccy=ccy, bill_id=bill_id,
+            **extra,
         )
 
     def funding_bill_ids(self) -> set[str]:

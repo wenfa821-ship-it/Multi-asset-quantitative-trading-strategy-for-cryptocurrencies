@@ -55,6 +55,109 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def backfilled_funding(rows: list[dict], start_ms: int, end_ms: int) -> dict:
+    """今日**写入**、但账单时刻在今日之外的结算 = 补记（2026-10-12）。
+
+    为什么要有这一栏：10-11 那天 09:10 一分钟内入账 6 条 CRV 账单（$233.24），
+    它们是之前几次结算的欠账（`funding-sync` 改成每小时之前的批量同步），
+    却整笔算进了当日 +0.700%。`bill_ts` 是账单自己的时刻，`ts` 是写入时刻 ——
+    只有前者能回答「这笔钱是哪天挣的」。旧行没有 `bill_ts`，报 unknown，不猜。
+    """
+    total = 0.0
+    count = 0
+    unknown = 0
+    for row in rows:
+        if row.get("kind") != "funding":
+            continue
+        if not (start_ms <= int(row.get("ts") or 0) < end_ms):
+            continue
+        bill_ts = row.get("bill_ts")
+        if not bill_ts:
+            unknown += 1
+            continue
+        if not (start_ms <= int(bill_ts) < end_ms):
+            total += float(row.get("amount") or 0.0)
+            count += 1
+    return {"total": total, "count": count, "unknown_bill_ts": unknown}
+
+
+def _funding_series(directory: Path) -> dict:
+    """费率序列（`ta.funding`）；从 scripts/ 直接跑时 src 不在 sys.path 上。"""
+    try:
+        from ta.funding import load_funding_dir
+    except ImportError:
+        sys.path.insert(0, str(PROJECT / "src"))
+        from ta.funding import load_funding_dir  # noqa: PLC0415
+    return load_funding_dir(directory)
+
+
+def live_rate_funding(
+    rows: list[dict], start_ms: int, end_ms: int, funding_dir: Path | None = None
+) -> dict:
+    """**实盘费率口径**的当日资金费（结论口径，2026-10-12 起）。
+
+    场馆账单口径（`funding_total`）实测是模拟盘自己的费率：CRV 一天 $555 vs 实盘
+    费率只值 $0.85（248 倍），结算频率也不一样，甚至实盘为负的日子照样付钱。
+    所以复盘必须同时给出「按公开费率、按我们真实持仓名义」应该是多少。
+
+    只读本地费率文件（`scripts/refresh_daily_bars.py` 每天刷新）；缺文件就报
+    `available=False` 与原因，**不猜**。持仓名义取当日最后一条 equity 的
+    `|qty × mark|`；空头收正费率、多头付 —— 方向按 `positions` 的符号定。
+    """
+    directory = Path(funding_dir) if funding_dir else PROJECT / "data" / "history" / "funding"
+    series_by_symbol = _funding_series(directory)
+    if not series_by_symbol:
+        return {"available": False, "total": None, "by_symbol": {},
+                "reason": f"没有费率文件（{directory}）"}
+
+    day = [r for r in rows if start_ms <= int(r.get("ts") or 0) < end_ms]
+    equity_rows = [r for r in day if r.get("kind") == "equity"]
+    if not equity_rows:
+        return {"available": False, "total": None, "by_symbol": {},
+                "reason": "当日没有 equity 记录，拿不到持仓名义"}
+
+    last = equity_rows[-1]
+    positions = last.get("positions") or {}
+    marks = last.get("marks") or {}
+    by_symbol: dict[str, float] = {}
+    missing: list[str] = []
+    for symbol, qty in positions.items():
+        name = str(symbol)
+        if not name.endswith(":USDT"):
+            continue                       # 现货腿没有资金费
+        stem = name.replace(":USDT", "").replace("/", "-") + "_USDT"
+        series = series_by_symbol.get(stem)
+        if series is None:
+            missing.append(stem)
+            continue
+        mark = marks.get(name.replace(":USDT", ""))
+        try:
+            notional = abs(float(qty) * float(mark))
+        except (TypeError, ValueError):
+            missing.append(stem)
+            continue
+        received = -1.0 if float(qty) > 0 else 1.0     # 多头付、空头收
+        total_pct = 0.0
+        for ts in series.timestamps:
+            if start_ms < ts <= end_ms:
+                total_pct += series.rate_at(ts) or 0.0
+        by_symbol[name] = round(received * total_pct * notional, 4)
+
+    # 费率文件每天才刷新一次，所以**今天的窗口天然只覆盖到上次刷新**。
+    # 不披露这一点，一个"还没到结算时刻"的 0.0000 会被读成"今天没有资金费" ——
+    # 0 与不知道必须分开（这条纪律在这个项目里已经踩过多次）。
+    covered_to = max((s.timestamps[-1] for s in series_by_symbol.values() if s.timestamps),
+                     default=None)
+    return {
+        "available": True,
+        "total": round(sum(by_symbol.values()), 4),
+        "by_symbol": by_symbol,
+        "missing_series": sorted(set(missing)),
+        "series_through": covered_to,
+        "partial": bool(covered_to is not None and covered_to < end_ms),
+    }
+
+
 def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
     """Everything the review quotes, in one place so it cannot drift from itself."""
     day = [r for r in rows if start_ms <= int(r.get("ts") or 0) < end_ms]
@@ -90,6 +193,10 @@ def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
         "funding_rows": len(funding),
         "funding_by_symbol": funding_by_symbol,
         "funding_top": (top_symbol, top_amount),
+        # 2026-10-12：账单口径是**事实**，但要和两个修正量一起看 ——
+        # 补记（哪天才算挣到）与实盘费率口径（这笔钱实盘值多少）。
+        "funding_backfilled": backfilled_funding(rows, start_ms, end_ms),
+        "funding_live_rate": live_rate_funding(rows, start_ms, end_ms),
         "blocked": blocked.most_common(5),
         "blocked_total": sum(blocked.values()),
         "risk": risk.most_common(6),
@@ -113,6 +220,28 @@ def markdown(date: str, stats: dict) -> str:
     add(f"| 成交 | **{len(stats['fills'])} 笔**，手续费 **${stats['fill_fees']:,.4f}** |")
     add(f"| 资金费 | **+${stats['funding_total']:,.4f} / {stats['funding_rows']} 次结算**"
         f"（最大 {stats['funding_top'][0]} +${stats['funding_top'][1]:,.2f}） |")
+    back = stats.get("funding_backfilled") or {}
+    if back.get("count"):
+        unknown = (f"；另有 {back['unknown_bill_ts']} 条没有账单时刻（旧行，按未知处理）"
+                   if back.get("unknown_bill_ts") else "")
+        add(f"| ↳ 其中**补记** | **+${back['total']:,.4f} / {back['count']} 次**"
+            f"（账单时刻不在当日，是之前几次结算的欠账）{unknown} |")
+    elif back.get("unknown_bill_ts"):
+        add(f"| ↳ 补记 | **无法判定**：{back['unknown_bill_ts']} 条结算没有账单时刻"
+            f"（`bill_ts` 是 2026-10-12 才加进账本的，旧行按未知处理） |")
+    live = stats.get("funding_live_rate") or {}
+    if live.get("available"):
+        missing = live.get("missing_series") or []
+        note = f"；缺费率文件：{'、'.join(missing)}" if missing else ""
+        if live.get("partial") and live.get("series_through"):
+            through = datetime.datetime.fromtimestamp(
+                int(live["series_through"]) / 1000, CST).strftime("%m-%d %H:%M")
+            note += f"；**费率序列只到 {through}**，窗口未完全覆盖（数字是下界）"
+        add(f"| ↳ **实盘费率口径** | **{live['total']:+,.4f}**"
+            f"（按公开费率 × 当日持仓名义算；**这一栏才是可以引用的结论**，"
+            f"上面那行是模拟盘到账）{note} |")
+    elif live.get("reason"):
+        add(f"| ↳ 实盘费率口径 | 拿不到：{live['reason']} |")
     add(f"| 期末持仓 | {stats['legs'][0]} 条现货腿 + {stats['legs'][1]} 条永续腿 |")
     add(f"| 拦下 | {stats['blocked_total']} 次"
         + (f"，主因：{'；'.join(f'{k}×{v}' for k, v in stats['blocked'])}" if stats["blocked"] else "") + " |")
