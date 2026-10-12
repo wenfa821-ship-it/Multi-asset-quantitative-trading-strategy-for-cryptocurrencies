@@ -134,6 +134,10 @@
     <div id="carry"></div>
   </section>
 
+  <section class="span12"><h2>期权腿（1.1）：闸门每天自动判，能不能执行取决于环境</h2>
+    <div id="options"></div>
+  </section>
+
   <section class="span12"><h2>环境监测（六维）：只观察，不接仓位刹车</h2>
     <div id="monitor"></div>
   </section>
@@ -723,6 +727,40 @@ function renderMonitor(m) {
       ——详见 README §29 与 scripts/monitor_study.py。</div>`;
 }
 
+function renderOptions(op) {
+  const el = $('#options');
+  if (!op || !op.available) {
+    el.innerHTML = '<div class="muted">没有闸门记录（data/options/gate.jsonl）</div>';
+    return;
+  }
+  const stamp = String(op.generated_at || '').slice(5, 16).replace('T', ' ');
+  const rows = (op.families || []).map(f => {
+    const series = (f.series || []).map(s => `${String(s[0]).slice(5)} ${s[1]}`).join(' · ');
+    const latest = f.latest_pct == null ? '—'
+      : (f.latest_pct >= 0 ? '+' : '') + f.latest_pct.toFixed(2) + 'pp';
+    return `<tr><td><b>${esc(f.family)}</b></td>
+      <td class="num">${f.run_days}/${op.days}</td>
+      <td class="num">${latest}</td>
+      <td>${f.open ? '<span class="badge ok">开</span>' : '<span class="badge">关</span>'}</td>
+      <td class="dim">${esc(series) || '—'}</td></tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="kv" style="margin-bottom:10px">
+      <div>闸门判据</div><div>RV(30d) − IV 连续 ${op.days} 天 ≥ ${op.min_edge_pp} pp（平值期权成本墙 ≈1.2–1.3pp）</div>
+      <div>最近一次判决</div><div class="dim">${esc(stamp)}</div>
+      <div>开闸中</div><div>${(op.open || []).length ? esc(op.open.join(' / ')) : '<span class="dim">无</span>'}</div>
+    </div>
+    <table><thead><tr><th>family</th><th class="num">连 X/${op.days} 天</th>
+      <th class="num">最新 RV−IV</th><th>闸门</th><th>序列</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    <div class="muted" style="margin-top:8px">
+      <b>执行能力：${op.executable ? '可用' : '不可用'}</b> —— ${esc(op.executable_reason)}。
+      额度 ${op.quota_pct}% 空置是设计、不是故障（<code>config/options_premium.json</code> 里
+      <code>enabled=${op.enabled ? 'true' : 'false'}</code>；该字段只有闸门脚本会读，runner 不读）。
+      <b>开闸 ≠ 可以下单</b>：§4 还有 6 条下单当刻的硬性条件，而门槛在第 1 条之前就已经是环境。
+    </div>`;
+}
+
 function renderCarry(c) {
   if (!c || !(c.symbols || []).length) {
     $('#carry').innerHTML = '<div class="muted">没有资金费率历史（data/history/funding）</div>';
@@ -878,6 +916,7 @@ async function refresh() {
     renderTrades(d.trades);
     renderTimeline(d.timeline);
     renderOnchain(d.onchain);
+    renderOptions(d.options);
     renderCarry(d.carry);
     renderMonitor(d.monitor);
     renderServices(d.services);

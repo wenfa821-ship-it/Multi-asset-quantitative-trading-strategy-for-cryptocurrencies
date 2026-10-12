@@ -1517,6 +1517,44 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(old.get("接管成交（历史）"), "info")
         self.assertEqual(old.get("killed（历史）"), "info")
 
+    def test_the_options_panel_reads_the_latest_gate_and_admits_the_environment(self) -> None:
+        """2026-10-12：闸门**首次开启**，但执行能力是**环境问题**（README §69：这套模拟
+        环境买不到期权）。面板必须同时说出这两件事 —— 我自己就是因为没在同一个地方看到
+        它们，把一件已结案的事（换 ~$100 USDT→BTC）又做了一遍，净成本 $0.27。
+        """
+        import json as _json
+
+        from ta.dashboard import DashboardData
+
+        def build(lines: list[dict]) -> dict:
+            with tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp) / "project"
+                (work / "config").mkdir(parents=True)
+                for toml in CONFIG_DIR.glob("*.toml"):
+                    shutil.copy(toml, work / "config" / toml.name)
+                (work / "data" / "options").mkdir(parents=True, exist_ok=True)
+                (work / "data" / "options" / "gate.jsonl").write_text(
+                    "\n".join(_json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+                return DashboardData(work / "config").options()
+
+        closed = {"generated_at": "2026-10-11T01:22:13+00:00", "days": 5, "min_edge_pp": 1.5,
+                  "families": {"BTC-USD": {"run_days": 4, "latest_rv_minus_iv_pp": 9.79,
+                                           "open": False, "series": []}},
+                  "open": []}
+        opened = {"generated_at": "2026-10-12T01:22:13+00:00", "days": 5, "min_edge_pp": 1.5,
+                  "families": {"BTC-USD": {"run_days": 5, "latest_rv_minus_iv_pp": 6.87,
+                                           "open": True,
+                                           "series": [["2026-10-12", 6.87]]}},
+                  "open": ["BTC-USD"]}
+        got = build([closed, opened])              # 只认最后一条判决
+        self.assertTrue(got["available"])
+        self.assertEqual(got["open"], ["BTC-USD"])
+        self.assertEqual(got["families"][0]["run_days"], 5)
+        self.assertEqual(got["families"][0]["latest_pct"], 6.87)
+        self.assertFalse(got["executable"])        # 环境事实，与闸门开不开无关
+        self.assertIn("买不到期权", got["executable_reason"])
+        self.assertEqual(build([])["available"], False)   # 没有记录 → 说没有，不猜
+
     def test_a_basis_change_is_not_mistaken_for_drift(self) -> None:
         """2026-10-12：我们**换了期望口径**（把资金费并进 `our flow`）之后，看板喊了
         "现金对账残余在漂移"，窗口波动正是那次跳跃的 $248.85 —— 但那是模型变了，不是钱在动。

@@ -910,6 +910,57 @@ class DashboardData:
         self._carry_cache = (time.time(), payload)
         return payload
 
+    def options(self) -> dict[str, Any]:
+        """期权腿（1.1）：每日闸门 + **执行能力的事实**。
+
+        为什么把它放上面板（2026-10-12）：这天闸门**首次开启**（BTC 连续 5 天 RV−IV ≥1.5pp），
+        但那是这条腿最重要的状态变化、却只能靠读 `data/options/gate.jsonl` 才看得到；
+        更糟的是，**同一天我自己**就因为只看「落地清单」不看结论，把一件早已结案的事
+        （换 ~$100 USDT→BTC）又做了一遍（净成本 $0.27，已卖回）。
+        把「这套环境买不到期权」直接写在面板上，是防止下一个人重犯的最省事办法。
+        """
+        latest: dict[str, Any] = {}
+        try:
+            lines = [ln for ln in self.config.path("data/options/gate.jsonl")
+                     .read_text(encoding="utf-8").splitlines() if ln.strip()]
+            if lines:
+                latest = json.loads(lines[-1])
+        except (OSError, ValueError):
+            latest = {}
+        premium: dict[str, Any] = {}
+        try:
+            premium = json.loads(self.config.path("config/options_premium.json")
+                                 .read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            premium = {}
+        families = [
+            {
+                "family": name,
+                "latest_date": spec.get("latest_date"),
+                "run_days": spec.get("run_days"),
+                "latest_pct": spec.get("latest_rv_minus_iv_pp"),
+                "open": bool(spec.get("open")),
+                "series": spec.get("series") or [],
+            }
+            for name, spec in (latest.get("families") or {}).items()
+        ]
+        return {
+            "available": bool(latest),
+            "generated_at": latest.get("generated_at"),
+            "days": latest.get("days"),
+            "min_edge_pp": latest.get("min_edge_pp"),
+            "families": families,
+            "open": latest.get("open") or [],
+            "enabled": bool(premium.get("enabled")),
+            "quota_pct": 20,
+            "executable": False,
+            "executable_reason": (
+                "这套模拟环境买不到期权（README §69：市价被拒 50016、按展示卖一价被拒 51006、"
+                "挂买一价等 25 分钟无人成交；2026-10-12 复测 12 分钟同样无人卖）—— "
+                "差的是有对手方的场所，不是判据、也不是代码"
+            ),
+        }
+
     def onchain(self) -> dict[str, Any]:
         # Cached for a minute: the page polls every 15s and the watchdog every
         # minute, and this walks the whole 13k-row store to get zero_change.
@@ -1561,6 +1612,7 @@ class DashboardData:
             "refit": self.refit_history(),
             "onchain": self.onchain(),
             "carry": self.carry(),
+            "options": self.options(),
             "monitor": self.monitor(),
             "redflags": self.redflags(),
             "services": self.services(),
