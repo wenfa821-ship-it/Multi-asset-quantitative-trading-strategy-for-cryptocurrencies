@@ -1036,9 +1036,18 @@ class DashboardData:
             e for e in ledger
             if e.get("kind") == "risk" and e.get("action") == "reconciliation mismatch"
         ]
-        latest_positions = (
-            position_diff_count(recent_checks[-1].get("diffs")) if recent_checks else 0
+        # 2026-10-12: 加**新鲜度**约束。runner 只在「不匹配签名变化」时记一条（成功时不记），
+        # 而签名里含场馆现金值 —— 现金随资金费大约每小时变一次，所以**真的还在不一致**会
+        # 每小时刷新一条；已经解决的那条不会再刷新。没有这条约束时，任何一次历史位置差都会
+        # 永远挂在看板上：今天我自己就造出来过一次（外部换币 → 位置差 → 卖回后两边已一致，
+        # warn 却还在），那正是「告警读的是历史而不是现状」这一类缺陷。
+        latest = recent_checks[-1] if recent_checks else None
+        fresh_age_ms = 2 * 3600 * 1000        # 约两个记录周期
+        is_fresh = (
+            latest is not None
+            and (int(time.time() * 1000) - int(latest.get("ts") or 0)) <= fresh_age_ms
         )
+        latest_positions = position_diff_count(latest.get("diffs")) if is_fresh else 0
         if latest_positions:
             flags.append(
                 {

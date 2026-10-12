@@ -1469,6 +1469,45 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("公开费率口径", detail)
             self.assertIn("只能用公开费率", detail)
 
+    def test_a_position_diff_flag_expires_instead_of_sticking_forever(self) -> None:
+        """2026-10-12 我自己造出的一次：外部换币 → 场馆有 BTC、回放账本没有 → 位置差 →
+        卖回后两边已经一致，但看板那条 warn 还挂着。
+
+        根因：这条标志读的是**最后一条** `reconciliation mismatch` 事件，而 runner 只在
+        签名变化时记录（成功时不记）→ 历史差会永远显示。修法：加新鲜度约束 —— 签名里含
+        场馆现金值、现金随资金费约每小时变一次，所以真还在不一致的会每小时刷新，已解决的
+        不会。这里造一旧一新两条，只有新的该报。
+        """
+        import datetime
+        import json as _json
+
+        from ta.dashboard import DashboardData
+
+        def ledger_with(age_hours: float) -> list[dict]:
+            when = int((datetime.datetime.now(datetime.UTC)
+                        - datetime.timedelta(hours=age_hours)).timestamp() * 1000)
+            return [
+                {"kind": "equity", "ts": when, "equity": 1000.0},
+                {"kind": "risk", "ts": when, "action": "reconciliation mismatch",
+                 "diffs": ["position BTC/USDT: local=2.5e-09 venue=0.0011948225",
+                           "cash delta: expected 1 but venue shows 2"]},
+            ]
+
+        def flags_for(age_hours: float) -> list[str]:
+            with tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp) / "project"
+                (work / "config").mkdir(parents=True)
+                for toml in CONFIG_DIR.glob("*.toml"):
+                    shutil.copy(toml, work / "config" / toml.name)
+                (work / "data").mkdir(parents=True, exist_ok=True)
+                (work / "data" / "ledger.okx_demo.jsonl").write_text(
+                    "\n".join(_json.dumps(r) for r in ledger_with(age_hours)) + "\n",
+                    encoding="utf-8")
+                return [f["title"] for f in DashboardData(work / "config").redflags()]
+
+        self.assertIn("仓位对账不一致", flags_for(0.5))      # 新鲜 → 报
+        self.assertNotIn("仓位对账不一致", flags_for(3.0))   # 3 小时前 → 不再声称它还在
+
     def test_concurrent_snapshot_requests_share_one_build(self) -> None:
         """2026-10-12：页面每 15s 轮询、慢的时候堆到 5 条并发（lsof 上看得见 5 条
         ESTABLISHED），彼此拖慢到 60~190 秒。修法是 HTTP 层用 `snapshot_cached()`：
