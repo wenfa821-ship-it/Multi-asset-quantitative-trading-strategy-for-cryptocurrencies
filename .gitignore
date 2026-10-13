@@ -19,6 +19,14 @@ KILL_SWITCH
 # reviewable later: its changelog/progress snapshots ARE the release record.
 !archive/versions/**/*.jsonl
 
+# ...and the trace itself (2026-10-13, user decision ① out of three options):
+# `docs/changelog.jsonl` is 692 KB of one-line-per-change plain text - small enough
+# to track, and the one file where `git blame` answers "who changed this and why".
+# The data files stay out: the ledger is 11 MB and the on-chain store 81 MB, both
+# rewritten by every collection round, so tracking them would bury the diff. The
+# frozen snapshot in archive/versions/<v>/ already captures them per release.
+!docs/changelog.jsonl
+
 # local virtualenvs
 .venv/
 venv/
