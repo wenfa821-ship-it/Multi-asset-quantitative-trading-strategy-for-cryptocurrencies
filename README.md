@@ -6354,8 +6354,18 @@ carry 侧不受影响：它的 `decision.qty` 本来就是按 $2k/对 算的，�
   tier cap"）；carry 与方向性两处调用点都把 `mark` 传进去。**行为零变化** ——
   同样的判据、同样的返回值，只是拒绝时说得清自己判的是什么。
 
-> **生效条件**：runner 是常驻进程（本次已连续运行约 30 小时），这段日志要**下一次重启后**才会出现。
-> 在此之前日志里仍是旧格式 —— 别把"没看到新字段"读成"改动没进去"。
+> **生效条件（2026-10-13 18:51 已满足）**：runner 是常驻进程，这段日志要**重启后**才出现 ——
+> 用户当天批准后已 `launchctl kickstart -k` 重启：pid 73665 → **10958**、runs 154 → **155**、
+> 新 `run_id=64e25354aaa4`、5 条 carry 对全部恢复、`mode=LIVE`、`kill_switch=0`、`open_positions=10`、
+> 手续费一分未增（646.489 前后一致）。**54 秒后就拿到首个证据**：
+>
+> ```
+> 10:52:22 WARNING carry entry refused: not enough depth [symbol=LINK/USDT qty=159.21
+>            kind=carry judged_notional_usd=2048.4 size_basis=pre-cap desired size (risk-based); …]
+> ```
+>
+> 顺带印证了上一节把范围划对了：**carry 被判的名义额就是 $2,048**（它本来就按 $2k/对定量），
+> 所以 carry 的拒绝是**真的薄**；"判错尺寸"的问题只发生在方向性那两条腿上。
 
 #### 70.10.14 `ta doctor` 现在把「在跑的策略」和「已实现但故意关掉的」分开印
 
