@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.17**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.18**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.18 — 2026-10-13T18:23
+
+- 测试 **443** 绿 · 权益 $102,430.59 · 记录时的包版本 1.1.18
+
+把 15m 历史从 23 天补深到 179 天（16 个 15m 消费方标的，各 17,280 根，2 分 59 秒；走合并不覆盖）。门槛 1 从「0/2 条可判策略为正」变成「0/4」：原来判不了的两条（trend_pullback 0→88 笔、mean_reversion 14→216 笔）现在带着 54~58 天的样本外窗口，全部为负。这不是结论变了，而是原来那一半没被测过。代价：回测 25→109 秒、磁盘 +32MB。443 测试绿。
 
 ## v1.1.17 — 2026-10-13T17:43
 
