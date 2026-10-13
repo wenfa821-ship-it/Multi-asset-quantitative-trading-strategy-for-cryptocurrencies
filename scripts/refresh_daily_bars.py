@@ -76,7 +76,10 @@ def main() -> int:
     ap.add_argument("--venue", default="okx_demo")
     ap.add_argument("--symbols", default=",".join(DEFAULT_SYMBOLS),
                     help='逗号分隔；写 "universe" = 配置里的全部标的（研究侧读的就是这些文件）')
-    ap.add_argument("--timeframe", default="1d")
+    ap.add_argument("--timeframe", default="1d",
+                    help="逗号分隔，例如 15m,1h,4h,1d。研究侧读的不止日线："
+                         "trend_breakout/perp 读 1h、mean_reversion 读 15m、"
+                         "TradFi 读 1d，而回测还会加载 confirm 帧（4h/1h）")
     ap.add_argument("--bars", type=int, default=60, help="recent window to fetch and merge")
     ap.add_argument("--env-file", default=".env", help="credentials, read like the runner does")
     ap.add_argument("--write", action="store_true")
@@ -93,42 +96,56 @@ def main() -> int:
         symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     venue = build_venue(config, args.venue)
     venue.connect()
-    print(f"venue={args.venue} timeframe={args.timeframe} bars={args.bars} symbols={len(symbols)}")
+    timeframes = [t.strip() for t in str(args.timeframe).split(",") if t.strip()]
+    print(f"venue={args.venue} timeframes={','.join(timeframes)} bars={args.bars} "
+          f"symbols={len(symbols)}")
 
     updated = 0
-    for symbol in symbols:
-        # config.data_dir / "history" is the layout `ta data fetch` uses
-        # (history_dir() itself only appends the venue), and getting this wrong is
-        # silent in the worst way: the first version of this script pointed at
-        # <project>/<venue>/ and cheerfully created a parallel copy of the series
-        # there while the files the research reads stayed four days stale.
-        path = history_path(config.data_dir / "history", args.venue, symbol, args.timeframe)
-        try:
-            bars = fetch_symbol(venue.ex, symbol, args.timeframe, args.bars)
-        except Exception as exc:  # noqa: BLE001 - one symbol must not kill the step
-            print(f"  {symbol}: fetch failed ({type(exc).__name__}: {str(exc)[:80]})")
-            continue
-        if not bars:
-            print(f"  {symbol}: no bars returned (not written)")
-            continue
-        before = read_bars(path)
-        last_before = before[-1].ts if before else 0
-        last_new = bars[-1].ts
-        if not args.write:
-            print(f"  {symbol}: would merge {len(bars)} bars "
-                  f"(have {len(before)}, newest now {last_new}, newest on disk {last_before})")
-            continue
-        total = merge_bars(path, bars)
-        gained = sum(1 for b in bars if b.ts > last_before)
-        if gained:
-            updated += 1
-        print(f"  {symbol}: merged -> {total} bars (+{gained} new)")
+    refreshed: dict[str, int] = {}
+    attempted = 0
+    for timeframe in timeframes:
+        hit = 0
+        for symbol in symbols:
+            # config.data_dir / "history" is the layout `ta data fetch` uses
+            # (history_dir() itself only appends the venue), and getting this wrong is
+            # silent in the worst way: the first version of this script pointed at
+            # <project>/<venue>/ and cheerfully created a parallel copy of the series
+            # there while the files the research reads stayed four days stale.
+            path = history_path(config.data_dir / "history", args.venue, symbol, timeframe)
+            attempted += 1
+            try:
+                bars = fetch_symbol(venue.ex, symbol, timeframe, args.bars)
+            except Exception as exc:  # noqa: BLE001 - one symbol must not kill the step
+                print(f"  {timeframe} {symbol}: fetch failed "
+                      f"({type(exc).__name__}: {str(exc)[:80]})")
+                continue
+            if not bars:
+                print(f"  {timeframe} {symbol}: no bars returned (not written)")
+                continue
+            before = read_bars(path)
+            last_before = before[-1].ts if before else 0
+            last_new = bars[-1].ts
+            if not args.write:
+                print(f"  {timeframe} {symbol}: would merge {len(bars)} bars "
+                      f"(have {len(before)}, newest now {last_new}, newest on disk {last_before})")
+                continue
+            total = merge_bars(path, bars)
+            gained = sum(1 for b in bars if b.ts > last_before)
+            if gained:
+                hit += 1
+            print(f"  {timeframe} {symbol}: merged -> {total} bars (+{gained} new)")
+        refreshed[timeframe] = hit
+        updated += hit
 
     venue.close()
     if not args.write:
         print("DRY RUN - re-run with --write")
         return 0
-    print(f"refreshed {updated}/{len(symbols)} symbol(s) with new daily bars")
+    # 分时间帧报，别把四个帧的短板藏进一个总数里（2026-10-13：只刷 1d 时，
+    # 那句"refreshed 52/52"看着全绿，而 15m 序列其实停在 5 天前）
+    print("refreshed by timeframe: " + "、".join(
+        f"{tf} {refreshed.get(tf, 0)}/{len(symbols)}" for tf in timeframes))
+    print(f"total refreshed {updated}/{attempted} (symbol × timeframe)")
     return 0
 
 

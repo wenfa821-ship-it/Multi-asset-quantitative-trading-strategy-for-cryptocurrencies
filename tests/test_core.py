@@ -6666,6 +6666,59 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         self.assertEqual(module.edge_age_note(dt.datetime.now(dt.timezone.utc).isoformat()), "")
         self.assertEqual(module.edge_age_note("not-a-date"), "")
 
+    def test_gate1_reports_the_horizon_of_the_data_it_read(self) -> None:
+        """2026-10-13：门槛 1 的回测读 15m/1h/4h/1d，而每日刷新只刷了 **1d**
+        （`refresh_daily_bars.py` 的 `--timeframe` 默认值），于是 52 个配置标的的 15m
+        全部停在 10-08、1h 有 20 个停在 09-29 —— 那张「样本外」表其实在看 5 天前的世界。
+        `generated_at` 挡不住这件事：测量可以是五分钟前跑的。所以输入的日期要一起报。"""
+        import tempfile
+
+        module = self._mod()
+        fresh = module.coverage_note({"15m": {"through": "2026-10-13", "at_through": 52,
+                                              "files": 52}})
+        self.assertIn("行情地平线", fresh)
+        self.assertNotIn("⚠️", fresh)
+
+        stale = module.coverage_note({
+            "15m": {"through": "2026-10-08", "at_through": 52, "files": 52},
+            "1h": {"through": "2026-10-08", "at_through": 32, "files": 52},
+            "1d": {"through": "2026-10-12", "at_through": 52, "files": 52},
+        })
+        self.assertIn("⚠️", stale)
+        self.assertIn("2026-10-08 收盘的世界", stale)
+        self.assertIn("32/52", stale)          # 不齐也要说出来，不能只报最新那天
+        self.assertEqual(module.coverage_note({}), "")
+
+    def test_coverage_counts_only_the_files_the_backtest_reads(self) -> None:
+        """地平线要按**配置里的标的**算，而不是"目录里最新的那个文件" ——
+        否则一个没人用的标的就能把整条线装成今天。"""
+        import tempfile
+        import datetime as dt
+
+        module = self._mod()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "config").mkdir(parents=True, exist_ok=True)
+            shutil.copy(CONFIG_DIR / "app.toml", root / "config" / "app.toml")
+            hist = root / "data" / "history" / "okx_demo"
+            hist.mkdir(parents=True, exist_ok=True)
+
+            def write(symbol: str, day: str, tf: str = "15m") -> None:
+                stamp = dt.datetime.fromisoformat(day + "T00:00:00+00:00")
+                (hist / f"{symbol}__{tf}.jsonl").write_text(
+                    json.dumps({"ts": int(stamp.timestamp() * 1000), "o": 1}) + "\n",
+                    encoding="utf-8")
+
+            symbols = module.configured_symbols(root)
+            self.assertIn("BTC/USDT", symbols)
+            write("BTC-USDT", "2026-10-08")
+            write("ETH-USDT", "2026-10-08")
+            # 目录里更新、但**不在配置的标的里** → 不该把地平线装成今天
+            write("ZZZNOTCONFIGURED-USDT", "2026-10-13")
+            cov = module.data_coverage(root)
+        self.assertEqual(cov["15m"]["through"], "2026-10-08")
+        self.assertEqual(cov["15m"]["files"], 2)   # 只数配置里的标的
+
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile
 

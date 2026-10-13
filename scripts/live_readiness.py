@@ -62,6 +62,9 @@ CARRY_SCREEN = "data/carry/screen_live.json"
 CARRY_HISTORY = "data/history/funding"
 OPTIONS_GATE = "data/options/gate.jsonl"
 OPTIONS_ATTEMPTS = "data/options/round_trip.jsonl"
+HISTORY_DIR = "data/history/okx_demo"
+# 回测要加载的帧：策略自己的 timeframe + confirm 帧（config/strategies.toml）。
+DATA_TIMEFRAMES = ("15m", "1h", "4h", "1d")
 
 # Which strategy names make up which leg, so gate 1 can answer the question it
 # actually asks ("至少一条**腿**/策略") instead of only the per-strategy half.
@@ -234,6 +237,7 @@ def gate_edge(root: Path) -> dict:
     )
     if age_note:
         detail += f"\n\n{age_note}"
+    detail += coverage_note(payload.get("input_coverage") or {})
     if failed:
         detail += f"\n\n⚠️ {len(failed)} 条回放没有给出样本外数字（rc≠0）：" + \
                   "、".join(f"`{r.get('strategy')}`" for r in failed) + "。"
@@ -318,6 +322,90 @@ def leg_inventory(root: Path, edge_rows: list[dict]) -> list[dict]:
             "verdict": "🚫 在这套环境里成交不了（被拒 / 价格带外 / 未成交），没有可判的数字",
         })
     return out
+
+
+def configured_symbols(root: Path) -> list[str]:
+    """Spot symbols the strategies actually trade (config/app.toml's tiers)."""
+    try:
+        import tomllib
+
+        with (root / "config" / "app.toml").open("rb") as handle:
+            cfg = tomllib.load(handle)
+    except (OSError, ValueError):
+        return []
+    out: list[str] = []
+    for items in ((cfg.get("universe") or {}).get("symbols_by_tier") or {}).values():
+        for symbol in items:
+            text = str(symbol)
+            if text not in out:
+                out.append(text)
+    return out
+
+
+def data_coverage(root: Path) -> dict:
+    """去重后的行情地平线：**回测真正会读的那些文件**最后停在哪一天。
+
+    2026-10-13 的教训（同一天第二次）：`refresh_daily_bars.py` 的 `--timeframe` 默认是 **1d**，
+    所以 v1.1.5 只解冻了日线 —— 52 个配置标的的 **15m 全部停在 10-08**、1h 有 20 个停在 09-29，
+    而门槛 1 的回测读的正是这些帧。只报"测量什么时候跑的"（`generated_at`）挡不住这件事：
+    测量可以是五分钟前跑的，输入却是一周前的世界。所以这里把**输入的日期**也报出来。
+    """
+    symbols = configured_symbols(root)
+    directory = root / HISTORY_DIR
+    out: dict[str, dict] = {}
+    for tf in DATA_TIMEFRAMES:
+        days: list[str] = []
+        for symbol in symbols:
+            path = directory / f"{symbol.replace('/', '-')}__{tf}.jsonl"
+            if not path.exists():
+                continue
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    ts = row.get("ts")
+                    if isinstance(ts, (int, float)):
+                        days.append(day_of(ts))
+                    break
+            except (OSError, ValueError):
+                continue
+        if not days:
+            continue
+        newest = max(days)
+        out[tf] = {
+            "through": newest,
+            "at_through": sum(1 for d in days if d == newest),
+            "files": len(days),
+        }
+    return out
+
+
+def coverage_note(coverage: dict, max_age_days: float = 1.0) -> str:
+    """The horizon the measurement actually saw, and whether that is recent enough."""
+    if not coverage:
+        return ""
+    worst = min(entry["through"] for entry in coverage.values())
+    detail = "；".join(
+        f"`{tf}` 到 {entry['through']}"
+        + ("" if entry["at_through"] == entry["files"]
+           else f"（只有 {entry['at_through']}/{entry['files']} 个标的到这天）")
+        for tf, entry in sorted(coverage.items())
+    )
+    try:
+        age_days = (datetime.datetime.now(UTC).date()
+                    - datetime.date.fromisoformat(worst)).days
+    except ValueError:
+        return f"\n\n**行情地平线**：{detail}。"
+    head = f"\n\n**行情地平线（这份回测实际读到的）**：{detail}。"
+    if age_days > max_age_days:
+        head += (
+            f"\n\n⚠️ 最旧的那一帧是 **{age_days} 天前** —— 也就是说这张「样本外」表看的是"
+            f"**{worst} 收盘的世界**，而不是今天。回测的数字不会因此报错，只会安静地过时。"
+        )
+    return head
 
 
 def edge_age_note(when: str, max_age_days: float = 3.0) -> str:
@@ -1129,6 +1217,9 @@ def run_edge_backtest(root: Path, strategies: list[str], split: float,
         "paper_fee_bps": paper_fee_bps,
         "paper_slippage_bps": paper_slippage_bps,
         "implied_fee_bps_per_side": round((paper_fee_bps or 0.0) * fee_multiplier, 2),
+        # 测量跑在什么时候（generated_at）与**它看到的世界停在哪一天**是两件事 ——
+        # 2026-10-13 实测：测量可以一分钟前刚跑，输入却是 5 天前收盘的行情。
+        "input_coverage": data_coverage(root),
         "rows": rows,
     }
 
