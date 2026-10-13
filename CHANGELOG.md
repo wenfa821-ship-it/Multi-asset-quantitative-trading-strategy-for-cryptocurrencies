@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.19**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.20**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.20 — 2026-10-13T18:44
+
+- 测试 **446** 绿 · 权益 $102,428.52 · 记录时的包版本 1.1.20
+
+ta doctor 把「在跑的策略」（6 条，enabled in config）与「已实现但故意关掉的」（perp_trend_funding：swap 适配未做 + 无真实资金费历史 ⇒ 闸门会敞开；random_control：仅存于 config-exp 的随机对照）分开印，并打印实际使用的 config-dir。查证结论：8 vs 6 不是配置漂移，但歧义有真实成本（我自己查了几分钟）。新增 2 个测试（含「关闭理由必须留在配置里」）。446 测试绿。
 
 ## v1.1.19 — 2026-10-13T18:40
 

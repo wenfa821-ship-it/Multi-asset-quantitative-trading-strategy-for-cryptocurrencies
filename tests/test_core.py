@@ -6207,6 +6207,41 @@ class NewListingCategoryTests(unittest.TestCase):
         self.assertEqual(counted, {"3": 1})     # 「added 0」时也要说清挡掉了什么
 
 
+class DoctorStrategyListTests(unittest.TestCase):
+    """2026-10-13：`ta doctor` 原来把**实现**和**在跑的策略**印成同一行（8 个 vs 6 个），
+    看起来像少了两条。实际两处差异都是有意的：`perp_trend_funding` 在 config 里 disabled
+    并写明原因，`random_control` 只存在于 `config-exp/`（README §25 的随机对照）。
+    混淆是真实成本 —— 我自己就查了几分钟才确认不是配置漂移。"""
+
+    def test_doctor_separates_enabled_from_defined_but_off(self) -> None:
+        import contextlib
+        import io
+
+        from ta.cli import main as cli_main
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cli_main(["doctor", "--config-dir", str(CONFIG_DIR)])
+        out = buf.getvalue()
+        self.assertIn("(enabled in", out)
+        enabled_line = next(l for l in out.splitlines() if l.startswith("strategies"))
+        off_line = next(l for l in out.splitlines() if l.strip().startswith("defined, off"))
+        # 跑在循环里的那些在 enabled 行，两个有意的例外在 off 行
+        for name in ("trend_breakout", "carry_funding", "new_listing_breakout"):
+            self.assertIn(name, enabled_line)
+        self.assertIn("perp_trend_funding", off_line)
+        self.assertIn("random_control", off_line)
+        self.assertNotIn("perp_trend_funding", enabled_line)
+
+    def test_the_config_still_says_why_the_perp_leg_is_off(self) -> None:
+        """关掉它是有意的，理由必须留在配置里（否则下一个人会当成漂移）。"""
+        text = (CONFIG_DIR / "strategies.toml").read_text(encoding="utf-8")
+        block = text.split("[strategies.perp_trend_funding]")[1].split("[strategies.")[0]
+        self.assertIn("enabled                 = false", block)
+        self.assertIn("DISABLED ON PURPOSE", block)
+        self.assertIn("REAL FUNDING HISTORY", block)
+
+
 class FundingHistorySummaryTests(unittest.TestCase):
     """2026-10-13：日更摘要把两件事混成一个词 —— "取不到费率"与"已是最新"。
 

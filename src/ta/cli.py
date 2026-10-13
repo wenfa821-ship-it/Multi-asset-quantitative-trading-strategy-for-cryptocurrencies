@@ -755,7 +755,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     kill = "PRESENT (the bot will refuse to trade)" if config.kill_switch_path.exists() else "clear"
     print(f"kill switch      {kill}")
-    print(f"strategies       {', '.join(available())}")
+    # 2026-10-13：这行原来只列**实现**（8 个），而常驻循环只跑**配置里 enabled 的**
+    # （6 个）—— 于是"doctor 说 8 条、runner 跑 6 条"看起来像少了两个。实测两个差异
+    # 都是有意的：`perp_trend_funding` 在 config 里 disabled 并写明原因（swap 适配未做 +
+    # 没有真实资金费历史 ⇒ 它的 funding 闸门等于敞开），`random_control` 只存在于
+    # `config-exp/`（README §25 的随机对照，不参与实盘循环）。把两句话分开印。
+    implemented = list(available())
+    configured = [name for name, spec in (config.strategies or {}).items() if spec.enabled]
+    off = [name for name, spec in (config.strategies or {}).items() if not spec.enabled]
+    print(f"strategies       {', '.join(configured) or '-'}"
+          f"   (enabled in {getattr(args, 'config_dir', 'config')})")
+    extra = [name for name in implemented if name not in configured and name not in off]
+    print(f"  defined, off   {', '.join(off + extra) or '-'}")
     timeframes = ", ".join(config.universe.all_timeframes)
     print(f"timeframes       base={config.universe.timeframe}  warm={timeframes}")
     print(f"tiers            {config.risk.tier_names or '-'}  (default {config.risk.default_tier})")
