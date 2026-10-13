@@ -290,6 +290,13 @@ def _load_script(name: str):
     return module
 
 
+def _iso(ts_ms: float) -> str:
+    """Epoch ms -> the same ISO shape `logs/alerts.jsonl` writes (UTC, +00:00)."""
+    import datetime
+
+    return datetime.datetime.fromtimestamp(ts_ms / 1000.0, datetime.timezone.utc).isoformat()
+
+
 def account(
     cash: float = 10_000.0,
     equity: float | None = None,
@@ -6357,6 +6364,67 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         self.assertEqual(got["trailing_green"], 1)
         self.assertIn("changelog_md.py", " ".join(got["last_red"]))
         self.assertIn("补不出历史", gate["detail"])
+
+    def test_a_known_inventory_diff_matches_our_own_tagged_balance(self) -> None:
+        """`position BTC/USDT local=2.5e-09 venue=0.0012070525` 之所以是「已知」，
+        不是因为它眼熟，而是因为**我们自己带标签买过这么多、还没卖回**。
+        实测那一串：19:10 买 0.00120705、20:00 试卖 0.0001 → 21:36 场馆仍显示
+        0.00110705 = 滚动余额。用「多久之内有成交」的窗口会漏掉 21:36 那条。"""
+        module = self._mod()
+        base = 1_790_000_000_000
+        ledger = [
+            {"kind": "fill", "symbol": "BTC/USDT", "tag": "options-funding",
+             "side": "buy", "qty": 0.00120705, "price": 120000.0, "ts": base},
+            {"kind": "fill", "symbol": "BTC/USDT", "tag": "btc-premium-inventory",
+             "side": "sell", "qty": 0.0001, "price": 120100.0, "ts": base + 50 * 60_000},
+        ]
+        windows = module.inventory_fills(ledger)
+        prices = module.reference_prices(ledger)
+
+        # 买完立刻：场馆等于买入量
+        first = {"ts": _iso(base), "diffs": [
+            "position BTC/USDT: local=2.5e-09 venue=0.0012070525"]}
+        self.assertEqual(module.classify_position_diff(first, windows, prices), "inventory")
+        # 两小时后（远超任何 ±15 分钟窗口）：场馆等于 买-卖 的滚动余额
+        later = {"ts": _iso(base + 146 * 60_000), "diffs": [
+            "position BTC/USDT: local=2.5e-09 venue=0.0011070525"]}
+        self.assertEqual(module.classify_position_diff(later, windows, prices), "inventory")
+        # 全部卖回之后场馆还有货 => 余额对不上 => 是新闻
+        after = {"ts": _iso(base + 10 * 3_600_000), "diffs": [
+            "position BTC/USDT: local=2.5e-09 venue=0.0011948225"]}
+        self.assertEqual(module.classify_position_diff(after, windows, prices), "unexplained")
+
+    def test_a_diff_on_a_symbol_we_never_tagged_is_always_news(self) -> None:
+        module = self._mod()
+        base = 1_790_000_000_000
+        ledger = [{"kind": "fill", "symbol": "BTC/USDT", "tag": "options-funding",
+                   "side": "buy", "qty": 0.001, "price": 120000.0, "ts": base}]
+        alert = {"ts": _iso(base), "diffs": ["position ETH/USDT: local=0.0 venue=12.5"]}
+        self.assertEqual(
+            module.classify_position_diff(alert, module.inventory_fills(ledger),
+                                          module.reference_prices(ledger)),
+            "unexplained")
+
+    def test_dust_against_dust_is_measured_not_guessed(self) -> None:
+        """`INJ local=8.29e-06 venue=9.37e-06` 两侧都是 0；但如果**价差换得出钱**，
+        同一个形状就必须算新闻（`BAND local=6792 venue=0` 那种）。"""
+        module = self._mod()
+        base = 1_790_000_000_000
+        ledger = [{"kind": "fill", "symbol": "INJ/USDT", "side": "buy",
+                   "qty": 10.0, "price": 20.0, "ts": base}]
+        windows, prices = module.inventory_fills(ledger), module.reference_prices(ledger)
+        dust = {"ts": _iso(base), "diffs": [
+            "position INJ/USDT: local=8.29e-06 venue=9.37e-06"]}
+        self.assertEqual(module.classify_position_diff(dust, windows, prices), "dust")
+        real = {"ts": _iso(base), "diffs": [
+            "position BAND/USDT: local=6792.0 venue=0.0"]}
+        self.assertEqual(module.classify_position_diff(real, windows, prices), "unexplained")
+        # 没有价格就判不了「灰尘」—— 宁可当新闻，也不猜
+        self.assertEqual(
+            module.classify_position_diff(
+                {"ts": _iso(base), "diffs": ["position ZZZ/USDT: local=1e-06 venue=2e-06"]},
+                windows, prices),
+            "unexplained")
 
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile

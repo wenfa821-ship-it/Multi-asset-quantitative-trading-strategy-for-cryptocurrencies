@@ -109,6 +109,23 @@ REJECT_CLASSES = (
     ("dust", "低于场馆最小额（灰尘）"),
 )
 
+# Reconciliation `position` diffs come in two shapes the project has ALREADY
+# documented as known, and one that is news (README §70 / the patrol rules):
+#   * the inventory experiment: buy spot with `tag=options-funding`, sell it back
+#     with `tag=btc-premium-inventory`; while it is held the venue shows the coin
+#     and the ledger books dust. Known source, known symbol.
+#   * dust vs dust: both sides are ~0 (`local=8.29e-06 venue=9.37e-06`).
+# Everything else is unexplained and DOES break the clean streak.
+#
+# "Known" is checked against OUR OWN tagged fills rather than a time window: the
+# 2026-10-10 sequence is buy 0.00120705 (19:10) -> probe sell 0.0001 (20:00) ->
+# still holding 0.00110705 at 21:36, and the venue's number in each alert equals
+# exactly that running balance. A ±15-minute window would have missed the 21:36
+# one; matching the balance does not, and it fails closed for any symbol we never
+# tagged.
+INVENTORY_TAGS = ("options-funding", "btc-premium-inventory")
+DUST_POSITION_USD = 1.0
+
 
 # --------------------------------------------------------------------------
 # reading
@@ -291,10 +308,17 @@ def gate_execution(root: Path) -> dict:
     path = root / ALERTS
     rows = read_jsonl(path)
     today = datetime.datetime.now(CST).date()
+    ledger = read_jsonl(root / LEDGER)
+    windows = inventory_fills(ledger)
+    prices = reference_prices(ledger)
 
     mismatches = [a for a in rows if a.get("title") == "reconciliation mismatch"]
     structural = [a for a in mismatches if is_cash_only(a)]
     non_structural = [a for a in mismatches if not is_cash_only(a)]
+    diff_rows = [(a, classify_position_diff(a, windows, prices)) for a in non_structural]
+    inventory = [a for a, kind in diff_rows if kind == "inventory"]
+    dust = [a for a, kind in diff_rows if kind == "dust"]
+    unexplained = [a for a, kind in diff_rows if kind == "unexplained"]
     rejected = [a for a in rows if a.get("title") == "order rejected"]
     degraded = [a for a in rows if a.get("title") == VENUE_DEGRADED_TITLE]
     critical = [
@@ -308,7 +332,7 @@ def gate_execution(root: Path) -> dict:
     })
     # Anything that breaks a clean streak: a non-cash-only mismatch, a repeated
     # rejection (one is noise; the gate says "重复出现"), or a critical alert.
-    breaks = list(non_structural)
+    breaks = list(unexplained)
     recent_rejects = [a for a in rejected if _within(a, 30, today)]
     if len(recent_rejects) >= 2:
         breaks += recent_rejects
@@ -328,18 +352,20 @@ def gate_execution(root: Path) -> dict:
         ).isoformat()
 
     lines = []
-    for a in sorted(non_structural, key=lambda r: str(r.get("ts")))[-6:]:
+    for a in sorted(unexplained, key=lambda r: str(r.get("ts")))[-6:]:
         when = _cst_when(a)
         first = _short((a.get("diffs") or ["?"])[0])
         lines.append(f"| {when} | {first} |")
     detail = (
         f"告警 {len(rows)} 条（{covered[0] if covered else '?'} .. {covered[-1] if covered else '?'}）："
         f"对账 mismatch **{len(mismatches)}** 条，其中只含 `cash delta` 的**已知项** "
-        f"{len(structural)} 条、含持仓/其它差异的 **{len(non_structural)}** 条；"
+        f"{len(structural)} 条、含持仓/其它差异的 **{len(non_structural)}** 条。后者再分三桶："
+        f"**已知库存窗口 {len(inventory)}**、**灰尘对灰尘 {len(dust)}**、**未解释 {len(unexplained)}**。"
         f"`order rejected` {len(rejected)} 条（最近 30 天 {len(recent_rejects)} 条）；"
         f"critical 级 {len(critical) + len(degraded)} 条"
         f"（其中 {len(degraded)} 条是**已知外部条件**「网络降级」，另计，见下）。\n\n"
-        f"清理后的连续干净天数 **{streak}**，账本覆盖 {len(covered)} 天。\n"
+        f"**只有「未解释」那一桶（加上重复拒单与事故）打断连击**；清理后的连续干净天数 "
+        f"**{streak}**，告警覆盖 {len(covered)} 天。\n"
     )
     if last_break:
         detail += (
@@ -368,7 +394,28 @@ def gate_execution(root: Path) -> dict:
             "判据是这一列，而不是总数。\n"
         )
     if lines:
-        detail += "\n最近的**非结构性**对账差异：\n\n| 时间(CST) | 差异 |\n|---|---|\n" + "\n".join(lines) + "\n"
+        detail += (
+            "\n**未解释**的对账差异（这一桶才打断连击，逐条列出而不是只给个数）：\n\n"
+            "| 时间(CST) | 差异 |\n|---|---|\n" + "\n".join(lines) + "\n"
+        )
+    else:
+        detail += "\n**未解释**的对账差异：一条都没有。\n"
+    if inventory:
+        last = max(_cst_day(a) for a in inventory if a.get("ts"))
+        detail += (
+            f"\n已知库存窗口 {len(inventory)} 条（最近 {last}）：BTC 库存实验（`tag=options-funding` 买、"
+            f"`tag=btc-premium-inventory` 卖回），场馆有货、账本记灰尘。"
+            f"判定方式是**场馆那个数字是否等于我们自己带标签成交的滚动余额**"
+            f"（不是「多久之内有成交」—— 那样会漏掉还没卖回的那一笔），"
+            f"我们没打标签的标的天然对不上，因此照样算新闻。\n"
+        )
+    if dust:
+        last = max(_cst_day(a) for a in dust if a.get("ts"))
+        detail += (
+            f"\n灰尘对灰尘 {len(dust)} 条（最近 {last}）：两侧都约等于 0"
+            f"（按该标的最后一次成交价折算，差额 < ${DUST_POSITION_USD:g}）——"
+            f"换不出钱的差异，但**仍然列出来**，不静默丢掉。\n"
+        )
     if rejected:
         reject_days = sorted({_cst_day(a) for a in rejected if a.get("ts")})
         detail += (
@@ -452,6 +499,116 @@ def _cst_day(alert: dict) -> str:
 
 def _cst_when(alert: dict) -> str:
     return datetime.datetime.fromisoformat(str(alert["ts"])).astimezone(CST).strftime("%m-%d %H:%M")
+
+
+def inventory_fills(ledger: list[dict]) -> dict[str, list[tuple[float, float]]]:
+    """symbol -> sorted [(epoch_ms, signed_qty)] for every inventory-tagged fill.
+
+    Read from the ledger itself, so "this diff is our own inventory" is a claim the
+    reader can re-derive: buy is +qty, sell is -qty.
+    """
+    out: dict[str, list[tuple[float, float]]] = {}
+    for row in ledger:
+        if row.get("kind") != "fill" or str(row.get("tag")) not in INVENTORY_TAGS:
+            continue
+        ts, qty = row.get("ts"), row.get("qty")
+        if not isinstance(ts, (int, float)) or not isinstance(qty, (int, float)):
+            continue
+        signed = float(qty) if str(row.get("side")) == "buy" else -float(qty)
+        out.setdefault(str(row.get("symbol")), []).append((float(ts), signed))
+    for entries in out.values():
+        entries.sort()
+    return out
+
+
+def inventory_balance(entries: list[tuple[float, float]], when_ms: float) -> float:
+    """Running tagged balance at `when_ms` (what we DID buy and have not sold back)."""
+    return sum(qty for ts, qty in entries if ts <= when_ms)
+
+
+def reference_prices(ledger: list[dict]) -> dict[str, float]:
+    """symbol -> last traded price, for turning a quantity diff into dollars."""
+    out: dict[str, float] = {}
+    for row in ledger:
+        if row.get("kind") != "fill":
+            continue
+        price = row.get("price")
+        if isinstance(price, (int, float)) and price:
+            out[str(row.get("symbol"))] = float(price)
+    return out
+
+
+def position_diffs(alert: dict) -> list[tuple[str, float, float]]:
+    """[(symbol, local, venue)] out of `position SYM: local=X venue=Y` lines."""
+    out = []
+    for raw in alert.get("diffs") or []:
+        text = str(raw)
+        if not text.startswith("position "):
+            continue
+        head, _, rest = text.partition(":")
+        symbol = head[len("position "):].strip()
+        match = re.search(r"local=(-?[\d.e+-]+)\s+venue=(-?[\d.e+-]+)", rest)
+        if not match:
+            continue
+        try:
+            out.append((symbol, float(match.group(1)), float(match.group(2))))
+        except ValueError:
+            continue
+    return out
+
+
+def classify_position_diff(alert: dict, windows: dict[str, list[float]],
+                           prices: dict[str, float]) -> str:
+    """"inventory" / "dust" / "unexplained" for one non-cash-only mismatch.
+
+    Two documented shapes are known, and BOTH still get counted and printed - this
+    only decides whether they break the clean streak:
+
+    * `dust`       - both sides round to nothing in dollars (`INJ local=8.29e-06
+                     venue=9.37e-06` is $0.00002). Measured with the symbol's own
+                     last traded price; if no price is known it is NOT called dust.
+    * `inventory`  - for every material symbol, the venue's number equals our own
+                     running `options-funding` / `btc-premium-inventory` balance at
+                     that instant (within 0.01% of the balance). That is the ledger
+                     saying "yes, we bought this and have not sold it back" - the
+                     known difference is WHOSE book it sits in, not whether it is ours.
+    * anything else, including a new symbol, is "unexplained" and keeps the streak
+      from starting. That is the whole point: 2026-10-08's carry mess must not
+      become invisible because a later change taught the script to be polite.
+    """
+    diffs = position_diffs(alert)
+    if not diffs:
+        return "unexplained"
+    # A `cash delta` line rides along with almost every mismatch (it is the known
+    # residual), so it must not disqualify anything. Any OTHER field does.
+    for raw in alert.get("diffs") or []:
+        text = str(raw)
+        if not text.startswith("position ") and "cash delta" not in text:
+            return "unexplained"
+
+    material = []
+    for symbol, local, venue in diffs:
+        price = prices.get(symbol)
+        if price is None:
+            return "unexplained"  # cannot price it -> cannot call it dust
+        notional = abs(venue - local) * abs(price)
+        if notional >= DUST_POSITION_USD:
+            material.append(symbol)
+    if not material:
+        return "dust"
+
+    try:
+        when = datetime.datetime.fromisoformat(str(alert["ts"])).timestamp() * 1000.0
+    except (KeyError, ValueError):
+        return "unexplained"
+    for symbol in material:
+        entries = windows.get(symbol) or []
+        if not entries:
+            return "unexplained"
+        balance = inventory_balance(entries, when)
+        if abs(balance - venue) > max(1e-9, abs(balance) * 1e-4):
+            return "unexplained"
+    return "inventory"
 
 
 def _short(text, limit: int = 90) -> str:
@@ -800,7 +957,11 @@ def render(gates: list[dict], meta: dict) -> str:
         "## 口径说明（会自己验证的几件事）",
         "",
         f"* 第 3 条的「已知项」= 对账差异**只**含 `cash delta`（期望线跟着资金费走之后的稳定残余）。"
-        f"带 `position` 的一律算非结构性，哪怕它来自已知的 BTC 库存实验窗口。",
+        f"带 `position` 的一律算非结构性。",
+        f"* 第 3 条的豁免**只给两类非缺陷**：① 已知外部条件（代理降级——它按 `critical` 记账，"
+        f"按级别数会让门槛永远不成立）② 我们**自己的记账口径**（库存实验的 tag 余额、两侧都约等于 0 的灰尘）。"
+        f"**缺陷不豁免，只会随时间自然退出 30 天窗口** —— 10-08 的 carry 乱局与 10-09 的单位假差异"
+        f"仍然在打断连击。少一条豁免，门槛就更硬；多一条，它就变成装饰。",
         f"* 第 4 条的逐轮留痕从 2026-10-13 起累积：那之前 `data/daily_job_status.json` "
         f"每轮被覆盖，历史无法追溯（脚本如实报出覆盖窗口，而不是假装有 14 天）。",
         f"* 第 1 条读的是 `{EDGE}`，`--backtest` 生成；数字随时间会变，看 `generated_at`。",
