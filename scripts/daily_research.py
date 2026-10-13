@@ -162,7 +162,9 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # gate was reading a premium against a stale base). This merges instead, so it
     # cannot shrink history. It runs after the in-process steps, so options_cost
     # sees bars at most one day old, which is immaterial inside a 30-day window.
-    ("refresh_daily_bars.py", ["--write"]),
+    # 2026-10-13：改成 **universe** 模式 —— 默认只刷期权标的（BTC/ETH/SOL），实测 52 个配置标的里
+    # **49 个停在 5.5 天前**，而 refit / daily_study 读的正是这些文件（研究侧一直在看一周前的世界）。
+    ("refresh_daily_bars.py", ["--write", "--symbols", "universe"]),
     # Which symbols the venue ACTUALLY serves, twice a day. The 09:10 slot is
     # outside US market hours and 21:10 is inside them - the pair is what answers
     # "is the TradFi sleeve session-limited or dead?" (2026-10-10: 12 of its 13

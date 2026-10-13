@@ -1,12 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.4**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.5**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-13T13:02 起，1 条留痕）
+## v1.1.5 — 2026-10-13T13:08
 
-- `2026-10-13T13:02` **bug** 冻结闸门**自己**留了个坑：测试没过时目录已经建好 —— 会留下「半个版本」；顺带它刚抓住我一次 kind 写错
+- 测试 **407** 绿 · 权益 $102,445.02 · 记录时的包版本 1.1.5
+
+研究侧日线不再冻结：refresh_daily_bars 新增 universe 模式（配置里全部标的 + 期权标的），并接进每日任务 —— 实测 52 个配置标的里 49 个停在 5.5 天前，而 refit / daily_study 读的正是这些文件。手工跑一次refreshed 49/52 各 +7 根日线，正好补上缺口。
 
 ## v1.1.4 — 2026-10-13T13:02
 

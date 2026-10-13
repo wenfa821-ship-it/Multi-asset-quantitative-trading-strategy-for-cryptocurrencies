@@ -5966,6 +5966,25 @@ class TradfiWatchListTests(unittest.TestCase):
         self.assertEqual(syms, ["XMU/USDT"])
 
 
+class UniverseRefreshTests(unittest.TestCase):
+    """2026-10-13：`refresh_daily_bars` 默认只刷期权标的，而 refit / daily_study 读的是**全库**日线 ——
+    实测 52 个配置标的里 49 个停在 5.5 天前，研究侧一直在看一周前的世界。"""
+
+    def test_universe_mode_covers_every_configured_symbol(self) -> None:
+        from ta.config import Config
+        from scripts.refresh_daily_bars import DEFAULT_SYMBOLS, universe_symbols
+
+        config = Config.load(PROJECT / "config")
+        symbols = universe_symbols(config)
+        self.assertGreater(len(symbols), len(DEFAULT_SYMBOLS))
+        for symbol in DEFAULT_SYMBOLS:                      # 期权标的一个都不能少
+            self.assertIn(symbol, symbols)
+        for items in (config.universe.symbols_by_tier or {}).values():
+            for symbol in items:
+                self.assertIn(str(symbol), symbols)
+        self.assertEqual(len(symbols), len(set(symbols)))    # 去重
+
+
 class NewListingCategoryTests(unittest.TestCase):
     """2026-10-13：`new_listing_track` 原来写死 `instCategory == "1"`，日志只写「added 0」——
     近 8 天 OKX 上线的 32 个交易对里，8 个已成熟的 X***（股票代币，cat=3）一个都没记，

@@ -47,11 +47,35 @@ from ta.venues import build_venue  # noqa: E402
 DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
 
 
+def universe_symbols(config, extra: list[str] | None = None) -> list[str]:
+    """配置里的**全部标的** + 期权标的（去重、保序）。
+
+    2026-10-13 实测的缺口：默认只刷期权标的（BTC/ETH/SOL），于是
+    `data/history/okx_demo/*__1d.jsonl` 里 **52 个配置标的中有 49 个停在 5.5 天前**
+    （482 个文件里只有 3 个是当天刷的）。而**研究侧读的正是这些文件**：
+    `scripts/refit.py` 与 `scripts/daily_study.py` 都走 `ta.history.load_frames` ——
+    也就是说参数重拟与每日研究一直在看「一周前的世界」，脚本自己的 docstring 也点名过这件事
+    （「every backtest run on disk ended 4 days ago」），但当时只给期权标的打了补丁。
+    每日 52 个标的各拉一次日线（60 根）约一分钟 —— 便宜、幂等、且**只合并不截断**。
+    """
+    out: list[str] = []
+    for symbol in list(extra or DEFAULT_SYMBOLS):
+        if symbol not in out:
+            out.append(symbol)
+    for items in (config.universe.symbols_by_tier or {}).values():
+        for symbol in items:
+            text = str(symbol)
+            if text not in out:
+                out.append(text)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config-dir", default="config")
     ap.add_argument("--venue", default="okx_demo")
-    ap.add_argument("--symbols", default=",".join(DEFAULT_SYMBOLS))
+    ap.add_argument("--symbols", default=",".join(DEFAULT_SYMBOLS),
+                    help='逗号分隔；写 "universe" = 配置里的全部标的（研究侧读的就是这些文件）')
     ap.add_argument("--timeframe", default="1d")
     ap.add_argument("--bars", type=int, default=60, help="recent window to fetch and merge")
     ap.add_argument("--env-file", default=".env", help="credentials, read like the runner does")
@@ -62,8 +86,11 @@ def main() -> int:
     if loaded:
         print(f"loaded {loaded} value(s) from {args.env_file}")
 
-    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     config = Config.load(args.config_dir)
+    if args.symbols == "universe":
+        symbols = universe_symbols(config)
+    else:
+        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     venue = build_venue(config, args.venue)
     venue.connect()
     print(f"venue={args.venue} timeframe={args.timeframe} bars={args.bars} symbols={len(symbols)}")
