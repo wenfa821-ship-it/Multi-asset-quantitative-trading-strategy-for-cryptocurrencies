@@ -185,8 +185,11 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # README 70.6's six "mature enough for real money" gates, as numbers instead of
     # prose (2026-10-13). Offline and read-only; it reads the ledger/alerts/carry
     # artifacts the steps above just refreshed, so it runs after them. `--backtest`
-    # re-runs the five walk-forward replays at real fees (~25s, local bars only) so
-    # gate 1 is a fresh measurement rather than a remembered number.
+    # re-runs the five walk-forward replays at real fees so gate 1 is a fresh
+    # measurement rather than a remembered number. **这一步的耗时在行情补深之后变了**：
+    # 2026-10-13 实测单条策略 46~81 秒（mean_reversion 46s / trend_pullback 81s，
+    # 五条合计约 5 分钟），注释此前写的「~25s」是补深前的旧数 —— 那时 15m 只有约 2,200 根，
+    # 现在是 17,292 根。它也是整轮里最重的一步：21:10 那轮全程 **32 分 47 秒**。
     ("live_readiness.py", ["--write", "--backtest"]),
     # The NUMBERS half of the daily review, written to docs/reviews/<date>.md. It
     # reviews the PREVIOUS complete CST day (so the 09:10 run closes yesterday, and
