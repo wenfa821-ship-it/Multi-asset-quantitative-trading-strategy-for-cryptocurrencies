@@ -89,6 +89,32 @@ def daily_bps_series(prints: list[dict], days: int, settlements_per_day: float =
     ]
 
 
+def detect_settlements_per_day(prints: list[dict], *, window: int = 100,
+                               fallback: float = 3.0) -> float:
+    """每标的的**实际**结算频率（次/天），从印之间的间隔量出来。
+
+    2026-10-13 实测：`daily_bps_series` 一直把 `settlements_per_day` 固定成 **3.0**（8 小时），
+    而场馆对一部分合约是 **4 小时结算（6 次/天）** —— 持仓腿里的 **ACT 就是 6/天**，
+    于是它的 bps/天被**系统性低估一半**；候选里的 CAP 同样是 6/天。
+    后果是不对称的：被低估的腿看起来更接近「死掉」（更容易被判 STALE 换掉），
+    而被低估的候选看起来更不值钱（该换的不换）。这与 §70.9 查出的「bps_per_day 少除窗口天数」
+    是同一类口径错：**单位搞错了，比较就不成立**。
+
+    用中位间隔而不是均值：漏抓几轮会留下大空洞，均值会被它拖走，中位数不会。
+    """
+    stamps = sorted(float(r["ts"]) for r in prints if isinstance(r.get("ts"), (int, float)))
+    if len(stamps) < 3:
+        return fallback
+    gaps = [(b - a) / 3_600_000.0 for a, b in zip(stamps, stamps[1:]) if b > a]
+    gaps = gaps[-window:]
+    if not gaps:
+        return fallback
+    gap_hours = statistics.median(gaps)
+    if gap_hours <= 0:
+        return fallback
+    return round(min(24.0, max(0.5, 24.0 / gap_hours)), 4)
+
+
 def is_persistently_below(series: list[tuple[str, float, int]], floor_bps: float, days: int) -> bool:
     """True only when EVERY day in the window is below the floor.
 
@@ -156,18 +182,20 @@ def remeasure_candidates(candidates: list[dict], history: Path, days: int,
     out: list[dict] = []
     for cand in candidates:
         base = cand["symbol"].split("/")[0]
-        series = daily_bps_series(load_jsonl(history / f"{base}-USDT_USDT.jsonl"), days,
-                                  settlements_per_day)
+        prints = load_jsonl(history / f"{base}-USDT_USDT.jsonl")
+        # 每个标的用自己的实际结算频率（4h 合约是 6/天，不是 3/天）—— 见 detect_settlements_per_day
+        series = daily_bps_series(prints, days, detect_settlements_per_day(prints))
         if len(series) < days:
             continue
         out.append({**cand, "series": series,
+                    "settles_per_day": detect_settlements_per_day(prints),
                     "bps": round(statistics.median([bps for _d, bps, _n in series]), 3)})
     return sorted(out, key=lambda r: -r["bps"])
 
 
 def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: list[dict],
          *, days: int, floor_bps: float, round_trip_bps: float, min_hold_hours: float,
-         intended_hold_days: float, settlements_per_day: float = 3.0,
+         intended_hold_days: float, settlements_per_day: float | None = None,
          now_ms: int | None = None,
          screen_generated_at_ms: int | None = None,
          max_history_age_days: float = 2.0,
@@ -214,12 +242,16 @@ def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: li
 
     for symbol in sorted(held):
         base = symbol.split("/")[0]
-        series = daily_bps_series(load_jsonl(history / f"{base}-USDT_USDT.jsonl"), days,
-                                  settlements_per_day)
+        prints = load_jsonl(history / f"{base}-USDT_USDT.jsonl")
+        # 同上：现任这一侧也逐标的量结算频率，别假设所有腿都是 8 小时结算
+        settles = detect_settlements_per_day(prints) if settlements_per_day is None \
+            else settlements_per_day
+        series = daily_bps_series(prints, days, settles)
         since = open_since(fills, symbol)
         age_hours = round((now - since) / 3_600_000, 1) if since else None
         low = is_persistently_below(series, floor_bps, days)
         row = {"symbol": symbol, "daily_bps": series, "stale": low,
+               "settles_per_day": settles,
                "median_bps": round(statistics.median([bps for _d, bps, _n in series]), 3) if series else None,
                "age_hours": age_hours}
         if series:

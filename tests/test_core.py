@@ -2000,6 +2000,60 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class SettlementIntervalTests(unittest.TestCase):
+    """结算频率这件事：**单位错了，比较就不成立**（2026-10-13）。
+
+    `carry_rotation.daily_bps_series` 一直把 `settlements_per_day` 固定成 **3.0**（8 小时），
+    而场馆对一部分合约是 **4 小时结算（6 次/天）**。实测持仓腿里的 **ACT 就是 6/天** ——
+    修正前它报 **1.500 bps/天**（离 1.0 的 floor 只差 0.5，是"最像要死"的那条腿），
+    修正后是 **3.000**。被低估的方向很要命：腿看起来更接近死掉（更容易被换掉，一次 44.9 bps），
+    而同样 4h 的候选看起来更不值钱（该换的不换）。
+    """
+
+    @staticmethod
+    def _prints(gap_hours: float, count: int = 30, start_hour: float = 0.0) -> list[dict]:
+        base = 1_790_000_000_000
+        step = int(gap_hours * 3_600_000)
+        return [{"ts": base + int(start_hour * 3_600_000) + i * step, "rate": 0.0005}
+                for i in range(count)]
+
+    def test_the_interval_is_measured_not_assumed(self) -> None:
+        from scripts.carry_rotation import detect_settlements_per_day
+
+        self.assertEqual(detect_settlements_per_day(self._prints(8.0)), 3.0)
+        self.assertEqual(detect_settlements_per_day(self._prints(4.0)), 6.0)
+        self.assertEqual(detect_settlements_per_day(self._prints(1.0)), 24.0)
+        # 漏抓留下大空洞，均值会被拖走 —— 中位数不会
+        gappy = self._prints(8.0, count=10) + [
+            {"ts": self._prints(8.0, count=1)[0]["ts"] + 30 * 86_400_000, "rate": 0.0005}]
+        self.assertEqual(detect_settlements_per_day(gappy), 3.0)
+        self.assertEqual(detect_settlements_per_day([{"ts": 1}, {"ts": 2}]), 3.0)  # 印太少
+
+    def test_a_four_hour_leg_is_no_longer_halved(self) -> None:
+        """回归：ACT 那种 4h 腿的中位必须翻倍 —— 这是"离 floor 多远"的直接判据。"""
+        import statistics
+
+        from scripts.carry_rotation import daily_bps_series, detect_settlements_per_day
+
+        prints = self._prints(4.0, count=18)      # 4h × 18 = 3 天
+        old = daily_bps_series(prints, 3, 3.0)             # 旧的统一假设
+        new = daily_bps_series(prints, 3, detect_settlements_per_day(prints))
+        # rate=0.0005（0.05%/次）× 10000 bps：3 次/天 → 15.0，6 次/天 → 30.0
+        self.assertEqual(statistics.median([b for _d, b, _n in old]), 15.0)
+        self.assertEqual(statistics.median([b for _d, b, _n in new]), 30.0)
+
+    def test_it_agrees_with_the_screens_own_helper(self) -> None:
+        """屏幕那边（`carry_live`）早就有同功能的函数 —— 两份实现必须当场对齐，
+        否则迟早分叉（本项目已经吃过一次"两把尺子"的亏）。"""
+        from scripts.carry_live import settlements_per_day
+        from scripts.carry_rotation import detect_settlements_per_day
+
+        for gap in (1.0, 2.0, 4.0, 8.0):
+            stamps = [p["ts"] for p in self._prints(gap, count=20)]
+            self.assertEqual(settlements_per_day(stamps)[0], detect_settlements_per_day(
+                [{"ts": t} for t in stamps]), f"gap={gap}h 两份实现不一致")
+
+
 class CarryRotationFreshnessTests(unittest.TestCase):
     """换腿规则两侧的「尺子」与「新鲜度」（2026-10-13 两轮改动）。
 
