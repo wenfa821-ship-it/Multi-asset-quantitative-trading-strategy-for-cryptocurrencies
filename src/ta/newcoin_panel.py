@@ -25,6 +25,13 @@ REPORT_RELATIVE = Path("data") / "reports" / "latest.json"
 # 采集是每天一次，所以超过这个年龄基本就是"某天没跑成"。
 STALE_AFTER_SECONDS = 26 * 3600
 
+# **各块自己的时刻**（2026-10-13）：视图文件可以是 6 秒前写的，而它里面装的
+# `scores` / `thesis_scores` 还是上一轮网络步骤（可能两小时前）的产物 ——
+# 「视图新鲜」不等于「里面的数字都新鲜」。用户这一轮就是这么发现的：面板整体已经是
+# 最新一版，而某个数还是旧的。所以把每块的 `generated_at` 各自算一份年龄，
+# 并把**最旧的那一块**点出来（`oldest_block`）。
+FRESHNESS_BLOCKS = ("scores", "thesis_scores", "invalidations", "cohort")
+
 
 def project_dir() -> Path:
     override = os.environ.get("NCQ_PROJECT_DIR")
@@ -40,6 +47,27 @@ def _age_seconds(iso_ts: str | None) -> float | None:
     except ValueError:
         return None
     return round(time.time() - parsed.timestamp(), 1)
+
+
+def freshness(payload: dict) -> dict:
+    """面板里**每一块数字各自多旧**，并点出最旧的那一块（纯函数，方便测）。
+
+    `age_seconds` 说的是"视图文件多久前写的"，那不等于"里面的数字都是新的"：
+    `scores` / `thesis_scores` 只在每 6 小时那轮的网络步骤里更新，人在这之间发版本、
+    刷别的表，视图变新了而这些块没变。所以这里逐块算年龄，并给出 `oldest_block`。
+    """
+    ages: dict[str, float] = {}
+    for key in FRESHNESS_BLOCKS:
+        block = payload.get(key)
+        if not isinstance(block, dict):
+            continue
+        age = _age_seconds(block.get("generated_at"))
+        if age is not None:
+            ages[key] = age
+    if not ages:
+        return {}
+    oldest = max(ages, key=lambda name: ages[name])
+    return {"ages": ages, "oldest_block": oldest, "oldest_age_seconds": ages[oldest]}
 
 
 def view(directory: Path | None = None) -> dict:
@@ -59,4 +87,5 @@ def view(directory: Path | None = None) -> dict:
 
     age = _age_seconds(payload.get("generated_at"))
     stale = age is not None and age > STALE_AFTER_SECONDS
-    return {**base, "available": True, "age_seconds": age, "stale": stale, **payload}
+    return {**base, "available": True, "age_seconds": age, "stale": stale,
+            "freshness": freshness(payload), **payload}

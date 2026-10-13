@@ -5345,6 +5345,42 @@ class NewCoinPanelTests(unittest.TestCase):
         self.assertEqual(DEFAULT_DIR.name, "newcoin-subjective-quant")
         self.assertEqual(DEFAULT_DIR.parent.name, "outputs")
 
+    def test_freshness_points_at_the_oldest_block_not_the_file(self) -> None:
+        """2026-10-13：视图文件可以是 6 秒前写的，而里面的 `scores` 还是两小时前那轮的产物。
+        「视图新鲜」不等于「里面的数字都新鲜」—— 而读者只会看到"采集正常"，所以要**点名**。"""
+        import datetime
+
+        from ta.newcoin_panel import freshness
+
+        now = datetime.datetime.now(datetime.UTC)
+        fresh = (now - datetime.timedelta(seconds=30)).replace(microsecond=0).isoformat()
+        old = (now - datetime.timedelta(hours=2)).replace(microsecond=0).isoformat()
+        out = freshness({
+            "generated_at": fresh,
+            "scores": {"generated_at": old},
+            "thesis_scores": {"generated_at": fresh},
+            "invalidations": {"generated_at": fresh},
+            "cohort": {"generated_at": fresh},
+        })
+        self.assertEqual(out["oldest_block"], "scores")
+        self.assertGreater(out["oldest_age_seconds"], 7000)      # ≈2 小时
+        self.assertLess(out["ages"]["cohort"], 120)              # 但它自己是新的
+        # 一块时刻都没有（旧版脚本写的视图）→ 返回空，不编一个年龄出来
+        self.assertEqual(freshness({"generated_at": fresh}), {})
+        self.assertEqual(freshness({"scores": {"generated_at": "不是时间"}}), {})
+
+    def test_the_view_carries_the_freshness_block(self) -> None:
+        import datetime
+
+        from ta.newcoin_panel import view
+
+        now = datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat()
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, {"generated_at": now, "version": "0.2.0",
+                              "cohort": {"generated_at": now}})
+            out = view(Path(tmp))
+        self.assertEqual(out["freshness"]["oldest_block"], "cohort")
+
 
 class DailyResearchRetryTests(unittest.TestCase):
     """A lost day of daily research is a lost day of IV-RV sample.

@@ -318,8 +318,17 @@ function renderNewcoin(nc) {
   const age = nc.age_seconds == null ? '未知'
     : (nc.age_seconds < 3600 ? Math.round(nc.age_seconds / 60) + ' 分钟前'
                              : Math.round(nc.age_seconds / 3600) + ' 小时前');
+  // 2026-10-13: 「视图新鲜」不等于「里面的数字都新鲜」—— scores / thesis_scores 这类块
+  // 只在每 6 小时那轮的网络步骤里更新，人在这之间刷别的表，视图变新了它们没变。
+  // 所以把**最旧的那一块**点出来（不点出来，读者只会看到"采集正常"）。
+  const fr = nc.freshness || {};
+  const frText = fr.oldest_block
+    ? ('最旧数字：' + fr.oldest_block + ' ' + (fr.oldest_age_seconds < 3600
+        ? Math.round(fr.oldest_age_seconds / 60) + ' 分钟前'
+        : Math.round(fr.oldest_age_seconds / 3600) + ' 小时前'))
+    : '各块时刻未知';
   badge.className = 'badge ' + (nc.stale ? 'warnb' : 'ok');
-  badge.textContent = nc.stale ? '采集过期' : '采集正常';
+  badge.textContent = (nc.stale ? '采集过期' : '采集正常') + '（' + frText + '）';
 
   const counts = (nc.progress && nc.progress.counts) || {};
   const total = Object.values(counts).reduce((a, c) => a + c, 0);
@@ -385,7 +394,7 @@ function renderNewcoin(nc) {
       ? '最近一轮 ' + esc(String((nc.candidates.rounds.slice(-1)[0] || {}).ts || '').slice(5, 16))
         + '（每 6 小时一轮，一轮一个文件）'
       : '还没有轮次索引'),
-  ncKpi('报告时刻', esc(age), nc.stale ? '超过 26 小时没更新' : '采集正常'),
+  ncKpi('报告时刻', esc(age), nc.stale ? '超过 26 小时没更新' : esc(frText)),
   ].join('');
 
   $('#nc-gates').innerHTML =
