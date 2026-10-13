@@ -39,6 +39,20 @@ UA = {
 }
 
 
+def summary_line(updated: int, unchanged: int, nodata: int, failed: int) -> str:
+    """一行说清四种结局，别把两种情况混成一个词。
+
+    2026-10-13 实测：155 个合约的日更摘要写着"updated 140, unchanged 14, failed 1"，
+    而其中 **14 个根本没有文件** —— 它们不是"已是最新"，是**这个数据源取不到它们的费率**：
+    本脚本刻意取**公共（主网）费率**（README §70.8 定了口径：模拟盘到账是产物，不能外推），
+    而 149 个 demo 合约里有一部分（PIGGY / AI16Z / TEST* …）只存在于模拟盘目录，
+    主网 `funding-rate-history` 对它们返回空。
+    "unchanged"读起来像"已经跟上了"，所以这两种必须分开报数。
+    """
+    return (f"updated {updated}, unchanged {unchanged}, "
+            f"no-data {nodata}（主网无此合约 ⇒ 费率取不到）, failed {failed}")
+
+
 def _opener(proxy: str | None):
     handlers = [urllib.request.ProxyHandler({"http": proxy, "https": proxy})] if proxy else []
     return urllib.request.build_opener(*handlers)
@@ -102,7 +116,8 @@ def main() -> int:
     opener = _opener(args.proxy)
 
     print(f"perps to cover: {len(swap_ids)} | pages/symbol: {args.pages}")
-    written = skipped = failed = 0
+    written = skipped = failed = nodata = 0
+    nodata_ids: list[str] = []
     for inst_id in swap_ids:
         symbol = inst_id[: -len("-USDT-SWAP")] + "/USDT:USDT"
         path = out_dir / f"{safe_symbol(symbol)}.jsonl"
@@ -133,7 +148,9 @@ def main() -> int:
                 failed += 1
                 continue
         if not fresh:
-            skipped += 1
+            # 取不到 ≠ 已是最新：没有文件、也没有任何印，说明这个合约在公共费率里不存在
+            nodata += 1
+            nodata_ids.append(inst_id)
             continue
         merged = merge(existing, fresh)
         if len(merged) == len(existing):
@@ -148,7 +165,11 @@ def main() -> int:
         written += 1
         print(f"  {inst_id:<22} {len(existing):>5} -> {len(merged):>5} rows")
 
-    print(f"\nupdated {written}, unchanged {skipped}, failed {failed}")
+    print(f"\n{summary_line(written, skipped, nodata, failed)}")
+    if nodata_ids:
+        head = "、".join(nodata_ids[:6])
+        more = f" 等 {len(nodata_ids)} 个" if len(nodata_ids) > 6 else ""
+        print(f"  no-data: {head}{more}（模拟盘有、公共费率没有 ⇒ 这些名字进不了 carry 排序）")
     if not args.yes and written:
         print("DRY RUN - re-run with --yes")
     return 0

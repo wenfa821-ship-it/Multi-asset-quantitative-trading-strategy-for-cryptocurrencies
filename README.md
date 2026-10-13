@@ -110,7 +110,7 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `live-readiness-gates` | README §70.6 的六条「切实盘门槛」数字化：`scripts/live_readiness.py` → `reports/live-readiness.md` + `data/readiness/readiness.json`，看板「切实盘门槛」面板 | **✅ 完成** | 用户目标是「等策略成熟再切实盘」，而「成熟」原来只活在散文里（§70.6）。2026-10-13 每条做成一个可复核的数：边缘（真跑 --fee-multiplier 1.25 的样本外回放，独立复现 §70.7）、样本（账本 157 笔/14 天）、执行（`cash delta` 已知项 + 21 条拒单按 sCode 分类 + 21 条 position 差异分三桶：库存窗口 4 / 灰尘 3 / **未解释 14**）、管道（新增 `data/daily_job_history.jsonl` 逐轮留痕）、资金费（到账 6/30 天、换腿 0 次）、第 6 条按定义标「不可自动判」。**同日查出三处「判据本身不可满足」**：① 网络降级按 `critical` 记账（8 天里 8 天在抖）→ 单独计数；② 第 4 条旧服务日志有 5 个红轮且无时间戳 → 报告明说「补不出历史」；③ 带 `position` 就算非结构性 → 库存实验的 tag 余额与「两侧皆零的灰尘」改为可核对后再豁免。口径：**豁免只给「已知外部条件」与「我们自己的记账口径」两类非缺陷，缺陷只随时间退出 30 天窗口** | 维护：已接进每日任务（`--write --backtest`，约 25 秒，只读本地日线）。门槛值随时间自己变，**不要手改报告**；要看的是哪条把门槛卡住（当前 0/5）与「上次打断/最早可满足」那一列。第 4 条的历史从 2026-10-13 起累积；第 3 条 3/30 天、最早 2026-11-09 可满足（前提是期间不再有新的未解释差异） |
 | `dashboard-restart-pending` | 三处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用） | **✅ 完成** | 2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）②「待你决定」面板 ③「切实盘门槛」面板（读 data/readiness/readiness.json）。**2026-10-13 用户批准后已重启**（`launchctl kickstart -k`，pid 75069 → 6360），三处全部实测生效：`/api/snapshot` 出现 `readiness` 键（6 条门槛 / 0-5）、`decisions` 6 行、红旗里「网络降级计数」按 24h 口径显示 | 维护：以后改服务端代码仍需重启才生效；HTML 部分一直是即时生效的 |
 | `data-files-in-git` | 父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`） | **waiting_decision** | 当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的 | 三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底） |
-| `carry-rotation-bench` | 换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字 | **waiting_decision** | 2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来。**同日第六轮又查出两个输入都可能过期**：候选快照 3.2 天前且**没有任何定时任务在生产它**；资金费历史 142 条里 APT/TIA 冻在 09-30。已先加**时效护栏**（两侧默认 2 天，过期就拒绝出提议、保留读数表、把原因写进 `refusals` 并在门槛报告里显示） | 四选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状（护栏已在挡，只会拒绝、不会提议）。**另有第五个选项**：给候选快照排一个定时产出（每日任务加一步、或单独 launchd）—— 代价是每日任务多一个依赖网络的步骤，门槛 4「连续 14 天两轮全绿」会跟着受影响；不做的话规则就一直是「拒绝出提议」 |
+| `carry-rotation-bench` | 换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字 | **waiting_decision** | 2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来。**同日第六轮又查出两个输入都可能过期**：候选快照 3.2 天前且**没有任何定时任务在生产它**；资金费历史里 APT/TIA 冻在 09-30。已先加**时效护栏**（两侧默认 2 天，过期就拒绝出提议、保留读数表、把原因写进 `refusals` 并在门槛报告里显示）。**当天下午更正**：APT/TIA 冻结的真因是**模拟盘下架了这两个永续**（demo SWAP 目录里已无它们），不是抓取静默失败 —— 护栏仍然成立（它防的是「拿两周前的印判持续低于 floor」），但当初给它的这条佐证是错的，见 §70.10.8 | 四选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状（护栏已在挡，只会拒绝、不会提议）。**另有第五个选项**：给候选快照排一个定时产出（每日任务加一步、或单独 launchd）—— 代价是每日任务多一个依赖网络的步骤，门槛 4「连续 14 天两轮全绿」会跟着受影响；不做的话规则就一直是「拒绝出提议」 |
 | `sibling-raw-health-false-dead` | 看板上**兄弟项目**那一行 `solana_rpc` 报的是假死（源在跑，原始归档从 10-11 起没人写） | **✅ 完成** | 兄弟项目 `latest.json` 的 `raw_health` 四行里，三个源是今天 05:15:31Z、`solana_rpc` 停在 10-11T10:00:08Z，看起来像它挂了 2.3 天。实际它这一轮还在产出：`data/candidates/20261013T042005Z.csv` 里 45 行 Solana 有 3 行 `top10_source=solana_rpc（扣掉最大账户·近似）`。真因是两个东西被同一张表统计：`raw_health()` 遍历 `data/raw/` 下的**目录**，而两个**自算**源（Solana RPC / EVM Blockscout）只写结果、不落原始记录。**2026-10-13 用户批准后已按 ① 修**：兄弟项目 v0.34.6 在 `top10_for` 里做成「调用即归档」（`solana_rpc` + `blockscout`，`skipped`/失败原因一并留存，`store` 为可选参数不影响旧调用），176 测试绿 | 维护：下一轮采集（18:20 CST）起 `data/raw/solana_rpc/` 与 `data/raw/blockscout/` 会跟着更新，父项目面板那行假死自然消失。父项目这边仍**不做过滤** —— 过滤等于替对方解释它自己的证据（README §71） |
 | `daily-review-timing` | 07:00 那条每日复盘是**下界**：它比费率序列补齐（09:10 每日任务）早 2 小时，引用「实盘费率口径资金费」会偏低 | **✅ 完成** | 实测 10-12：07:00 跑出 **+$0.5617**（脚本自标「序列只到 20:00」），09:19 重算是 **+$1.0850**（序列到当日 24:00）—— **差 48%**。**2026-10-13 用户批准后已按建议改排期**：automation `tradingagent` 的 rrule 由 `BYHOUR=7` 改为 **`BYHOUR=10`**（09:30 太紧：09:19 跑完只留 11 分钟余量），prompt 同步改写并写明原因；README §16 的区块说明同时记录三次排期沿革与「历史条目按当时口径读」 | 维护：10:00 之后本节与权威文件 docs/reviews/<date>.md 用同一份收口数据；若某天每日任务 10:00 还没跑完，脚本仍会自己标「下界」 |
 
@@ -6115,7 +6115,7 @@ python3 scripts/live_readiness.py --write --backtest   # → reports/live-readin
 | 输入 | 现状 | 谁在生产它 |
 |---|---|---|
 | 候选快照 `data/carry/screen_live.json` | **3.2 天前**（10-10） | **没有任何定时任务** —— 只有手跑 `carry_live.py --write`；每日任务只刷新"裁决"，从不刷新"候选" |
-| 持仓腿的资金费历史 | 142 条里 140 条今天仍在更新，**APT / TIA 冻在 09-30** | `fetch_funding_history.py`，但它的名单来自 5 天前的 `data/universe/inventory.json` |
+| 持仓腿的资金费历史 | 142 条里 140 条今天仍在更新；**APT / TIA 冻在 09-30** —— 当天下午查明是**模拟盘下架了这两个永续**（demo 的 SWAP 目录里已经没有它们），不是抓取静默失败，见 §70.10.8 | `fetch_funding_history.py`，名单来自 `data/universe/inventory.json`（见 §70.10.8：这份清单本身是手动快照） |
 
 危险的地方不在"旧"，而在**旧数据长得和新数据一样**：`daily_bps_series` 取的是"最后 N 个
 有印的日子"，冻住的文件照样产出三个形状完全正常的桶，而 `is_persistently_below` 从来不看日期。
@@ -6182,6 +6182,27 @@ new_listing）、`1h`（trend_breakout / perp），回测还会加载 confirm �
 
 **顺带更正一条自己写的话**：§70.10 里原先说 `--backtest`"独立复现了 §70.7"—— 不准确，
 它读的是同一份冻结文件，属同一测量重跑（已在原文处注明）。
+
+#### 70.10.8 追查「没有资金费记录的 15 个合约」：一半是口径，一半是我的错（同日第八轮）
+
+沿着上一轮那条线索（`fetch_funding_history.py` 的名单来自手动快照 `data/universe/inventory.json`）
+往下查，得到三个答案，其中一个是**更正我自己**：
+
+1. **15 个合约没有任何资金费文件**（AI16Z / BABYDOGE / CAT / CATI / CITY / MAJOR / PIGGY / SCR /
+   TEST01/3103/3110 / TESTPR1 / USAR4 / XQQQ / ZBCN）。问场馆（带 demo 头）它们**是 live 的**；
+   但本脚本刻意取**公共（主网）费率**（§70.8 定的口径：模拟盘到账是 200~450 倍的产物，不能外推），
+   主网 `funding-rate-history` 对它们返回空。→ **口径上无解，不是 bug**；代价是这些名字进不了 carry 排序。
+2. **APT / TIA 的序列冻在 09-30** —— 我两天前拿它当"历史会静默冻结"的证据。**真因是模拟盘在 09-30
+   前后下架了这两个永续**（今天的 demo SWAP 目录里已经查不到它们，所以清单里没有、也就没人再抓）。
+   → 那条**佐证是错的**（护栏本身仍然成立：它防的是"拿两周前的印判持续低于 floor"）。已按本项目
+   惯例在 §70.10.5 与进度表原位更正，不改写历史条目。
+3. **摘要那行把两件事混成一个词**：日更输出 `updated 140, unchanged 14, failed 1`，而其中 14 个
+   **根本没有文件** —— "unchanged"读起来像"已经跟上了"。改成
+   `updated 140, unchanged 5, no-data 9（主网无此合约 ⇒ 费率取不到）, failed 1`，并把 no-data 的
+   名字列出来（`scripts/fetch_funding_history.summary_line`，两个测试守着）。
+
+顺带确认了一件事：`universe_inventory.py` 读的是**带 `x-simulated-trading: 1` 的模拟盘目录**（192 个 SWAP），
+而我的临时 curl 没带这个头（拿到的是主网目录、500 个）—— 两边对不上不是数据出错，是**问了两个不同的场馆**。
 
 ---
 

@@ -6187,6 +6187,33 @@ class NewListingCategoryTests(unittest.TestCase):
         self.assertEqual(counted, {"3": 1})     # 「added 0」时也要说清挡掉了什么
 
 
+class FundingHistorySummaryTests(unittest.TestCase):
+    """2026-10-13：日更摘要把两件事混成一个词 —— "取不到费率"与"已是最新"。
+
+    实测那句 `updated 140, unchanged 14, failed 1` 里的 14 个**根本没有文件**：
+    本脚本刻意取公共（主网）费率（§70.8 定的口径），而模拟盘目录里有一批只存在于
+    demo 的合约（PIGGY / AI16Z / TEST* …）——主网对它们返回空。分开报数之后，
+    "unchanged"才重新只表示"已经跟上了"。
+    """
+
+    def test_the_four_outcomes_are_counted_separately(self) -> None:
+        from scripts.fetch_funding_history import summary_line
+
+        line = summary_line(140, 5, 9, 1)
+        self.assertIn("updated 140", line)
+        self.assertIn("unchanged 5", line)
+        self.assertIn("no-data 9", line)      # 不能并进 unchanged
+        self.assertIn("failed 1", line)
+        self.assertIn("主网", line)            # 说清 no-data 是什么意思
+
+    def test_a_clean_sweep_says_zero_rather_than_hiding_the_bucket(self) -> None:
+        from scripts.fetch_funding_history import summary_line
+
+        line = summary_line(155, 0, 0, 0)
+        self.assertIn("no-data 0", line)      # 有桶就要显式出现，别等出事才发现它存在
+        self.assertIn("failed 0", line)
+
+
 class LiveReadinessTests(unittest.TestCase):
     """README 70.6 的六条「切实盘门槛」以前只活在散文里，每次都要重新论证一遍。
     2026-10-13 把它们做成 `scripts/live_readiness.py` 的**可复核数字**。这批测试

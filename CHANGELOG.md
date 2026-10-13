@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.14**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.15**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.15 — 2026-10-13T17:16
+
+- 测试 **438** 绿 · 权益 $102,434.43 · 记录时的包版本 1.1.15
+
+追查 15 个「有合约、无资金费记录」的标的：带 demo 头问场馆它们是 live，但本脚本刻意取主网公共费率，主网对它们返回空 → 口径上无解、不是 bug（代价是这些名字进不了 carry 排序）。同时更正：APT/TIA 冻在 09-30 的真因是模拟盘下架了这两个永续，不是我两天前说的抓取静默失败。顺手把日更摘要的 updated/unchanged/failed 拆出 no-data（'unchanged' 原来把『取不到』也算进去了），并列出 no-data 名单。438 测试绿。
 
 ## v1.1.14 — 2026-10-13T17:10
 
