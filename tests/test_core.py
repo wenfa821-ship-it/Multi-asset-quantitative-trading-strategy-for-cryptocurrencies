@@ -5823,6 +5823,53 @@ class PreconditionGuardTests(unittest.TestCase):
                 load(path)
 
 
+class VenueDegradedFreshnessTests(unittest.TestCase):
+    """2026-10-13（10-12 复盘建议 ③）：只报「累计 N 次」等于永远等不到阈值 ——
+    一次网络抖动会永久挂在面板上。改成按**最近 24h 次数**判，>5 次才 warn。"""
+
+    def _flags(self, *, fresh: int, old: int) -> list[dict]:
+        import datetime
+        import json
+        import shutil
+        import tempfile
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            (work / "data").mkdir(parents=True, exist_ok=True)
+            now = int(datetime.datetime.now(datetime.UTC).timestamp() * 1000)
+            rows = []
+            for i in range(fresh):
+                rows.append({"kind": "risk", "ts": now - (i + 1) * 60_000,
+                             "action": "venue degraded - new entries suspended"})
+            for i in range(old):
+                rows.append({"kind": "risk", "ts": now - (48 + i) * 3_600_000,
+                             "action": "venue degraded - new entries suspended"})
+            (work / "data" / "ledger.okx_demo.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            return [f for f in DashboardData(work / "config").redflags()
+                    if f["title"] == "网络降级计数"]
+
+    def test_a_single_recent_degradation_is_info_not_a_warn(self) -> None:
+        flags = self._flags(fresh=1, old=0)
+        self.assertEqual(len(flags), 1)
+        self.assertEqual(flags[0]["level"], "info")
+        self.assertIn("最近 24h **1 次**", flags[0]["detail"])
+
+    def test_a_stream_of_degradations_warns(self) -> None:
+        flags = self._flags(fresh=6, old=0)
+        self.assertEqual(flags[0]["level"], "warn")
+        self.assertIn("超过阈值 5 次/24h", flags[0]["detail"])
+
+    def test_old_events_do_not_keep_the_flag_alive(self) -> None:
+        """只有三天前那次 → 不报（这正是「累计」口径的毛病：它会一直挂着）。"""
+        self.assertEqual(self._flags(fresh=0, old=1), [])
+
+
 class DailyReviewDecompositionTests(unittest.TestCase):
     """2026-10-13（10-12 复盘建议 ②）：复盘数字块必须给「可复制部分」一行 ——
     否则「账面 +0.129%」会被单独引用，而其中大头是模拟盘费率买不到的钱。"""

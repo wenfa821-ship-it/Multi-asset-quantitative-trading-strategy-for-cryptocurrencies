@@ -31,7 +31,7 @@ import statistics as st
 import threading
 import time
 import tomllib
-from collections import Counter, defaultdict
+from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -61,6 +61,10 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     # 15 minutes, not 5: a restart re-warms bars for 64 symbols and the slowest
     # measured warmup was ~12 minutes, so a tighter limit fires on every restart.
     "runner_stale_minutes": 15.0,
+    # 2026-10-13: venue-degradation events in the last 24h. Above this, the page
+    # warns: one or two are a proxy hiccup, a steady stream means the upstream is
+    # unreliable and every pause costs entry opportunities.
+    "venue_degraded_24h": 5.0,
     "webhook_min_interval_seconds": 1800,
 }
 
@@ -1051,7 +1055,6 @@ class DashboardData:
     def redflags(self) -> list[dict[str, Any]]:
         """The same checks the 2-hourly inspection runs, computed live."""
         ledger = self._ledger()
-        alerts = self._alerts()
         metrics = self.live_metrics()
         flags: list[dict[str, Any]] = []
 
@@ -1239,14 +1242,19 @@ class DashboardData:
             )
 
         degraded = metrics.get("ta_venue_degraded_total", 0.0)
-        if degraded:
-            flags.append(
-                {
-                    "level": "info",
-                    "title": "网络降级计数",
-                    "detail": f"累计 {int(degraded)} 次（每次约暂停开仓 2 分钟）",
-                }
-            )
+        # 2026-10-13（10-12 复盘建议 ③）：只报「累计」等于永远等不到阈值 ——
+        # 一次网络抖动会永久挂在面板上，而真正该看的是**最近 24h 的频次**。
+        degraded_events = [e for e in risk_events
+                           if str(e.get("action") or "").startswith("venue degraded")]
+        fresh_degraded, _ = split_fresh(degraded_events)
+        degraded_limit = float(self.thresholds().get("venue_degraded_24h", 5.0))
+        if degraded or fresh_degraded:
+            level = "warn" if len(fresh_degraded) > degraded_limit else "info"
+            detail = (f"最近 24h **{len(fresh_degraded)} 次**"
+                      f"（累计 {int(degraded)} 次；每次约暂停开仓 2 分钟）")
+            if level == "warn":
+                detail += (f"；**超过阈值 {degraded_limit:g} 次/24h** —— 代理/上游稳定性要看")
+            flags.append({"level": level, "title": "网络降级计数", "detail": detail})
         basis = self.funding_basis()
         if basis.get("available") and basis.get("level") == "warn":
             live_text = (f"${basis['live_usd']:,.4f}"
