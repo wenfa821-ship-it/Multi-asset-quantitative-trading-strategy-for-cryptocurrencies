@@ -6497,6 +6497,41 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         self.assertFalse(got["depth_ok"])
         self.assertGreater(got["recent_breakeven"], 4.0)    # 折算后回本比快照说得久
 
+    def test_gate1_lists_every_leg_not_just_the_strategies(self) -> None:
+        """门槛 1 写的是「至少一条**腿**/策略」，第一版只量了策略那一半 ——
+        carry、TradFi、期权都没有出现在答案里。而 carry 恰恰是唯一扣掉成本后
+        为正的那条腿，它缺的是「30 天样本」（和门槛 5 同一口钟）。"""
+        import tempfile
+
+        module = self._mod()
+        edge_rows = [
+            {"strategy": "trend_breakout", "total_return_pct": -1.70, "trades": 94},
+            {"strategy": "trend_breakout_daily", "total_return_pct": 0.02, "trades": 3},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "carry").mkdir(parents=True, exist_ok=True)
+            (root / "data" / "carry" / "income_report.json").write_text(json.dumps(
+                {"report": {"realised_days": 6, "net_bps_per_30d_hold": 22.4}}), encoding="utf-8")
+            (root / "data" / "options").mkdir(parents=True, exist_ok=True)
+            (root / "data" / "options" / "gate.jsonl").write_text(json.dumps(
+                {"families": {"BTC-USD": {"open": True}}}) + "\n", encoding="utf-8")
+            (root / "data" / "options" / "round_trip.jsonl").write_text(
+                "\n".join(json.dumps({"error": "buy rejected"}) for _ in range(4)) + "\n",
+                encoding="utf-8")
+            legs = module.leg_inventory(root, edge_rows)
+        by_leg = {g["leg"]: g for g in legs}
+        # 有样本但为负 → 明确说"有样本"而不是含混的"未满足"
+        self.assertIn("❌", by_leg["现货方向性"]["verdict"])
+        # 只有 3 笔 → 判不了，不能算它不合格
+        self.assertIn("样本不足", by_leg["TradFi"]["verdict"])
+        # carry：唯一为正的腿，但样本不够
+        self.assertIn("6/30", by_leg["carry（资金费）"]["verdict"])
+        self.assertIn("22.4", by_leg["carry（资金费）"]["number"])
+        # 期权：把"这个环境成交不了"写成数字（4 次尝试 4 次失败）
+        self.assertIn("4 次尝试", by_leg["期权"]["number"])
+        self.assertIn("🚫", by_leg["期权"]["verdict"])
+
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile
 

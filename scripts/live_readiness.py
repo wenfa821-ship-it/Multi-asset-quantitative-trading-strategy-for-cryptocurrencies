@@ -60,6 +60,16 @@ INCOME_REPORT = "data/carry/income_report.json"
 ROTATION = "data/carry/rotation.jsonl"
 CARRY_SCREEN = "data/carry/screen_live.json"
 CARRY_HISTORY = "data/history/funding"
+OPTIONS_GATE = "data/options/gate.jsonl"
+OPTIONS_ATTEMPTS = "data/options/round_trip.jsonl"
+
+# Which strategy names make up which leg, so gate 1 can answer the question it
+# actually asks ("至少一条**腿**/策略") instead of only the per-strategy half.
+LEG_STRATEGIES = (
+    ("现货方向性", ("trend_breakout", "trend_pullback", "mean_reversion")),
+    ("永续", ("perp_trend_funding",)),
+    ("TradFi", ("trend_breakout_daily",)),
+)
 EDGE = "data/readiness/edge.json"
 REPORT = "reports/live-readiness.md"
 READINESS_JSON = "data/readiness/readiness.json"
@@ -194,7 +204,7 @@ def gate_edge(root: Path) -> dict:
         return {
             "id": 1,
             "name": "边缘",
-            "requirement": f"至少一条策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
+            "requirement": "至少一条腿/策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
             "status": "unmeasured",
             "value": "未测量",
             "detail": (
@@ -230,16 +240,81 @@ def gate_edge(root: Path) -> dict:
             f"（回测按 paper 定价），乘 {payload.get('fee_multiplier')} 后 "
             f"**{payload.get('implied_fee_bps_per_side')} bps/边**。"
         )
+    legs = leg_inventory(root, rows)
+    if legs:
+        detail += (
+            "\n\n**按腿清点**（门槛问的是「至少一条**腿**/策略」，上面那张表只覆盖策略那一半）：\n\n"
+            "| 腿 | 这条腿的可判数字 | 够不够满足第 1 条 |\n|---|---|---|\n"
+            + "\n".join(f"| {g['leg']} | {g['number']} | {g['verdict']} |" for g in legs)
+        )
     return {
         "id": 1,
         "name": "边缘",
-        "requirement": "至少一条策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
+        "requirement": "至少一条腿/策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
         "status": "met" if qualifying else "unmet",
         "value": f"{len(qualifying)}/{len(decided)} 条可判策略为正",
         "detail": detail,
         "evidence": [rel(path)],
         "window": f"截至 {when}",
     }
+
+
+def leg_inventory(root: Path, edge_rows: list[dict]) -> list[dict]:
+    """Every leg, with the number that decides gate 1 for it.
+
+    Gate 1 is written as "至少一条腿/策略在样本外为正" - and the first version of this
+    script only measured the strategies, which silently left carry, TradFi and
+    options out of the answer. Carry matters most: it is the ONE leg whose measured
+    margin is positive after its own 44.9 bps round trip, and the reason it is not
+    yet "样本外" is the same 30-day clock gate 5 waits on.
+    """
+    by_name = {str(r.get("strategy")): r for r in edge_rows}
+    out = []
+    for leg, names in LEG_STRATEGIES:
+        rows = [by_name[n] for n in names if n in by_name]
+        decided = [r for r in rows if (r.get("trades") or 0) >= 30]
+        best = max(decided, key=lambda r: r.get("total_return_pct") or 0.0, default=None)
+        if best is not None:
+            verdict = (
+                f"❌ 有样本（{best.get('trades')} 笔）但样本外 **{best.get('total_return_pct'):+.2f}%**"
+            )
+            number = f"样本外最好的一条 {best.get('strategy')} {best.get('total_return_pct'):+.2f}%（{best.get('trades')} 笔）"
+        else:
+            counts = "、".join(f"{r.get('strategy')} {r.get('trades') or 0} 笔" for r in rows) or "无数据"
+            verdict = "⬜ 样本不足，判不了"
+            number = counts
+        out.append({"leg": leg, "number": number, "verdict": verdict})
+
+    report = (read_json(root / INCOME_REPORT) or {}).get("report") or {}
+    days, net = report.get("realised_days"), report.get("net_bps_per_30d_hold")
+    if days is not None and net is not None:
+        out.append({
+            "leg": "carry（资金费）",
+            "number": f"到账 {days}/{CARRY_DAYS_REQUIRED} 天 · 持有 30 天净 **{net} bps**"
+                      f"（已扣 44.9 bps 往返）",
+            "verdict": (
+                "⬜ **唯一扣成本后为正的腿**，但样本 "
+                f"{days}/{CARRY_DAYS_REQUIRED} 天 —— 与门槛 5 共用同一个 30 天钟"
+            ),
+        })
+
+    attempts = read_jsonl(root / OPTIONS_ATTEMPTS)
+    gate_rows = read_jsonl(root / OPTIONS_GATE)
+    opened = []
+    if gate_rows:
+        opened = [name for name, fam in (gate_rows[-1].get("families") or {}).items()
+                  if fam.get("open")]
+    if attempts or opened:
+        out.append({
+            "leg": "期权",
+            "number": (
+                f"闸门{'已成立 ' + '/'.join(opened) if opened else '未成立'} · "
+                f"本场所实测下单 **{len(attempts)} 次尝试、" 
+                f"{sum(1 for a in attempts if a.get('error'))} 次失败**"
+            ),
+            "verdict": "🚫 在这套环境里成交不了（被拒 / 价格带外 / 未成交），没有可判的数字",
+        })
+    return out
 
 
 def _is_gate1_winner(row: dict) -> bool:

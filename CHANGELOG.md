@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.10**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.11**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.11 — 2026-10-13T16:42
+
+- 测试 **428** 绿 · 权益 $102,434.70 · 记录时的包版本 1.1.11
+
+门槛 1 补上按腿清点：原文是「至少一条腿/策略」，实现只量了策略那一半，carry/TradFi/期权三条腿原本不在答案里。补全后可见 carry 是唯一扣成本后为正的腿（30 天净 +22.4 bps，已扣 44.9 往返）但只有 6/30 天样本 —— 即第 1 条与第 5 条共用同一个 30 天钟；期权腿的「成交不了」改为引用 data/options/round_trip.jsonl 的 4 次真实失败记录。428 测试绿。
 
 ## v1.1.10 — 2026-10-13T16:38
 
