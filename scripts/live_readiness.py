@@ -1098,8 +1098,9 @@ def gate_carry(root: Path) -> dict:
         detail += (
             "\n\n**最近一轮规则自己的拒绝记录**（`carry_rotation.py` 的 `refusals`）："
             + "；".join(f"{r.get('what')} —— {r.get('why')}" for r in refusals)
-            + "。护栏是 2026-10-13 加的：候选快照没有定时产出、历史目录里也有冻住的序列，"
-              "而 `daily_bps_series` 取的是「最后 N 个**有印**的日子」——冻住的文件照样给出正常形状的桶。"
+            + "。**这里的语义 2026-10-13 变过一次**：候选排名已改由本地费率历史、按与现任相同的窗口重算，"
+              "快照只提供 `depth_ok`/`eligible` 过滤且只在够新时生效 —— 所以 `candidate depth filter` 这条"
+              "现在只表示「深度没被用来筛候选」，**不再是**「规则拒绝出提议」（那曾是护栏的第一版行为）。"
         )
     return {
         "id": 5,
