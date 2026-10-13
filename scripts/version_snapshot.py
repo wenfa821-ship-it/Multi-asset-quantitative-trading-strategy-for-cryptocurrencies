@@ -116,6 +116,10 @@ def main() -> int:
     if target.exists() and not args.force:
         print(f"{target} already exists - a version that can be rewritten is not a version")
         return 1
+    # **先过测试闸门，再建目录**（2026-10-13 实测）：原来先建目录、最后才跑测试，
+    # 于是一次被拒的冻结会留下**半个版本** —— 只有 changelog/config/progress、
+    # 没有 manifest/NOTES/VERSION。目录一建出来，就得有人手工收拾。
+    tests_passed = _test_count()
     target.mkdir(parents=True, exist_ok=True)
 
     config_dir = PROJECT / "config"
@@ -133,7 +137,7 @@ def main() -> int:
         "version": args.version,
         "package_version": package_version,
         "created_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-        "tests_passed": _test_count(),
+        "tests_passed": tests_passed,
         "account": _equity_and_positions(),
         "progress": json.loads((PROJECT / "docs" / "progress.json").read_text(encoding="utf-8")),
     }

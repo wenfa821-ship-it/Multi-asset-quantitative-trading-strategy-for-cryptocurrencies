@@ -1,8 +1,18 @@
 # Changelog
 
-当前版本：**v1.1.3**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.4**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## Unreleased（自 2026-10-13T13:02 起，1 条留痕）
+
+- `2026-10-13T13:02` **bug** 冻结闸门**自己**留了个坑：测试没过时目录已经建好 —— 会留下「半个版本」；顺带它刚抓住我一次 kind 写错
+
+## v1.1.4 — 2026-10-13T13:02
+
+- 测试 **406** 绿 · 权益 $102,433.68 · 记录时的包版本 1.1.4
+
+TradFi 可交易性采样扩到新上市的股票代币（最近 20 个，--listings-cap）：池子 10-10 收窄到 XMU 后，「场馆哪天开始供数据」只对旧名单成立；新上市才是池子长回来的来源。采样器每天两次都在美股时段内，下一轮盘内运行就会回答。写测试时抓到两个自己的坑：先截后筛吃掉配额、tier 报告缺失时提前 return 静默跳过新上市段。
 
 ## v1.1.3 — 2026-10-13T11:03
 

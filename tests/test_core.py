@@ -5934,6 +5934,38 @@ class DailyReviewDecompositionTests(unittest.TestCase):
         self.assertIn("拿不到：没有费率文件", text)
 
 
+class TradfiWatchListTests(unittest.TestCase):
+    """2026-10-13：TradFi 池收窄到 XMU 之后，「场馆哪天开始供数据」这个问题只对 10-10 那 13 个成立。
+    OKX 每天在上新股票代币（近 8 天 8 个成熟、全 cat=3），所以最近 N 个也要进采样列表。"""
+
+    def test_new_listings_join_the_watch_list_newest_first(self) -> None:
+        import json
+        import tempfile
+
+        from scripts.venue_availability import watch_symbols
+
+        with tempfile.TemporaryDirectory() as tmp:
+            listings = Path(tmp) / "tradfi_records.jsonl"
+            listings.write_text("\n".join(json.dumps(r) for r in [
+                {"inst": "XOLD-USDT", "entry_ts": 1_000},
+                {"inst": "XNEW-USDT", "entry_ts": 9_000},
+                {"inst": "XNOTUSDT", "entry_ts": 9_500},          # 不是 USDT → 丢
+            ]) + "\n", encoding="utf-8")
+            syms = watch_symbols(["XMU/USDT"], Path(tmp) / "none.json",
+                                 listings_path=listings, listings_cap=1)
+        self.assertEqual(syms, ["XMU/USDT", "XNEW/USDT"])   # 取最新的那个，且转成场馆格式
+
+    def test_a_missing_listings_file_changes_nothing(self) -> None:
+        import tempfile
+
+        from scripts.venue_availability import watch_symbols
+
+        with tempfile.TemporaryDirectory() as tmp:
+            syms = watch_symbols(["XMU/USDT"], Path(tmp) / "none.json",
+                                 listings_path=Path(tmp) / "missing.jsonl")
+        self.assertEqual(syms, ["XMU/USDT"])
+
+
 class NewListingCategoryTests(unittest.TestCase):
     """2026-10-13：`new_listing_track` 原来写死 `instCategory == "1"`，日志只写「added 0」——
     近 8 天 OKX 上线的 32 个交易对里，8 个已成熟的 X***（股票代币，cat=3）一个都没记，
