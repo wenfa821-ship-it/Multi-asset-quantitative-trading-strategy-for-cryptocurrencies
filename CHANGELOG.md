@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.15**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.16**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.16 — 2026-10-13T17:37
+
+- 测试 **442** 绿 · 权益 $102,426.62 · 记录时的包版本 1.1.16
+
+scan evaluate 的自诊断「11% 是重复写入，说明有多个扫描器」是历史遗留：被折叠的 7,269 行里 91% 来自 09-29/09-30（多扫描器时期），近 24 小时为 0 —— 这台机器上 ps/pgrep 本来就是假阴性，一句过期自诊断正好凑成每轮一次的自制误报。改成三个可测函数：collapse() 是唯一折叠实现（dedupe_rows 与统计共用）、collapse_stats() 按天归属并单独算近 24h、collapse_note() 只在本轮真有重复时才说多扫描器并给出可执行下一步。442 测试绿。
 
 ## v1.1.15 — 2026-10-13T17:16
 

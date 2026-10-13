@@ -1478,15 +1478,14 @@ def cmd_scan_evaluate(args: argparse.Namespace) -> int:
         print(f"{config.path(args.store)} 里还没有快照")
         print("先跑：ta scan watch --mints <地址,...> --interval 300")
         return 2
-    from .onchain.study import dedupe_rows
+    from .onchain.study import collapse_note, collapse_stats, dedupe_rows
 
+    # 2026-10-13：原来这句把"整份账本 11% 被折叠"直接念成"有多个扫描器在写" ——
+    # 而按天拆开，被折叠的行 91% 来自 09-29/09-30（清理多扫描器之前），近 24h 为 0。
+    # 数字仍然照报，但"现在还重复吗"必须一起说，否则读者会去找不存在的进程。
+    stats = collapse_stats(raw_rows, bucket_seconds=args.dedupe_seconds)
     rows = dedupe_rows(raw_rows, bucket_seconds=args.dedupe_seconds)
-    if len(rows) < len(raw_rows):
-        print(
-            f"去重：{len(raw_rows)} -> {len(rows)} 条唯一观测"
-            f"（{100 * (1 - len(rows) / len(raw_rows)):.0f}% 是重复写入，"
-            "说明有多个扫描器在写同一账本）"
-        )
+    print(collapse_note(stats))
     # Scope the study to the CURRENT candidate list. Stale watcher instances keep
     # appending rows for tokens that have since been dropped (dead pools with
     # frozen prices); mixing them in makes "low turnover" buckets mean "dead

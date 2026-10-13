@@ -524,6 +524,65 @@ class HttpClientTests(unittest.TestCase):
             self.assertIn("offline mode", str(ctx.exception))
 
 
+
+class CollapseStatsTests(unittest.TestCase):
+    """2026-10-13：`ta scan evaluate` 每轮打印「11% 是重复写入，说明有多个扫描器在写同一账本」。
+
+    按天拆开那份账本：被折叠的 7,269 行里 91% 来自 09-29/09-30（清理多扫描器之前），
+    近 24 小时为 0。把历史合计当当前状况念出来，会让读者去找不存在的重复进程 ——
+    而这个项目的 `ps`/`pgrep` 在沙箱里本来就是假阴性，正好凑成一次误报。
+    """
+
+    @staticmethod
+    def _r(mint: str, ts: int, price: float = 1.0) -> dict:
+        return {"mint": mint, "ts": ts, "price_usd": price}
+
+    def test_collapse_keeps_the_newest_of_a_minute_and_reports_the_rest(self) -> None:
+        from ta.onchain.study import collapse
+
+        base = 1_790_000_000_000
+        rows = [self._r("A", base, 1.0), self._r("A", base + 20_000, 2.0),
+                self._r("A", base + 61_000, 3.0), self._r("B", base, 9.0)]
+        kept, dropped = collapse(rows, bucket_seconds=60)
+        # 结果按时间排序：B@base（9.0）、A@base+20s（2.0，同分钟里取代 1.0）、A@base+61s（3.0）
+        self.assertEqual([r["price_usd"] for r in kept], [9.0, 2.0, 3.0])
+        self.assertEqual(len(dropped), 1)
+        self.assertEqual(dropped[0]["price_usd"], 1.0)   # 同一分钟里被最新那条取代
+
+    def test_stats_say_when_the_collapse_happened(self) -> None:
+        """关键不是「折叠了多少」，而是「现在还折叠吗」。"""
+        from ta.onchain.study import collapse_stats
+
+        base = 1_790_000_000_000
+        rows = [self._r("A", base, 1.0), self._r("A", base + 5_000, 2.0)]
+        stats = collapse_stats(rows, now_ms=base + 10 * 86_400_000, recent_hours=24)
+        self.assertEqual((stats["rows"], stats["kept"], stats["dropped"]), (2, 1, 1))
+        self.assertEqual(stats["recent_dropped"], 0)     # 十天前的折叠，不是现在
+        stats_now = collapse_stats(rows, now_ms=base + 60_000, recent_hours=24)
+        self.assertEqual(stats_now["recent_dropped"], 1)
+
+    def test_the_note_does_not_cry_multiple_writers_when_the_rows_are_old(self) -> None:
+        from ta.onchain.study import collapse_note, collapse_stats
+
+        base = 1_790_000_000_000
+        rows = [self._r("A", base, 1.0), self._r("A", base + 5_000, 2.0)]
+        old = collapse_note(collapse_stats(rows, now_ms=base + 10 * 86_400_000))
+        self.assertIn("不是现在有多个扫描器", old)
+        now = collapse_note(collapse_stats(rows, now_ms=base + 60_000))
+        self.assertIn("多个扫描器在写同一账本", now)
+        self.assertIn("lsof", now)                       # 给可执行的下一步，而不是猜
+        self.assertIn("无同分钟重复采样", collapse_note(
+            collapse_stats([self._r("A", base)], now_ms=base)))
+
+    def test_dedupe_rows_still_returns_just_the_rows(self) -> None:
+        """`dedupe_rows` 的对外行为不变（看板与 evaluate 都在用它）。"""
+        from ta.onchain.study import dedupe_rows
+
+        base = 1_790_000_000_000
+        rows = [self._r("A", base, 1.0), self._r("A", base + 5_000, 2.0)]
+        self.assertEqual([r["price_usd"] for r in dedupe_rows(rows)], [2.0])
+        self.assertEqual(dedupe_rows(rows, bucket_seconds=0), rows)
+
 class EventStudyHonestyTests(unittest.TestCase):
     """The study must refuse to report a trend when the sample cannot support one.
 

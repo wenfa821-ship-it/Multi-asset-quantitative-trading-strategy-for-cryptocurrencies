@@ -26,6 +26,30 @@ from ..util import now_ms
 from .models import ScreenResult, TokenSnapshot
 
 
+def collapse(rows: list[dict[str, Any]], bucket_seconds: int = 60,
+             ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(kept, dropped) for one observation per (token, time bucket), newest wins.
+
+    The single implementation behind `dedupe_rows` and `collapse_stats` — the count
+    you print and the rows you study must come from the same rule (2026-10-13).
+    """
+    if bucket_seconds <= 0:
+        return list(rows), []
+    span = bucket_seconds * 1000
+    latest: dict[tuple[str, int], dict[str, Any]] = {}
+    dropped: list[dict[str, Any]] = []
+    for row in rows:
+        key = (str(row.get("mint")), int(row.get("ts", 0)) // span)
+        current = latest.get(key)
+        if current is None or int(row.get("ts", 0)) >= int(current.get("ts", 0)):
+            if current is not None:
+                dropped.append(current)
+            latest[key] = row
+        else:
+            dropped.append(row)
+    return sorted(latest.values(), key=lambda r: int(r.get("ts", 0))), dropped
+
+
 def dedupe_rows(rows: list[dict[str, Any]], bucket_seconds: int = 60) -> list[dict[str, Any]]:
     """Collapse to one observation per (token, time bucket), keeping the newest.
 
@@ -35,16 +59,63 @@ def dedupe_rows(rows: list[dict[str, Any]], bucket_seconds: int = 60) -> list[di
     manufacturing zero-length "forward returns" from two writes in the same
     minute. Deduplicating here keeps the study valid however many writers run.
     """
-    if bucket_seconds <= 0:
-        return list(rows)
-    span = bucket_seconds * 1000
-    latest: dict[tuple[str, int], dict[str, Any]] = {}
-    for row in rows:
-        key = (str(row.get("mint")), int(row.get("ts", 0)) // span)
-        current = latest.get(key)
-        if current is None or int(row.get("ts", 0)) >= int(current.get("ts", 0)):
-            latest[key] = row
-    return sorted(latest.values(), key=lambda r: int(r.get("ts", 0)))
+    return collapse(rows, bucket_seconds)[0]
+
+
+def collapse_stats(rows: list[dict[str, Any]], bucket_seconds: int = 60,
+                   now_ms: int | None = None, recent_hours: float = 24.0) -> dict[str, Any]:
+    """去重折叠了哪些行、**什么时候**的行 —— 因为"有多少重复"和"现在还重复吗"是两个问题。
+
+    2026-10-13：`ta scan evaluate` 每轮打印「11% 是重复写入，说明有多个扫描器在写同一账本」。
+    按天拆开那份账本：7,269 条被折叠的行里 **6,627 条来自 09-30、627 条来自 09-29，
+    10-02 之后基本为 0** —— 那是清理多扫描器时期留下的历史，现在只有一个 watcher 在写。
+    把历史合计当当前状况念出来，会让人去找不存在的重复进程（而这个项目的 `ps`/`pgrep`
+    在这个沙箱里本来就是假阴性，正好凑成一次误报）。
+    """
+    import datetime as _dt
+
+    kept, dropped = collapse(rows, bucket_seconds)
+    now = now_ms or int(_dt.datetime.now(_dt.timezone.utc).timestamp() * 1000)
+    cutoff = now - int(recent_hours * 3_600_000)
+    by_day: dict[str, int] = {}
+    recent = 0
+    newest = 0
+    for row in dropped:
+        ts = int(row.get("ts", 0) or 0)
+        day = _dt.datetime.fromtimestamp(ts / 1000, _dt.timezone.utc).date().isoformat()
+        by_day[day] = by_day.get(day, 0) + 1
+        if ts >= cutoff:
+            recent += 1
+        newest = max(newest, ts)
+    return {
+        "rows": len(rows),
+        "kept": len(kept),
+        "dropped": len(dropped),
+        "rate": (1 - len(kept) / len(rows)) if rows else 0.0,
+        "by_day": by_day,
+        "recent_dropped": recent,
+        "recent_hours": recent_hours,
+        "last_dropped_ts": newest or None,
+    }
+
+
+def collapse_note(stats: dict[str, Any]) -> str:
+    """One honest line about the collapse: rate, when, and whether it is still happening."""
+    if not stats.get("dropped"):
+        return f"去重：{stats['rows']} 条（无同分钟重复采样）"
+    top = sorted((stats.get("by_day") or {}).items(), key=lambda kv: -kv[1])[:2]
+    when = "、".join(f"{day} 占 {n}" for day, n in top)
+    head = (f"去重：{stats['rows']} -> {stats['kept']} 条唯一观测"
+            f"（{100 * stats['rate']:.0f}% 被折叠：同一代币同一分钟内的重复采样，"
+            f"取最新一条；按天看主要是 {when}）")
+    if stats.get("recent_dropped"):
+        head += (f"。近 {stats['recent_hours']:g} 小时仍有 {stats['recent_dropped']} 条 ——"
+                 f"**这可能是多个扫描器在写同一账本**，去数进程之前先看 "
+                 f"`lsof <store>` 与 watcher 的 runs")
+    else:
+        head += (f"。近 {stats['recent_hours']:g} 小时**没有**新的重复 —— "
+                 f"这是历史遗留的折叠，不是现在有多个扫描器")
+    return head
 
 
 def _field_value(row: dict[str, Any], field: str) -> float | None:
