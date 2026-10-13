@@ -439,9 +439,9 @@
   {
    "id": "data-files-in-git",
    "item": "父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`）",
-   "state": "waiting_decision",
-   "gate": "当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的",
-   "next": "三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底）"
+   "state": "done",
+   "gate": "当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的。**2026-10-13 用户批准执行选项 ①**：`.gitignore` 增加 `!docs/changelog.jsonl`，留痕本体（**692 KB** 纯文本、一行一条改动）入库；账本 `data/ledger.okx_demo.jsonl`（**11 MB**）与 `data/onchain/snapshots.jsonl`（**81 MB**）继续留在外面 —— 它们每轮采集都在改，进 git 会把 diff 淹掉，而 `archive/versions/<v>/` 的冻结快照已按版本留住了它们",
+   "next": "维护：留痕本体现在可 `git blame`。新增数据类文件仍按 `.gitignore` 的默认规则走；要改这条边界就改 `.gitignore` 并在这里登记"
   },
   {
    "id": "depth-gate-vs-capped-size",
