@@ -6258,6 +6258,29 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         """解析不出样本外段时不能返回 {'total_return_pct': 0}：那会读成「不赚不亏」。"""
         self.assertEqual(self._mod().parse_oos("no walk-forward here"), {})
 
+    def test_parse_oos_remembers_where_the_out_of_sample_window_starts(self) -> None:
+        """2026-10-13：把行情从 10-08 补到 10-13 之后，同一批策略的样本外数字**全变了**
+        （−1.70%→−1.12%、0 笔→14 笔、−1.61%→−2.02%），而结论没变。
+        因为切点是「序列长度的 70%」—— 序列变长，切点前移，**样本外窗口整段平移**：
+        两次数的不是同一段时间。所以窗口起点必须和数字一起存下来，否则下一次对比
+        就是拿两个不同区间互相解释。"""
+        module = self._mod()
+        text = ("\nwalk-forward split at ts=1786000000000\n"
+                "  --- in-sample (shape only)\n\n"
+                "  --- out-of-sample (the only number that means anything)\n\n"
+                "backtest mean_reversion  symbols=BTC/USDT  bars=100  timeframe=15m\n"
+                "  total_return_pct     -0.17\n"
+                "  trades               14\n")
+        got = module.parse_oos(text)
+        self.assertEqual(got["total_return_pct"], -0.17)
+        self.assertEqual(got["oos_from_ms"], 1786000000000)
+        self.assertEqual(got["oos_from"], module.day_of(1786000000000))
+        # 没有 split 行的输出（旧格式/未带 --split）不能凭空造一个窗口起点
+        bare = ("  --- out-of-sample (the only number that means anything)\n\n"
+                "backtest mean_reversion  symbols=BTC/USDT  bars=100  timeframe=15m\n"
+                "  total_return_pct     -0.17\n  trades               14\n")
+        self.assertNotIn("oos_from", module.parse_oos(bare))
+
     def _root(self, tmp: str) -> Path:
         root = Path(tmp)
         (root / "data" / "readiness").mkdir(parents=True, exist_ok=True)

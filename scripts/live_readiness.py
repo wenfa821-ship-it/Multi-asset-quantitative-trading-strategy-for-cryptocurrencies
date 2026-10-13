@@ -226,15 +226,25 @@ def gate_edge(root: Path) -> dict:
     age_note = edge_age_note(when)
     failed = [r for r in rows if r.get("rc")]
     lines = [
-        f"| `{r.get('strategy')}` | {_pct(r.get('total_return_pct'))} | {_num(r.get('trades'))} | "
+        f"| `{r.get('strategy')}` | {r.get('oos_from') or '—'} | "
+        f"{_pct(r.get('total_return_pct'))} | {_num(r.get('trades'))} | "
         f"{_num(r.get('win_rate_pct'))} | {_num(r.get('profit_factor'))} |"
         for r in rows
     ]
+    starts = sorted({str(r.get("oos_from")) for r in rows if r.get("oos_from")})
     detail = (
         f"样本外（最后 30%），成本按 `--fee-multiplier 1.25` = 10 bps/边，生成于 {when}。\n\n"
-        "| 策略 | 样本外收益 | 成交 | 胜率 | PF |\n|---|---|---|---|---|\n" + "\n".join(lines)
+        "| 策略 | 样本外起 | 样本外收益 | 成交 | 胜率 | PF |\n|---|---|---|---|---|---|\n"
+        + "\n".join(lines)
         + f"\n\n有足够样本可判的 {len(decided)} 条，其中为正的 **{len(qualifying)}** 条。"
     )
+    if starts:
+        detail += (
+            f"\n\n样本外窗口 **{'、'.join(starts)} 起**。切点是序列长度的 70%，**行情一变长，"
+            f"窗口就整段平移** —— 所以只有 `样本外起` 相同的那两次运行才能直接比数字"
+            f"（2026-10-13 补完行情后同一批策略从 −1.70%/−1.61%/0 笔变成 −1.12%/−2.02%/14 笔，"
+            f"换的是区间，不是策略）。"
+        )
     if age_note:
         detail += f"\n\n{age_note}"
     detail += coverage_note(payload.get("input_coverage") or {})
@@ -1134,13 +1144,34 @@ _KV = re.compile(r"^  ([a-z_]+)\s+(\S+)\s*$")
 
 
 def parse_oos(text: str) -> dict:
-    """Pull the out-of-sample block out of `ta backtest --split ...` output."""
+    """Pull the out-of-sample block out of `ta backtest --split ...` output.
+
+    Also records WHERE the out-of-sample window starts (`walk-forward split at ts=`).
+    2026-10-13 实测：把行情从 10-08 补到 10-13 之后，同一批策略的样本外数字全都变了
+    （`trend_breakout` −1.70%→−1.12%、`trend_pullback` 0 笔→14 笔、`perp_trend_funding`
+    −1.61%→−2.02%），而结论没变。原因是切点是 `int(bar_count * 0.7)`：序列变长，切点前移，
+    **样本外窗口整段平移**，两次数的根本不是同一段时间。所以窗口起点必须跟着数字一起存 ——
+    否则下一次"对比"就是在拿两个不同的区间互相解释。
+    """
     lines = text.splitlines()
+    split_note = {}
+    for line in lines:
+        if "walk-forward split at ts=" in line:
+            try:
+                cut = int(line.split("ts=")[1].split()[0])
+            except (IndexError, ValueError):
+                cut = 0
+            if cut:
+                split_note = {
+                    "oos_from_ms": cut,
+                    "oos_from": day_of(cut),
+                }
+            break
     try:
         start = next(i for i, l in enumerate(lines) if "--- out-of-sample" in l)
     except StopIteration:
-        return {}
-    out: dict = {}
+        return split_note
+    out: dict = dict(split_note)
     for line in lines[start + 1:]:
         if line.startswith("backtest "):
             parts = line.split()
