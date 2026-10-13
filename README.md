@@ -6125,6 +6125,24 @@ REFUSED candidate screen: candidate snapshot is 3.2 days old (limit 2) - nothing
 而真正决定出不出提议的是局部变量 `low` —— 提议照样发出来了。这又是"你设的那个开关
 不是被读的那个开关"，四行断言就把它钉住了。
 
+#### 70.10.6 第 1 条自己的测量也不能被降级的运行顶掉（同日第七轮）
+
+进门之前先检查**自己刚建的东西**：`--backtest` 原来**无条件**写 `data/readiness/edge.json`。
+只要五条回放全部 rc≠0（历史缺失、解释器不对、`ta` 导入坏掉），盘上那五行好数据就会被五个
+`None` 顶掉 —— 而门槛 1 照旧输出一个"0/2 条可判策略为正"，看起来像量过了。
+本项目十小时前刚吃过一次同形状的亏（网络抖动把每日证据表写成空表），所以规则定死：
+
+> **降级的运行不许变成新的事实。** 一条数字都没跑出来时：保留上一份 `edge.json`、
+> 打印原因、**退出码 1**（每日任务据此记一条 `needs_rerun`，而不是悄悄变绿）。
+
+实测（`--strategies no_such_strategy_xyz`，故意让它全挂）：`rc=1`，
+`edge.json` 的 sha1 **前后一致**，输出里明确写着"NOT overwriting ... gate 1 still shows the
+previous measurement"。同时门槛 1 新增一句自检：测量本身超过 3 天没更新就标警告 ——
+`generated_at` 一直打印着，但**没人比较的日期不是护栏**。
+
+顺带把今晚要跑的那条命令按每日任务的方式跑了一遍（`/opt/anaconda3/bin/python3 -u
+scripts/live_readiness.py --write --backtest`，工作目录为项目根）：`rc=0`，产物照常更新。
+
 ---
 
 ## 61. 每日复盘 · 2026-10-09（23:15 CST，覆盖 10-09 交易日）+ 今日改动汇总

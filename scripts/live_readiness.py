@@ -220,6 +220,7 @@ def gate_edge(root: Path) -> dict:
     qualifying = [r for r in rows if _is_gate1_winner(r)]
     decided = [r for r in rows if (r.get("trades") or 0) >= 30]
     when = payload.get("generated_at") or "?"
+    age_note = edge_age_note(when)
     failed = [r for r in rows if r.get("rc")]
     lines = [
         f"| `{r.get('strategy')}` | {_pct(r.get('total_return_pct'))} | {_num(r.get('trades'))} | "
@@ -231,6 +232,8 @@ def gate_edge(root: Path) -> dict:
         "| 策略 | 样本外收益 | 成交 | 胜率 | PF |\n|---|---|---|---|---|\n" + "\n".join(lines)
         + f"\n\n有足够样本可判的 {len(decided)} 条，其中为正的 **{len(qualifying)}** 条。"
     )
+    if age_note:
+        detail += f"\n\n{age_note}"
     if failed:
         detail += f"\n\n⚠️ {len(failed)} 条回放没有给出样本外数字（rc≠0）：" + \
                   "、".join(f"`{r.get('strategy')}`" for r in failed) + "。"
@@ -315,6 +318,28 @@ def leg_inventory(root: Path, edge_rows: list[dict]) -> list[dict]:
             "verdict": "🚫 在这套环境里成交不了（被拒 / 价格带外 / 未成交），没有可判的数字",
         })
     return out
+
+
+def edge_age_note(when: str, max_age_days: float = 3.0) -> str:
+    """Say so when gate 1's own measurement has gone stale.
+
+    `generated_at` was already printed, but a date nobody compares is not a guard: if
+    the daily refresh stops working, the table keeps looking like a fresh measurement.
+    (Same lesson as the frozen research bars and the unfreshened candidate screen.)
+    """
+    try:
+        stamp = datetime.datetime.fromisoformat(when)
+    except (TypeError, ValueError):
+        return ""
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    age_days = (datetime.datetime.now(UTC) - stamp).total_seconds() / 86_400.0
+    if age_days <= max_age_days:
+        return ""
+    return (
+        f"⚠️ **这份测量本身已经 {age_days:.1f} 天没更新了**（上限 {max_age_days:g} 天）——"
+        f"`--backtest` 每天的刷新没生效，上面的数字是旧的，先修管道再读结论。"
+    )
 
 
 def _is_gate1_winner(row: dict) -> bool:
@@ -1108,6 +1133,23 @@ def run_edge_backtest(root: Path, strategies: list[str], split: float,
     }
 
 
+def should_replace_edge(payload: dict) -> bool:
+    """Only ever REPLACE a measurement with a real one.
+
+    2026-10-13: `--backtest` originally wrote `edge.json` unconditionally, so if every
+    replay came back rc!=0 (missing bars, wrong interpreter, a broken `ta` import) the
+    five good rows on disk would be replaced by five `None`s - and gate 1 would report
+    "0/2" as if it had measured something. The project already lost a day's evidence
+    table to exactly this shape (an empty table overwriting a good one under a network
+    blip), so the rule here is: a degraded run keeps the previous file and reports a
+    failure the daily job can see, instead of quietly becoming the new truth.
+    """
+    rows = payload.get("rows") or []
+    if not rows:
+        return False
+    return any(isinstance(r.get("total_return_pct"), (int, float)) for r in rows)
+
+
 def paper_costs(root: Path) -> tuple[float | None, float | None]:
     """The backtest prices on the PAPER venue's fees (`cmd_backtest` builds the
     strategy with those), so the 10 bps/边 claim is only true if the multiplier is
@@ -1193,13 +1235,25 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
 
+    degraded = False
     if args.backtest:
         strategies = [s.strip() for s in args.strategies.split(",") if s.strip()]
         payload = run_edge_backtest(root, strategies, args.split, args.fee_multiplier)
         out = root / EDGE
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"\nwrote {rel(out)} ({len(payload['rows'])} strategies)")
+        if not should_replace_edge(payload):
+            # Keep the last real measurement; say so loudly and fail, so the daily job
+            # records a needs-rerun instead of a silently emptier answer.
+            print(
+                f"\n!! no replay produced a number ({len(payload['rows'])} attempted) - "
+                f"NOT overwriting {rel(out)}; gate 1 still shows the previous measurement",
+                flush=True,
+            )
+            degraded = True
+        else:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                           encoding="utf-8")
+            print(f"\nwrote {rel(out)} ({len(payload['rows'])} strategies)")
 
     now = datetime.datetime.now(UTC)
     meta = {
@@ -1231,7 +1285,9 @@ def main(argv: list[str] | None = None) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"\nwrote {rel(report)} and {rel(out)}")
-    return 0
+    # The report is still written (the other five gates did not fail); only the exit
+    # code carries the degraded measurement.
+    return 1 if degraded else 0
 
 
 if __name__ == "__main__":

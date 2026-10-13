@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.12**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.13**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.13 — 2026-10-13T16:55
+
+- 测试 **434** 绿 · 权益 $102,435.27 · 记录时的包版本 1.1.13
+
+门槛 1 自己的测量不再被降级运行顶掉：--backtest 原来无条件覆盖 edge.json，五条回放全挂时好数据会变成五个 None 而门槛照旧输出 0/2。现在一条数字都没跑出来时保留上一份、打印原因、rc=1（每日任务记 needs_rerun）。实测 --strategies no_such_strategy_xyz 得 rc=1 且 edge.json sha1 前后一致；门槛 1 另加「测量超过 3 天没更新」的自检警告。按每日任务方式复跑 --write --backtest 得 rc=0。434 测试绿。
 
 ## v1.1.12 — 2026-10-13T16:51
 

@@ -6634,6 +6634,38 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         self.assertIn("4 次尝试", by_leg["期权"]["number"])
         self.assertIn("🚫", by_leg["期权"]["verdict"])
 
+    def test_a_degraded_backtest_never_replaces_a_real_measurement(self) -> None:
+        """`--backtest` 原来无条件覆盖 `edge.json`：五条回放全挂时，盘上五条好数据会被
+        五个 `None` 顶掉，而门槛 1 照样输出一个「0/2」装作量过了。本项目在 10-13 已经
+        吃过一次同形状的亏（网络抖动把证据表写成空表），所以规则是：**降级的运行不许
+        变成新的事实**。"""
+        module = self._mod()
+        good = {"rows": [{"strategy": "trend_breakout", "total_return_pct": -1.7, "trades": 94}]}
+        self.assertTrue(module.should_replace_edge(good))
+        self.assertFalse(module.should_replace_edge({}))
+        self.assertFalse(module.should_replace_edge({"rows": []}))
+        # 五条全 rc!=0 / 解析不出数字 —— 这是"跑挂了"，不是"结论变了"
+        self.assertFalse(module.should_replace_edge({"rows": [
+            {"strategy": "trend_breakout", "total_return_pct": None, "rc": 1},
+            {"strategy": "mean_reversion", "total_return_pct": None, "rc": 1},
+        ]}))
+        # 只要有一条真跑出数字，就允许替换（其余可以缺）
+        self.assertTrue(module.should_replace_edge({"rows": [
+            {"strategy": "trend_breakout", "total_return_pct": None, "rc": 1},
+            {"strategy": "mean_reversion", "total_return_pct": -0.08, "trades": 5},
+        ]}))
+
+    def test_a_stale_gate1_measurement_says_so(self) -> None:
+        """`generated_at` 一直打印着，但**没人比较的日期不是护栏**：刷新一旦停掉，
+        那张表看起来还是一次新测量。"""
+        import datetime as dt
+
+        module = self._mod()
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=5)).isoformat()
+        self.assertIn("没更新", module.edge_age_note(old))
+        self.assertEqual(module.edge_age_note(dt.datetime.now(dt.timezone.utc).isoformat()), "")
+        self.assertEqual(module.edge_age_note("not-a-date"), "")
+
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile
 
