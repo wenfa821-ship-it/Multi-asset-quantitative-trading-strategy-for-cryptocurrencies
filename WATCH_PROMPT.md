@@ -1,5 +1,26 @@
 # trading-agent · 24 小时盯盘提示词（WATCH_PROMPT v2）
 
+> ## ⚠️ 2026-10-13：本文件**已被取代**，不要再按它行动
+>
+> 本文件最后更新于 **v0.4.6**（2026-10-06，见 `git log -- WATCH_PROMPT.md`），而项目现在是
+> **v1.1.20**。当前生效的巡检规范是 **automation 的 prompt 本身**
+> （`~/.codex/automations/trading-agent-okx/automation.toml`），那份是有维护、且与现状一致的。
+> 保留本文件只为追溯"当初怎么盯"。
+>
+> **三处会让人做错事的过时点**（照旧文行动会出错）：
+>
+> 1. **服务不是 4 个常驻**：旧文按 runner / dashboard / watcher / **newlisting** 四个"state=running"检查，
+>    而 `newlisting`（以及 `funding-sync` / `tradfi-session`）是**批量任务**，跑完就是 `not running`、
+>    `rc=0` 才是正常 —— 按旧文的标准会把正常的批量任务误报成"服务没起来"。
+> 2. **不许重启任何进程**：旧文写着看板挂了"可以拉起"（§0 的唯一例外）。现在的规范是
+>    **只读巡检、不重启任何已有进程**（重启要用户单独点头；2026-10-13 那次看板重启是用户先批准的）。
+> 3. **少了整套新机制**：旧文完全没有 `docs/changelog.jsonl` 的留痕纪律、`docs/progress.json` 的
+>    `waiting_decision` 收件箱、README §70.6 的六条切实盘门槛（`scripts/live_readiness.py`）、
+>    以及"发现新问题必须追加留痕并重跑 `changelog_md.py --write`"这条 —— 按旧文巡检会漏掉它们。
+>
+> 另外旧文里的故障模式库（出口 IP 漂移 50110、TradFi 54092、`entries_today` 跨日结转）**仍然有效**，
+> 可以当参考读。
+
 > **本文件是盯盘 Agent 的唯一执行规范。** 每次被唤醒先读本文件，再按本文件行动。
 > 改本文件 = 改盯盘行为，不需要改自动化配置。
 >
