@@ -58,6 +58,8 @@ JOB_HISTORY = "data/daily_job_history.jsonl"
 PIPELINE_LOG = "logs/ta-newlisting-service.log"
 INCOME_REPORT = "data/carry/income_report.json"
 ROTATION = "data/carry/rotation.jsonl"
+CARRY_SCREEN = "data/carry/screen_live.json"
+CARRY_HISTORY = "data/history/funding"
 EDGE = "data/readiness/edge.json"
 REPORT = "reports/live-readiness.md"
 READINESS_JSON = "data/readiness/readiness.json"
@@ -464,6 +466,63 @@ def gate_execution(root: Path) -> dict:
     }
 
 
+def candidate_window(root: Path, held_names: list[str], recent_days: int = 5) -> dict | None:
+    """Re-measure the rotation rule's top candidate over a window you can compare.
+
+    Found 2026-10-13 while asking why the rule never fires: the incumbent side is a
+    `--days 3` median, but the candidate side is `screen_live.json`'s
+    `median_daily_bps`, which is a median over its last `samples` prints - 100 prints
+    at a 4h settle interval is ~17 days. So a name can look 2x better than it has
+    actually been paying lately.
+
+    This only measures; it does not change what the rule proposes (that is a
+    strategy choice, and the rule is deliberately read-only).
+    """
+    screen = read_json(root / CARRY_SCREEN) or {}
+    rows = [r for r in (screen.get("rows") or [])
+            if r.get("symbol") and r.get("median_daily_bps") is not None]
+    held = {str(s).split("/")[0] for s in held_names}
+    rows = [r for r in rows if str(r["symbol"]).split("/")[0] not in held]
+    if not rows:
+        return None
+    top = max(rows, key=lambda r: float(r["median_daily_bps"]))
+    base = str(top["symbol"]).split("/")[0]
+    settle_hours = float(top.get("settle_hours") or 8.0)
+    samples = int(top.get("samples") or 0)
+    per_day = 24.0 / settle_hours if settle_hours else 3.0
+
+    prints = read_jsonl(root / CARRY_HISTORY / f"{base}-USDT_USDT.jsonl")
+    by_day: dict[str, list[float]] = {}
+    for row in prints:
+        ts, rate = row.get("ts"), row.get("rate")
+        if not isinstance(ts, (int, float)) or not isinstance(rate, (int, float)):
+            continue
+        stamp = float(ts)
+        if stamp < 1e11:
+            stamp *= 1000.0
+        day = datetime.datetime.fromtimestamp(stamp / 1000.0, UTC).date().isoformat()
+        by_day.setdefault(day, []).append(float(rate))
+    recent = sorted(by_day)[-recent_days:]
+    per_day_bps = [
+        sum(by_day[d]) / len(by_day[d]) * 10_000.0 * per_day for d in recent if by_day[d]
+    ]
+    recent_bps = sorted(per_day_bps)[len(per_day_bps) // 2] if per_day_bps else 0.0
+    gain = recent_bps - 0.0
+    return {
+        "symbol": top["symbol"],
+        "screen_bps": round(float(top["median_daily_bps"]), 3),
+        "samples": samples,
+        "settle_hours": settle_hours,
+        "window_days": samples / per_day if per_day else 0.0,
+        "recent_days": len(per_day_bps),
+        "recent_bps": recent_bps,
+        "recent_breakeven": float("inf") if gain <= 0 else 44.9 / gain,
+        "recent": ", ".join(f"{d[5:]}:{b:.1f}" for d, b in zip(recent, per_day_bps)),
+        "depth_ok": bool(top.get("depth_ok")),
+        "depth_bps": top.get("depth_bps"),
+    }
+
+
 def classify_reject(alert: dict) -> tuple[str, str]:
     """(class key, label) for one `order rejected` alert.
 
@@ -483,6 +542,41 @@ def classify_reject(alert: dict) -> tuple[str, str]:
     if "minimum amount" in reason or reason.startswith("dust") or "below the venue minimum" in reason:
         return "dust", dict(REJECT_CLASSES)["dust"]
     return "other", "其它"
+
+
+def closest_call(rows: list[dict]) -> dict | None:
+    """How close the carry rotation rule ever came to firing.
+
+    The rule needs a held pair below `floor_bps` on EVERY day of the window (three,
+    by default) - deliberately strict, because one bad print is the churn that cost
+    31 fills on the first day of live carry. "Never fired" is only informative next
+    to how near it got, so this returns the best (below, window, symbol) row plus
+    the days that blocked it.
+    """
+    best: dict | None = None
+    for row in rows:
+        floor = float(row.get("floor_bps") or 1.0)
+        when = str(row.get("generated_at") or "")[:16]
+        for pair in row.get("pairs") or []:
+            series = pair.get("daily_bps") or []
+            if not series:
+                continue
+            blocked = [
+                (str(day), float(bps)) for day, bps, *_ in series if float(bps) >= floor
+            ]
+            below = len(series) - len(blocked)
+            candidate = {
+                "symbol": pair.get("symbol"),
+                "when": when,
+                "below": below,
+                "window": len(series),
+                "blocked": blocked,
+                "floor_bps": floor,
+            }
+            # Ties go to the most recent round: "how near are we NOW" is the question.
+            if best is None or (below, when) > (best["below"], best["when"]):
+                best = candidate
+    return best
 
 
 def _within(alert: dict, days: int, today: datetime.date) -> bool:
@@ -738,9 +832,12 @@ def gate_carry(root: Path) -> dict:
     basket = report.get("basket_names") or []
     excluded = report.get("excluded") or {}
 
+    rot_rows = read_jsonl(rotation_path)
     rotations: list[dict] = []
-    for row in read_jsonl(rotation_path):
+    for row in rot_rows:
         rotations.extend(row.get("rotations") or [])
+    near = closest_call(rot_rows)
+    candidate = candidate_window(root, basket)
 
     days_ok = isinstance(realised_days, int) and realised_days >= CARRY_DAYS_REQUIRED
     rotated = bool(rotations)
@@ -765,8 +862,39 @@ def gate_carry(root: Path) -> dict:
             if isinstance(realised_days, int) and realised_days < CARRY_DAYS_REQUIRED
             else "。"
         )
-        + f"\n\n换腿规则实际触发次数：**{len(rotations)}**（`{ROTATION}` 里每轮的 `rotations` 全为空）。"
+        + f"\n\n换腿规则实际触发次数：**{len(rotations)}**。"
     )
+    if rot_rows:
+        detail += (
+            f"这条规则**不是没人跑**：`{ROTATION}` 里有 **{len(rot_rows)}** 轮评估"
+            f"（{str(rot_rows[0].get('generated_at'))[:16]} .. {str(rot_rows[-1].get('generated_at'))[:16]}），"
+            f"条件是某条持仓腿在**连续 {rot_rows[-1].get('days')} 天里每天都低于 "
+            f"{rot_rows[-1].get('floor_bps')} bps/天**。"
+        )
+        if near:
+            detail += (
+                f"\n\n最接近的一次是 **{near['symbol']}**（{near['when']}）：窗口 3 天里有 "
+                f"**{near['below']}/3** 天低于 floor，被 "
+                + "、".join(f"`{day}` 的 {bps:g} bps/天" for day, bps in near["blocked"])
+                + f"挡住。所以「0 次」是**市场没给出连续三天的塌陷**，不是规则坏了 —— "
+                f"但它也意味着 carry 的 5 个名额在这些名字上**锁住**：满员时换腿是唯一的进场方式。"
+            )
+    if candidate:
+        detail += (
+            f"\n\n⚠️ **两边的尺子不是同一把**：规则里**现任**用 `--days 3` 的中位（3 天），"
+            f"而**候选**读的是扫描快照 `{CARRY_SCREEN}` 的 `median_daily_bps` —— "
+            f"`samples={candidate['samples']}`、每 {candidate['settle_hours']:g}h 结算一次，"
+            f"那其实是 **≈{candidate['window_days']:.0f} 天**的中位。"
+            f"同一个名字 `{candidate['symbol']}`：快照 **{candidate['screen_bps']} bps/天**，"
+            f"但按最近 {candidate['recent_days']} 天实测只有 **{candidate['recent_bps']:.1f} bps/天**"
+            f"（{candidate['recent']}）。用「2 天窗口」跑一次规则会提议 "
+            f"`LTC/USDT → {candidate['symbol']}`、breakeven 4 天；"
+            f"拿最近的数折算，同一个提议是 **≈{candidate['recent_breakeven']:.0f} 天**回本。"
+            f"\n\n方向不变（LTC 确实是最弱的一条腿），**倍数是虚的**；"
+            f"而且这个候选在快照里 `depth_ok={candidate['depth_ok']}`（查不到深度），"
+            f"按「入场前查不到深度就拒」的闸门，它**根本进不来**。"
+            f"修哪一边是策略选择，所以这里只报数、不动规则。"
+        )
     return {
         "id": 5,
         "name": "资金费证据",
@@ -774,7 +902,7 @@ def gate_carry(root: Path) -> dict:
         "status": "met" if met else "unmet",
         "value": f"{realised_days if realised_days is not None else '?'}/{CARRY_DAYS_REQUIRED} 天 · 换腿 {len(rotations)} 次",
         "detail": detail,
-        "evidence": [rel(report_path), rel(rotation_path)],
+        "evidence": [rel(report_path), rel(rotation_path), rel(root / CARRY_SCREEN)],
         "window": f"{window[0]} .. {window[-1]}" if window else "—",
     }
 

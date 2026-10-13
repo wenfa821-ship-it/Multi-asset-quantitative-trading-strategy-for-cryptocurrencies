@@ -6426,6 +6426,77 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
                 windows, prices),
             "unexplained")
 
+    def test_carry_rotation_reports_how_close_it_came(self) -> None:
+        """门槛 5 的「换腿至少触发过一次」= 0，但 0 本身没有信息量。
+        规则要的是「某条腿连续 3 天每天都低于 floor」；报告要能说出**差在哪一天**，
+        否则「0 次」既可能是规则坏了、也可能是市场没给 —— 这两件事要分开。"""
+        module = self._mod()
+        rows = [
+            {"generated_at": "2026-10-11T01:19:14+00:00", "days": 3, "floor_bps": 1.0,
+             "pairs": [{"symbol": "LTC/USDT", "stale": False, "median_bps": 0.114,
+                        "daily_bps": [["2026-10-09", 0.114, 3], ["2026-10-10", 0.081, 3],
+                                      ["2026-10-11", 1.508, 1]]}],
+             "rotations": []},
+            {"generated_at": "2026-10-13T01:19:22+00:00", "days": 3, "floor_bps": 1.0,
+             "pairs": [{"symbol": "LTC/USDT", "stale": True, "median_bps": 0.33,
+                        "daily_bps": [["2026-10-11", 0.5, 3], ["2026-10-12", 0.2, 3],
+                                      ["2026-10-13", 0.3, 1]]}],
+             "rotations": []},
+        ]
+        # 平手取最近一轮（「现在离得多近」才是要问的）
+        near = module.closest_call(rows)
+        self.assertEqual(near["symbol"], "LTC/USDT")
+        self.assertEqual(near["when"], "2026-10-13T01:19")   # 报告只显示到分钟
+        self.assertEqual((near["below"], near["window"]), (3, 3))
+        self.assertEqual(near["blocked"], [])
+
+        earlier = module.closest_call(rows[:1])
+        self.assertEqual(earlier["below"], 2)
+        self.assertEqual(earlier["blocked"], [("2026-10-11", 1.508)])
+        self.assertEqual(module.closest_call([]), None)
+
+    def test_candidate_is_remeasured_on_the_incumbent_window(self) -> None:
+        """换腿规则的现任是「3 天中位」，候选却是扫描快照的 100 个样本中位
+        （4h 结算 ⇒ ≈17 天）。同一个名字因此可以看着比它近期实际支付的好一倍 ——
+        2026-10-13 的 TRIA：快照 11.933、最近 5 天 5.2。"""
+        import tempfile
+
+        module = self._mod()
+        import datetime
+
+        day_ms = 86_400_000
+        base_ms = int(datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
+                      .timestamp() * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "carry").mkdir(parents=True, exist_ok=True)
+            (root / "data" / "carry" / "screen_live.json").write_text(json.dumps({
+                "rows": [
+                    {"symbol": "TRIA/USDT:USDT", "median_daily_bps": 11.933,
+                     "samples": 100, "settle_hours": 4.0, "depth_ok": False,
+                     "depth_bps": None},
+                    {"symbol": "LTC/USDT:USDT", "median_daily_bps": 99.0,
+                     "samples": 100, "settle_hours": 8.0, "depth_ok": True},
+                ]}, ensure_ascii=False), encoding="utf-8")
+            hist = root / "data" / "history" / "funding"
+            hist.mkdir(parents=True, exist_ok=True)
+            # 5 天 × 6 个 4h 结算，bps/天 = 12,12,3,3,3 → 取中位 3.0
+            rates = [0.0002, 0.0002, 0.00005, 0.00005, 0.00005]
+            prints = []
+            for day, rate in enumerate(rates):
+                for slot in range(6):
+                    prints.append({"ts": base_ms + day * day_ms + slot * 14_400_000,
+                                   "rate": rate})
+            (hist / "TRIA-USDT_USDT.jsonl").write_text(
+                "\n".join(json.dumps(p) for p in prints) + "\n", encoding="utf-8")
+            got = module.candidate_window(root, ["BAND", "LTC", "NEAR", "SUI"])
+        self.assertEqual(got["symbol"], "TRIA/USDT:USDT")   # 已持有的 LTC 不当候选
+        self.assertEqual(got["screen_bps"], 11.933)
+        self.assertAlmostEqual(got["window_days"], 100 / 6, places=1)
+        self.assertAlmostEqual(got["recent_bps"], 3.0, places=1)
+        self.assertFalse(got["depth_ok"])
+        self.assertGreater(got["recent_breakeven"], 4.0)    # 折算后回本比快照说得久
+
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile
 

@@ -442,6 +442,13 @@
    "state": "waiting_decision",
    "gate": "当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的",
    "next": "三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底）"
+  },
+  {
+   "id": "carry-rotation-bench",
+   "item": "换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字",
+   "state": "waiting_decision",
+   "gate": "2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来",
+   "next": "三选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状、只在报告里标注（当前就是这个状态）"
   }
  ]
 }

@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.9**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.10**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.10 — 2026-10-13T16:38
+
+- 测试 **427** 绿 · 权益 $102,438.57 · 记录时的包版本 1.1.10
+
+换腿规则「0 次触发」查清：规则没坏（最接近的是 LTC 3 天里 2/3 低于 floor，被 10-11 的 1.508 bps/天挡住），离线 --days 2 能出提议（LTC→TRIA, breakeven 4d）。但查出两把尺子不同长：现任是 --days 3 中位、候选是 screen_live.json 的 ≈17 天中位（samples=100×4h），TRIA 最近 5 天实测仅 5.2 bps/天（快照 11.933），折算回本 ≈9 天；且 TRIA depth_ok=false，规则在提议一个进不去的名字。只报数不动规则，已登记 carry-rotation-bench 待决定。427 测试绿。
 
 ## v1.1.9 — 2026-10-13T16:13
 
