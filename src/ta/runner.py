@@ -47,6 +47,31 @@ class KillSwitchTriggered(RuntimeError):
     """Raised to unwind the loop after a kill-switch flatten."""
 
 
+def depth_size_fields(symbol: str, qty: float, mark: float | None, kind: str) -> dict:
+    """The fields a depth refusal carries — including **which size it judged**.
+
+    2026-10-13: the gate is fed `decision.qty`, the risk-based DESIRED size
+    (`equity × tier risk% ÷ stop distance`). With a tight stop that is 3~7x the tier's
+    position cap, and the risk engine afterwards shrinks it (`shrunk 54922 -> 12240`).
+    So every directional refusal in the log was judged against an order that would
+    never have been submitted — unusable in BOTH directions. Measured on live books:
+    ETH was refused at 21.7 units ($54k, `None` = cannot fill) while the capped 4.88
+    ($12.2k) costs 9.8 bps and would have passed.
+
+    The gate itself is deliberately kept: a leg measured at −0.82%..−2.02% out of
+    sample should not be trading to collect paper fills (and letting it trade would
+    inflate the sample gates with trades nobody intends to run live). What changes is
+    that the log now says what it judged, so "not enough depth" is not misread as
+    "our order does not fit".
+    """
+    fields: dict = {"symbol": symbol, "qty": qty, "kind": kind}
+    if mark:
+        fields["judged_notional_usd"] = round(qty * float(mark), 2)
+    fields["size_basis"] = ("pre-cap desired size (risk-based); the risk engine "
+                            "would shrink it to the tier cap")
+    return fields
+
+
 @dataclass
 class ExitPlan:
     """How an open position will be managed: stop, targets, scale-out, time stop."""
@@ -1076,7 +1101,7 @@ class TradingRunner:
                 return False
             # DEPTH GATE (README 59.9). See _entry_depth_refused - it is shared
             # with every other entry now, not just carry's two legs.
-            if self._entry_depth_refused(signal.symbol, qty, "carry"):
+            if self._entry_depth_refused(signal.symbol, qty, "carry", mark=mark):
                 return False
             # BASIS GATE (README 59.14). The pair realises P - S on convergence:
             # a perp BELOW spot is money paid at entry. Measured 2026-10-09: ACT
@@ -1167,7 +1192,7 @@ class TradingRunner:
         # equities whose book is one-sided or empty most of the day (17 of 20
         # lines had no ask when measured), and the risk engine's spread check
         # passes when the spread cannot be measured. "Cannot tell" is a refusal.
-        if self._entry_depth_refused(signal.symbol, qty, strategy.name):
+        if self._entry_depth_refused(signal.symbol, qty, strategy.name, mark=mark):
             return False
         order = self._submit(request, account, mark, marks)
         if order is None or order.status not in ("filled", "open"):
@@ -1235,7 +1260,8 @@ class TradingRunner:
             return None  # locked/crossed book: there is no maker price to join
         return float(bid)
 
-    def _entry_depth_refused(self, symbol: str, qty: float, kind: str) -> bool:
+    def _entry_depth_refused(self, symbol: str, qty: float, kind: str,
+                             mark: float | None = None) -> bool:
         """Refuse an entry the book cannot absorb at an acceptable cost.
 
         Thin or one-sided books are the normal case for the TradFi sleeve, and a
@@ -1259,8 +1285,7 @@ class TradingRunner:
         self.log.warning(
             f"{kind} entry refused: not enough depth",
             extra={"extra_fields": {
-                "symbol": symbol,
-                "qty": qty,
+                **depth_size_fields(symbol, qty, mark, kind),
                 "impact_bps": None if impact is None else round(impact, 1),
                 "cap_bps": cap,
                 "why": reason,

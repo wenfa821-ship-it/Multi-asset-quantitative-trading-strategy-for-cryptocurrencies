@@ -4909,6 +4909,26 @@ class EntryDepthGateCoverageTests(unittest.TestCase):
             dry_run=False,
         )
 
+    def test_a_depth_refusal_says_which_size_it_judged(self) -> None:
+        """2026-10-13：闸门被喂的是**缩量前**的期望尺寸（`权益×tier风险%÷止损距离`），
+        而风控引擎随后会把它缩到 tier 上限（日志里 `shrunk 54922 -> 12240`）。
+        实测今天的盘口：ETH 想要的 21.7 张（$54k）→ `None` ⇒ 拒绝，而缩量后的 4.88 张
+        （$12.2k）只要 9.8 bps，本来会通过。闸门保留（那两条腿样本外 −0.82%~−2.02%，
+        不该靠它去攒纸面成交），但日志必须说清判的是哪个数量。
+        """
+        from ta.runner import depth_size_fields
+
+        fields = depth_size_fields("ETH/USDT", 21.735, 2507.01, "mean_reversion")
+        self.assertEqual(fields["symbol"], "ETH/USDT")
+        self.assertEqual(fields["kind"], "mean_reversion")
+        self.assertEqual(fields["judged_notional_usd"], round(21.735 * 2507.01, 2))
+        self.assertIn("pre-cap", fields["size_basis"])
+        self.assertIn("shrink", fields["size_basis"])
+        # 没有 mark 时不编造名义，但「判的是哪个尺寸」这句必须还在
+        bare = depth_size_fields("ETH/USDT", 21.735, None, "mean_reversion")
+        self.assertNotIn("judged_notional_usd", bare)
+        self.assertIn("size_basis", bare)
+
     def _entry(self, runner: TradingRunner, impact: float | None) -> bool:
         from ta.models import Signal
         from ta.strategies.base import MarketView

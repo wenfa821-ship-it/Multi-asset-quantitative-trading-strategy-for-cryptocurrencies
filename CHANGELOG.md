@@ -1,12 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.18**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.19**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-13T18:23 起，1 条留痕）
+## v1.1.19 — 2026-10-13T18:40
 
-- `2026-10-13T18:27` **bug** 深度闸门判的是「缩量前」的数量（比真正会发出去的大 3~7 倍）：方向性策略从未按真实尺寸被评估过
+- 测试 **444** 绿 · 权益 $102,428.46 · 记录时的包版本 1.1.19
+
+深度闸门按建议处置：保留为有意的刹车（两条腿样本外 −0.82%/−1.92%，放行等于烧手续费买已知为负的结论，还会用不打算实盘跑的腿灌胖门槛 2/3），只把「判的是缩量前尺寸」写进拒绝日志：新增 ta.runner.depth_size_fields（kind / judged_notional_usd / size_basis），两处调用点传 mark，行为零变化。444 测试绿。
 
 ## v1.1.18 — 2026-10-13T18:23
 
