@@ -42,7 +42,7 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 
 <!-- PROGRESS:BEGIN -->
 
-> 生成自 `docs/progress.json`（`python3 scripts/progress.py`），更新于 2026-10-12。
+> 生成自 `docs/progress.json`（`python3 scripts/progress.py`），更新于 2026-10-13。
 > **每轮先读这张表，收尾时更新它** —— 它是「下一步做什么」的唯一事实来源。
 
 | # | 项目 | 状态 | 闸门 / 依据 | 下一步 |
@@ -106,8 +106,9 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `project-scope-hold` | 项目定名与挂起政策：多资产组合策略（当前 100% 仓位）；剩余 waiting_data 等在实盘阶段再更新 | **✅ 完成** | 用户决定（2026-10-11，含当日追加确认）：① 项目定名为**多资产组合策略**，四条腿共用一份风控/账本/闸门，当前 100% 仓位属于它；② 未来新增**新币策略**另立新项目（预定名**新币主观量化策略**），不混入本项目；③ 版本管理法则不变（仍按 RELEASING.md 的 7 步与语义化版本）；④ 表上剩余的 waiting_data 项**不再逐轮更新**，等实盘后再统一重估；⑤ **目录名与 git 仓库路径保持 `trading-agent` 不改**——项目名只在文档层生效 | 维护：README 顶部与 docs/RELEASING.md 已写入项目名与边界；代码目录名保持 `trading-agent`（5 个 launchd 单元的 WorkingDirectory 指着它）。**新项目已落地（2026-10-11 同日）**：`rh/outputs/newcoin-subjective-quant`，独立 git / 进度表 / 版本号 / **自己的证据标准**，已封板 v0.1.0（36 测试、无真实成交、不连 API）。本项目继续按实时数据自我更新；再启动时：若决定进入实盘，把实盘相关项从挂起恢复成可执行 |
 | `carry-income-report` | carry 真实收入的「两个口径对照」报告（非尖峰篮子）：市场费率 vs 模拟盘到账 | **✅ 完成** | 用户 2026-10-11 同意先算一份非尖峰标的的 carry 真实收入报告；越算越发现 `income.jsonl` 本身口径错（滚动窗口重复计费、bps 少除窗口天数），一并修掉 | 每天由 `daily_research.py` 跑 `scripts/carry_income_report.py --write` 累积到 `data/carry/income_report.json`（代理不通时退化为只读费率面板，不会让任务变红）。结论：市场费率 ~2.03 bps/天、44.9 bps 往返回本 22.2 天、30 天净 +15.9 bps → **低于自己的 20 bps 边际门槛**，今天不该新开 carry 对，也不该触发换腿。等 §70.6 第 5 条门槛（非尖峰 ≥30 天实测，现只有 4 天）满 |
 | `dashboard-two-projects` | 运营看板分开展示两个项目（tab 切换 + 「新币主观量化策略」面板） | **✅ 完成** | 用户 2026-10-11 要求分开展示并优化 UI；读对方发布的 `data/reports/latest.json`，**不 import 对方代码**（独立仓库/独立证据标准） | 维护：新币项目每 6 小时自动刷新该报告；报告缺失或超过 26 小时未更新时，面板显示**原因**而不是 0。面板以对方的证据标准进度开头（开仓/结案/③+④），并新增「失效条件」KPI（2026-10-12，读对方发布的 invalidations.json：待结案 / 判不了 / 最深那只）—— 「有几条触发还没结案」是它现在唯一的待办出口 |
+| `preconditions-guard` | 前置的**执行闸门**：`config/preconditions.json` + `scripts/preconditions.py --check <id>`（closed / blocked / 过期一律非零退出） | **✅ 完成** | 2026-10-12 的 $0.27：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉，代码侧没有拦截 → 同一件事被重跑。判据改成**能被脚本读**，并写进 spec §6 的执行须知 | 维护：新增前置/实验时先登记（新 id）；要重做已结案的事必须**新立条目**，不允许把 closed 改回 open。检查器 6 条测试守着 |
 
-**合计**：✅ 完成 50 · ⏳ 等数据 9。
+**合计**：✅ 完成 51 · ⏳ 等数据 9。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。

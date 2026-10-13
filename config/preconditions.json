@@ -1,0 +1,53 @@
+{
+  "_note": "前置/实验的**机器可读登记表**。执行任何一条前置（换币、买一张期权、改 enabled…）之前先跑 `python3 scripts/preconditions.py --check <id>`：它不是 `open` 或已过期，脚本就以非零退出。刻意是数据文件而不是代码 —— 与 config/alerts.json、config/options_premium.json 同一个理由：改一条状态不该动代码。",
+  "_why": "2026-10-12 的教训：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉（~~已做、已撤、已结案~~），代码侧没有任何拦截，于是同一件事被重跑了一次（净成本 ≈ $0.27）。写进文档的「已结案」不是判据，能被脚本读到的才是。",
+  "_status_meaning": {
+    "open": "可以执行（且未过期）",
+    "closed": "已结案，不许重跑；要再做必须新立条目（新 id）",
+    "blocked": "外部条件不具备（等对手方/等数据/等新场所），不是「未完成」"
+  },
+  "items": [
+    {
+      "id": "options-funding-btc",
+      "title": "现货换 ~$100 USDT → BTC（期权权利金库存）",
+      "status": "closed",
+      "closed_at": "2026-10-11T18:00:00+08:00",
+      "expires_at": "2026-10-11T23:59:59+08:00",
+      "why": "README §69 已证明这套模拟环境买不到期权 → 这个前置本身没有意义（不是「等批准」，是「不需要」）",
+      "repeat_policy": "禁止重跑；要再动 BTC 库存必须新立条目（新 id）",
+      "cost_of_repeat": "2026-10-12 13:05 被重跑一次：0.00119482 BTC 往返，净成本 ≈ $0.27（手续费 $0.1999 + 滑点）",
+      "spec": "docs/options-sleeve-spec.md §6.1",
+      "evidence": "docs/changelog.jsonl 2026-10-12T13:05（bug 条目）"
+    },
+    {
+      "id": "options-fill-one-contract",
+      "title": "买 1 张 ATM 30d，记录成交价 vs mid / 手续费 / 价差",
+      "status": "blocked",
+      "closed_at": null,
+      "expires_at": null,
+      "why": "这个场馆没有对手方流动性：市价被拒（50016）、按卖一价被价格带拒（51006）、挂买一价等 25 分钟无人成交，2026-10-12 又用 12 分钟挂单复测同样无人卖",
+      "repeat_policy": "同一场馆不要再试；换到有对手方的场所再新立条目",
+      "spec": "docs/options-sleeve-spec.md §6.2"
+    },
+    {
+      "id": "options-gate-config",
+      "title": "把 §4 的闸门写成配置（交付物）",
+      "status": "closed",
+      "closed_at": "2026-10-10T20:00:00+08:00",
+      "expires_at": null,
+      "why": "已交付：config/options_premium.json + scripts/options_gate.py（这是交付物，不是可执行前置）",
+      "repeat_policy": "已交付",
+      "spec": "docs/options-sleeve-spec.md §6.3"
+    },
+    {
+      "id": "options-enable-after-gate",
+      "title": "IV−RV 判据成立后把 enabled 改成 true",
+      "status": "blocked",
+      "closed_at": null,
+      "expires_at": null,
+      "why": "判据 2026-10-12 已成立（BTC 5/5 天，最新 +6.87pp），但**这套模拟环境买不到期权** → 开闸不会带来任何交易；要等的是有对手方的场所，不是判据",
+      "repeat_policy": "等外部条件；在此之前不要改 enabled",
+      "spec": "docs/options-sleeve-spec.md §6.4"
+    }
+  ]
+}

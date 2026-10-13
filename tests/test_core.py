@@ -5760,5 +5760,68 @@ class SpotTdModeTests(unittest.TestCase):
             CcxtVenue._create_order(venue, self._request(), 0.001, {"tdMode": "cross"})
 
 
+class PreconditionGuardTests(unittest.TestCase):
+    """2026-10-12 的 $0.27：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉，
+    代码侧没有拦截，于是那件事被重跑了一次。这里的判据必须**能被脚本读**。"""
+
+    def test_a_closed_precondition_refuses_and_says_why(self) -> None:
+        from scripts.preconditions import is_executable
+
+        ok, reason = is_executable({"id": "x", "status": "closed",
+                                    "why": "§69 已证明这里买不到期权",
+                                    "repeat_policy": "禁止重跑"})
+        self.assertFalse(ok)
+        self.assertIn("closed", reason)
+        self.assertIn("禁止重跑", reason)
+
+    def test_a_blocked_precondition_is_not_an_unfinished_one(self) -> None:
+        from scripts.preconditions import is_executable
+
+        ok, reason = is_executable({"id": "x", "status": "blocked", "why": "没有对手方"})
+        self.assertFalse(ok)
+        self.assertIn("外部条件不具备", reason)
+
+    def test_an_open_precondition_expires(self) -> None:
+        import datetime
+
+        from scripts.preconditions import is_executable
+
+        now = datetime.datetime(2026, 10, 13, 12, 0, tzinfo=datetime.UTC)
+        before = {"id": "x", "status": "open", "expires_at": "2026-10-13T23:59:59+08:00"}
+        after = {"id": "x", "status": "open", "expires_at": "2026-10-12T23:59:59+08:00"}
+        self.assertTrue(is_executable(before, now)[0])
+        ok, reason = is_executable(after, now)
+        self.assertFalse(ok)
+        self.assertIn("过期", reason)
+
+    def test_an_open_precondition_without_expiry_is_allowed(self) -> None:
+        from scripts.preconditions import is_executable
+
+        self.assertTrue(is_executable({"id": "x", "status": "open"})[0])
+
+    def test_the_registry_marks_the_btc_inventory_as_closed(self) -> None:
+        from scripts.preconditions import load
+
+        items = {i["id"]: i for i in load()}
+        btc = items["options-funding-btc"]
+        self.assertEqual(btc["status"], "closed")
+        self.assertIn("禁止重跑", btc["repeat_policy"])
+        self.assertEqual(btc["spec"], "docs/options-sleeve-spec.md §6.1")
+        self.assertIn("$0.27", btc["cost_of_repeat"])
+
+    def test_an_unknown_status_is_an_error_not_a_silent_no(self) -> None:
+        import json
+        import tempfile
+
+        from scripts.preconditions import load
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "p.json"
+            path.write_text(json.dumps({"items": [{"id": "x", "status": "maybe"}]}),
+                            encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                load(path)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
