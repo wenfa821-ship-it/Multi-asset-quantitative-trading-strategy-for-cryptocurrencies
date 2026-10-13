@@ -5823,15 +5823,42 @@ class PreconditionGuardTests(unittest.TestCase):
                 load(path)
 
 
+class VersionSnapshotGateTests(unittest.TestCase):
+    """2026-10-13：冻结工具曾经把**红着的树**冻成版本，并把 `1 failed, 399 passed`
+    读成 `tests=1` —— 而它的 docstring 写的是「测试不过就不是版本」。"""
+
+    def _count(self, stdout: str, returncode: int) -> int | None:
+        import subprocess
+        from unittest import mock
+
+        from scripts import version_snapshot as v
+
+        fake = subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout,
+                                           stderr="")
+        with mock.patch.object(v.subprocess, "run", return_value=fake):
+            return v._test_count()
+
+    def test_a_green_suite_reports_the_passed_count(self) -> None:
+        self.assertEqual(self._count("400 passed in 49.10s\n", 0), 400)
+
+    def test_a_red_suite_refuses_to_freeze(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            self._count("1 failed, 399 passed in 49.21s\n", 1)
+        self.assertIn("拒绝冻结", str(ctx.exception))
+
+
 class VenueDegradedFreshnessTests(unittest.TestCase):
     """2026-10-13（10-12 复盘建议 ③）：只报「累计 N 次」等于永远等不到阈值 ——
     一次网络抖动会永久挂在面板上。改成按**最近 24h 次数**判，>5 次才 warn。"""
 
     def _flags(self, *, fresh: int, old: int) -> list[dict]:
+        """**把现役 metrics 屏蔽掉**：`ta_venue_degraded_total` 是进程级累计值，
+        本机跑测试时它非零（服务在跑），会让「只数账本里的新鲜事件」这件事测不出来。"""
         import datetime
         import json
         import shutil
         import tempfile
+        from unittest import mock
 
         from ta.dashboard import DashboardData
 
@@ -5851,8 +5878,9 @@ class VenueDegradedFreshnessTests(unittest.TestCase):
                              "action": "venue degraded - new entries suspended"})
             (work / "data" / "ledger.okx_demo.jsonl").write_text(
                 "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-            return [f for f in DashboardData(work / "config").redflags()
-                    if f["title"] == "网络降级计数"]
+            with mock.patch.object(DashboardData, "live_metrics", return_value={}):
+                flags = DashboardData(work / "config").redflags()
+            return [f for f in flags if f["title"] == "网络降级计数"]
 
     def test_a_single_recent_degradation_is_info_not_a_warn(self) -> None:
         flags = self._flags(fresh=1, old=0)

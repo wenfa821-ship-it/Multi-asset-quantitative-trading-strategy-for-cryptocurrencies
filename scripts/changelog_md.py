@@ -65,11 +65,14 @@ def load_versions() -> list[dict]:
             # (`# vX` title, "Frozen ...", the trailing compare-against line) -
             # those are already reconstructable from manifest.json.
             text = notes_path.read_text(encoding="utf-8").strip().splitlines()
+            # 2026-10-13：快照 NOTES 的收尾是一句两句的样板（"Strategy changes…" 后面
+            # 还有一行 "its config/ and manifest.json rather than against memory."）——
+            # 过滤只写了前半句，于是每个版本的说明后面都挂着一行断句残骸（CHANGELOG 里 21 处）。
+            boilerplate = ("Frozen ", "Strategy changes after this point",
+                           "its config/ and manifest.json rather than against memory")
             keep = [
                 line for line in text[2:]
-                if line.strip()
-                and not line.startswith("Frozen ")
-                and not line.startswith("Strategy changes after this point")
+                if line.strip() and not line.startswith(boilerplate)
             ]
             notes = "\n".join(keep)
         out.append({

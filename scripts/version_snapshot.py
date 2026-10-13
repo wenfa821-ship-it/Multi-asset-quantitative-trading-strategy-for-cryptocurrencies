@@ -28,6 +28,7 @@ unless --force, because a version that can be silently rewritten is not a versio
 from __future__ import annotations
 
 import argparse
+import re
 import datetime
 import json
 import shutil
@@ -66,7 +67,13 @@ def _equity_and_positions() -> dict:
 
 
 def _test_count() -> int | None:
-    """Run the suite quietly. A version whose tests do not pass is not a version."""
+    """Run the suite quietly. **A version whose tests do not pass is not a version.**
+
+    2026-10-13 实测的两个毛病（当时差点把坏快照当版本发出去）：
+    1. 原来只看输出里第一段数字 —— 一行 `1 failed, 399 passed` 会被读成 **tests=1**；
+    2. 原来**不看返回码**，红着的树照样冻结，与这句 docstring 自相矛盾。
+    现在：非零就 `SystemExit` 拒绝冻结；绿了才解析 `N passed`。
+    """
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "tests", "-p", "no:cacheprovider"],
@@ -74,12 +81,11 @@ def _test_count() -> int | None:
         )
     except Exception:  # noqa: BLE001 - a missing pytest must not block the archive
         return None
-    tail = (proc.stdout or "").strip().splitlines()
-    for line in reversed(tail):
-        if "passed" in line:
-            digits = "".join(ch if ch.isdigit() else " " for ch in line).split()
-            return int(digits[0]) if digits else None
-    return None
+    if proc.returncode != 0:
+        tail = "\n".join((proc.stdout or "").strip().splitlines()[-12:])
+        raise SystemExit("测试没过，**拒绝冻结版本**（先修绿再来）：\n" + tail)
+    match = re.search(r"(\d+) passed", proc.stdout or "")
+    return int(match.group(1)) if match else None
 
 
 def main() -> int:
