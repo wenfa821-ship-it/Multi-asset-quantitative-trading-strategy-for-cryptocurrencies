@@ -1,13 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.5**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.6**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-13T13:08 起，2 条留痕）
+## v1.1.6 — 2026-10-13T15:50
 
-- `2026-10-13T15:04` **ops** 入口文档与现实对不上：README 顶部还写着「当前版本 v1.0.0」、RELEASING 的版本表三行过期、`path-5` 停在「4/5 天」
-- `2026-10-13T15:44` **ops** 把四条**常设声明**变成实测（本轮无缺陷）：扫描器会自我刷新 / 每轮按时跑完 / 磁盘与 stderr 都干净
+- 测试 **409** 绿 · 权益 $102,434.72 · 记录时的包版本 1.1.6
+
+看板新增「待你决定」面板：DashboardData.decisions() 读 docs/progress.json 的 waiting_decision 行并进 /api/snapshot，面板连同兄弟项目发布的待决项一起显示（缺文件给原因不给 0）。同时把两条只在回复里存在的流程决定登记成行：dashboard-restart-pending（两处 Python 改动要重启才生效）、data-files-in-git（三选一）。当前收件箱 3 + 4 = 7 条。
 
 ## v1.1.5 — 2026-10-13T13:08
 

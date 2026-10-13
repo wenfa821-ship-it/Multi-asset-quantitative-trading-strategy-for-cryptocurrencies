@@ -106,6 +106,11 @@
 <main>
 <div id="view-portfolio" class="viewgrid">
   <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis"></div></section>
+  <section class="span12" id="decisions-section" hidden><h2>待你决定（两个项目）</h2>
+    <div id="decisions"></div>
+    <div class="muted" style="margin-top:6px">来源：本项目的 <code>docs/progress.json</code> 与兄弟项目发布的进度表 ——
+      只列 <code>state = waiting_decision</code> 的行。其余「等数据/等闸门」的条目不在这一块。</div>
+  </section>
   <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
   <section class="span12"><h2>常驻服务与告警看门狗</h2>
     <div id="services"></div>
@@ -929,6 +934,27 @@ function renderRefit(list) {
     || '<tr><td colspan="4" class="dim">还没有参数迭代记录</td></tr>';
 }
 
+function renderDecisions(d) {
+  // 2026-10-13: 两个项目的待决项集中在这里 —— 它们原本只活在巡检回复与进度表里，
+  // 而进度表看板根本不读，于是「下一步做什么」的唯一事实来源在看板上是隐形的。
+  const mine = ((d.decisions || {}).rows || []);
+  const theirs = (((d.newcoin || {}).progress || {}).rows || [])
+    .filter(r => r.state === 'waiting_decision');
+  const rows = [
+    ...mine.map(r => ({ owner: '多资产组合策略', ...r })),
+    ...theirs.map(r => ({ owner: '新币主观量化策略', ...r })),
+  ];
+  $('#decisions-section').hidden = rows.length === 0;
+  if (!rows.length) return;
+  $('#decisions').innerHTML = `<div class="scroll"><table><thead><tr>
+      <th>项目</th><th>id</th><th>要决定什么</th><th>下一步 / 选项</th>
+    </tr></thead><tbody>${rows.map(r => `<tr>
+      <td>${esc(r.owner)}</td>
+      <td class="dim">${esc(r.id || '')}</td>
+      <td>${esc(r.item || '')}</td>
+      <td class="dim">${esc(r.next || '')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
 function renderArtifacts(list) {
   const size = (b) => b > 1048576 ? n(b/1048576,1)+' MB' : (b > 1024 ? n(b/1024,0)+' KB' : b+' B');
   $('#artifacts tbody').innerHTML = (list || []).map(a => `<tr>
@@ -961,6 +987,7 @@ async function refresh() {
     renderThresholds(d.services);
     renderRefit(d.refit);
     renderArtifacts(d.artifacts);
+    renderDecisions(d);
     renderNewcoin(d.newcoin);
     if (AUDIT.length !== d.audit.length) { AUDIT = d.audit; renderAuditFilter(); }
     renderAudit();

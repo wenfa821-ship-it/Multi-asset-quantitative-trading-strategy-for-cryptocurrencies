@@ -5985,6 +5985,51 @@ class UniverseRefreshTests(unittest.TestCase):
         self.assertEqual(len(symbols), len(set(symbols)))    # 去重
 
 
+class DecisionsPanelTests(unittest.TestCase):
+    """2026-10-13：两个项目的「待决事项」集中到看板总览 —— 它们原本只活在巡检回复与进度表里，
+    而进度表看板根本不读，于是「下一步做什么」的唯一事实来源在看板上是隐形的。"""
+
+    def test_waiting_decision_rows_are_surfaced(self) -> None:
+        import json
+        import shutil
+        import tempfile
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):          # DashboardData 要能加载配置
+                shutil.copy(toml, work / "config" / toml.name)
+            (work / "docs").mkdir(parents=True)
+            (work / "docs" / "progress.json").write_text(json.dumps({
+                "updated": "2026-10-13",
+                "rows": [
+                    {"id": "a", "state": "waiting_decision", "item": "要决定 A",
+                     "next": "选项 1 或 2"},
+                    {"id": "b", "state": "done", "item": "做完的"},
+                    {"id": "c", "state": "waiting_data", "item": "等数据的"},
+                ]}, ensure_ascii=False), encoding="utf-8")
+            out = DashboardData(work / "config").decisions()
+        self.assertEqual([r["id"] for r in out["rows"]], ["a"])
+        self.assertEqual(out["rows"][0]["next"], "选项 1 或 2")
+
+    def test_a_missing_progress_file_is_a_reason_not_a_crash(self) -> None:
+        import shutil
+        import tempfile
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            out = DashboardData(work / "config").decisions()
+        self.assertEqual(out["rows"], [])
+        self.assertIn("Error", out["reason"])
+
+
 class NewListingCategoryTests(unittest.TestCase):
     """2026-10-13：`new_listing_track` 原来写死 `instCategory == "1"`，日志只写「added 0」——
     近 8 天 OKX 上线的 32 个交易对里，8 个已成熟的 X***（股票代币，cat=3）一个都没记，

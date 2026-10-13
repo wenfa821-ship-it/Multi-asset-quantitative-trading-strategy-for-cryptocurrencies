@@ -421,6 +421,20 @@
    "state": "done",
    "gate": "2026-10-12 的 $0.27：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉，代码侧没有拦截 → 同一件事被重跑。判据改成**能被脚本读**，并写进 spec §6 的执行须知",
    "next": "维护：新增前置/实验时先登记（新 id）；要重做已结案的事必须**新立条目**，不允许把 closed 改回 open。检查器 6 条测试守着"
+  },
+  {
+   "id": "dashboard-restart-pending",
+   "item": "两处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用）",
+   "state": "waiting_decision",
+   "gate": "2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）。两处都已测试通过、HTML 即时生效部分已上线，但读指标/读进度表的那一半需要重启进程",
+   "next": "要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启"
+  },
+  {
+   "id": "data-files-in-git",
+   "item": "父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`）",
+   "state": "waiting_decision",
+   "gate": "当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的",
+   "next": "三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底）"
   }
  ]
 }

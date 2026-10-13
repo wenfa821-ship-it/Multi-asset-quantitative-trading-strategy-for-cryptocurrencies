@@ -764,6 +764,26 @@ class DashboardData:
         rows.sort(key=lambda r: str(r.get("ts") or ""), reverse=True)
         return rows
 
+    def decisions(self) -> dict[str, Any]:
+        """**待用户决定的事**（`docs/progress.json` 里 state = waiting_decision 的行）。
+
+        2026-10-13：这些条目原来只活在巡检回复和进度表里 —— 而进度表看板根本不读，
+        于是「下一步做什么」的唯一事实来源在看板上是隐形的。这里把它读进来，
+        并在面板上把**兄弟项目的待决项**（它发布的 JSON 里有 progress.rows）一起列出来。
+        """
+        path = self.root / "docs" / "progress.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return {"updated": None, "rows": [], "reason": f"{type(exc).__name__}: {exc}"}
+        rows = [r for r in (payload.get("rows") or [])
+                if str(r.get("state")) == "waiting_decision"]
+        return {
+            "updated": payload.get("updated"),
+            "rows": [{"id": r.get("id"), "item": r.get("item"),
+                      "next": r.get("next"), "gate": r.get("gate")} for r in rows],
+        }
+
     def artifacts(self) -> list[dict[str, Any]]:
         """Raw trail: reports, archives and the running logs, newest first."""
         out: list[dict[str, Any]] = []
@@ -1623,6 +1643,7 @@ class DashboardData:
             "options": self.options(),
             "monitor": self.monitor(),
             "redflags": self.redflags(),
+            "decisions": self.decisions(),
             "services": self.services(),
             "newcoin": self.newcoin(),
         }

@@ -107,8 +107,10 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `carry-income-report` | carry 真实收入的「两个口径对照」报告（非尖峰篮子）：市场费率 vs 模拟盘到账 | **✅ 完成** | 用户 2026-10-11 同意先算一份非尖峰标的的 carry 真实收入报告；越算越发现 `income.jsonl` 本身口径错（滚动窗口重复计费、bps 少除窗口天数），一并修掉 | 每天由 `daily_research.py` 跑 `scripts/carry_income_report.py --write` 累积到 `data/carry/income_report.json`（代理不通时退化为只读费率面板，不会让任务变红）。结论：市场费率 ~2.03 bps/天、44.9 bps 往返回本 22.2 天、30 天净 +15.9 bps → **低于自己的 20 bps 边际门槛**，今天不该新开 carry 对，也不该触发换腿。等 §70.6 第 5 条门槛（非尖峰 ≥30 天实测，现只有 4 天）满 |
 | `dashboard-two-projects` | 运营看板分开展示两个项目（tab 切换 + 「新币主观量化策略」面板） | **✅ 完成** | 用户 2026-10-11 要求分开展示并优化 UI；读对方发布的 `data/reports/latest.json`，**不 import 对方代码**（独立仓库/独立证据标准） | 维护：新币项目每 6 小时自动刷新该报告；报告缺失或超过 26 小时未更新时，面板显示**原因**而不是 0。面板以对方的证据标准进度开头（开仓/结案/③+④），并新增「失效条件」KPI（2026-10-12，读对方发布的 invalidations.json：待结案 / 判不了 / 最深那只）—— 「有几条触发还没结案」是它现在唯一的待办出口 |
 | `preconditions-guard` | 前置的**执行闸门**：`config/preconditions.json` + `scripts/preconditions.py --check <id>`（closed / blocked / 过期一律非零退出） | **✅ 完成** | 2026-10-12 的 $0.27：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉，代码侧没有拦截 → 同一件事被重跑。判据改成**能被脚本读**，并写进 spec §6 的执行须知 | 维护：新增前置/实验时先登记（新 id）；要重做已结案的事必须**新立条目**，不允许把 closed 改回 open。检查器 6 条测试守着 |
+| `dashboard-restart-pending` | 两处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用） | **waiting_decision** | 2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）。两处都已测试通过、HTML 即时生效部分已上线，但读指标/读进度表的那一半需要重启进程 | 要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启 |
+| `data-files-in-git` | 父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`） | **waiting_decision** | 当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的 | 三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底） |
 
-**合计**：✅ 完成 51 · ⏳ 等数据 8 · waiting_decision 1。
+**合计**：✅ 完成 51 · ⏳ 等数据 8 · waiting_decision 3。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。
