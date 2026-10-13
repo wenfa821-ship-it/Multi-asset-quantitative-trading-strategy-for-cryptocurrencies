@@ -6205,7 +6205,7 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
             (root / "logs" / "alerts.jsonl").write_text(
                 "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
             gate = module.gate_execution(root)
-            self.assertEqual(gate["value"], "4/30 天（覆盖 4 天）")
+            self.assertEqual(gate["value"].split(" ·")[0], "4/30 天")
             self.assertIn("已知项", gate["detail"])
 
             # 昨天出现一条带持仓差异的 → 连击从今天重新开始
@@ -6214,7 +6214,7 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
             (root / "logs" / "alerts.jsonl").write_text(
                 "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
             gate = module.gate_execution(root)
-        self.assertEqual(gate["value"], "1/30 天（覆盖 4 天）")
+        self.assertEqual(gate["value"].split(" ·")[0], "1/30 天")
         self.assertIn("position BTC/USDT", gate["detail"])
 
     def test_gate4_counts_two_green_runs_per_day(self) -> None:
@@ -6269,6 +6269,94 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         gate = module.gate_venue_only()
         self.assertEqual(gate["status"], "not_auto")
         self.assertIn("最小仓位", gate["detail"])
+
+    def test_reject_classes_are_keyed_on_the_venue_scode(self) -> None:
+        """分类要机械、可复核 —— 报告只负责说「这一类最近一次是什么时候」，
+        不负责替读者宣布「已经修好了」。"""
+        module = self._mod()
+        sdk = ('BadRequest: okx {"code":"1","data":[{"sCode":"51000",'
+               '"sMsg":"Parameter tdMode error "}]}')
+        self.assertEqual(module.classify_reject({"reason": sdk})[0], "51000")
+        self.assertEqual(
+            module.classify_reject({"reason": "InvalidOrder: okx amount of SUI/USDT must be "
+                                             "greater than minimum amount precision of 0.0001"})[0],
+            "dust")
+        self.assertEqual(
+            module.classify_reject({"reason": "dust: 1.4e-06 SUI/USDT is below the venue "
+                                             "minimum 1.0 - not sent"})[0],
+            "dust")
+        self.assertEqual(
+            module.classify_reject({"reason": "InsufficientFunds: okx {\"code\":\"1\"}"})[0],
+            "51008")
+        self.assertEqual(module.classify_reject({"reason": "something new"})[0], "other")
+
+    def test_venue_degraded_is_not_counted_as_an_incident(self) -> None:
+        """`venue degraded` 是**已知外部条件**（代理上游抖动），却记在 `critical` 级 ——
+        按级别当事故数的话，这条门槛在这个环境里永远不可能满足（10-13 实测 8 天里抖了 8 天）。
+        它必须单独计数，而 kill switch 这类才是事故。"""
+        import tempfile
+        from datetime import datetime, timedelta
+
+        module = self._mod()
+        today = datetime.now(module.CST).date()
+
+        def alert(back, level, title):
+            when = datetime.combine(today - timedelta(days=back),
+                                    datetime.min.time(), tzinfo=module.CST).replace(hour=12)
+            return {"ts": when.isoformat(), "level": level, "title": title}
+
+        # 已知项的形状是「只含 cash delta」；没有 diffs 的对账 mismatch 属于**没解释**，
+        # 按保守口径应当打断连击（这条测试只放已知项）。
+        known = ["cash delta: expected 92464.40 but venue shows 91405.50"]
+        rows = [dict(alert(n, "warning", "reconciliation mismatch"), diffs=list(known))
+                for n in range(3)]
+        rows += [alert(n, "critical", module.VENUE_DEGRADED_TITLE) for n in range(3)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "logs" / "alerts.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_execution(root)
+            self.assertEqual(gate["value"].split(" ·")[0], "3/30 天")   # 降级不打断连击
+            self.assertIn("网络降级", gate["detail"])
+
+            rows.append(alert(1, "critical", "kill switch"))            # 事故才打断
+            (root / "logs" / "alerts.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_execution(root)
+        self.assertEqual(gate["value"].split(" ·")[0], "1/30 天")
+        self.assertIn("事故级事件", gate["detail"])
+
+    def test_the_service_log_bounds_gate4_but_cannot_answer_it(self) -> None:
+        """服务日志只有轮数、没有日期，而且里面有红轮 —— 它能给出上界，答不了「14 天」。
+        把这件事写进报告，比让读者以为「日志里看着挺绿」可靠。"""
+        import tempfile
+
+        module = self._mod()
+        log = "\n".join([
+            "=== new_listing_track ===",
+            "=== summary ===",
+            "  new_listing_track    rc=0 attempts=1",
+            "  vol_monitor          rc=0 attempts=1",
+            "=== new_listing_track ===",
+            "=== summary ===",
+            "  new_listing_track    rc=1 attempts=3",
+            "  changelog_md.py      rc=1 attempts=3",
+            "=== new_listing_track ===",
+            "=== summary ===",
+            "  new_listing_track    rc=0 attempts=1",
+            "  changelog_md.py      rc=0 attempts=1",
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "logs").mkdir(parents=True, exist_ok=True)
+            (root / "logs" / "ta-newlisting-service.log").write_text(log, encoding="utf-8")
+            got = module.service_log_runs(root)
+            gate = module.gate_pipeline(root)
+        self.assertEqual(got["runs"], 3)
+        self.assertEqual(got["red"], 1)
+        self.assertEqual(got["trailing_green"], 1)
+        self.assertIn("changelog_md.py", " ".join(got["last_red"]))
+        self.assertIn("补不出历史", gate["detail"])
 
     def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
         import tempfile

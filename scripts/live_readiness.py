@@ -55,6 +55,7 @@ LEDGER = "data/ledger.okx_demo.jsonl"
 ALERTS = "logs/alerts.jsonl"
 JOB_STATUS = "data/daily_job_status.json"
 JOB_HISTORY = "data/daily_job_history.jsonl"
+PIPELINE_LOG = "logs/ta-newlisting-service.log"
 INCOME_REPORT = "data/carry/income_report.json"
 ROTATION = "data/carry/rotation.jsonl"
 EDGE = "data/readiness/edge.json"
@@ -86,6 +87,27 @@ STATUS_LABEL = {
     "unmeasured": "⬜ 未测量",
     "not_auto": "🚫 不可自动判",
 }
+
+# The one alert title that is a KNOWN EXTERNAL CONDITION rather than a defect: the
+# local proxy's upstream drops every few days, `VenueDegraded` suspends new entries
+# and the process stays alive (README §70.5). It is logged at `critical` level, and
+# 2026-10-13 it fired 25 times across 8 days - which means counting it as an
+# "事故级事件" would have made gate 3 (30 clean days) unsatisfiable in this
+# environment, i.e. a gate that can never be met. Same failure shape as the 1.3
+# low-turnover wait. It gets its own counter instead (the dashboard already watches
+# it by 24h count).
+VENUE_DEGRADED_TITLE = "venue degraded - new entries suspended"
+
+# `order rejected` classes, keyed by the venue's sCode where there is one. The
+# labels are what the report shows; the disposition is NOT hardcoded here - the
+# report only says when each class last fired, so a recurrence shows up as a new
+# row rather than as a stale explanation.
+REJECT_CLASSES = (
+    ("51000", "tdMode 参数错（账户档位口径）"),
+    ("51008", "现货余额不足"),
+    ("54092", "TradFi 免责声明未确认"),
+    ("dust", "低于场馆最小额（灰尘）"),
+)
 
 
 # --------------------------------------------------------------------------
@@ -274,7 +296,11 @@ def gate_execution(root: Path) -> dict:
     structural = [a for a in mismatches if is_cash_only(a)]
     non_structural = [a for a in mismatches if not is_cash_only(a)]
     rejected = [a for a in rows if a.get("title") == "order rejected"]
-    critical = [a for a in rows if str(a.get("level")) == "critical"]
+    degraded = [a for a in rows if a.get("title") == VENUE_DEGRADED_TITLE]
+    critical = [
+        a for a in rows
+        if str(a.get("level")) == "critical" and a.get("title") != VENUE_DEGRADED_TITLE
+    ]
 
     covered = sorted({
         day_of(datetime.datetime.fromisoformat(str(a["ts"])).timestamp() * 1000)
@@ -294,20 +320,53 @@ def gate_execution(root: Path) -> dict:
     })
     streak = running_days([d for d in covered if d not in set(break_days)], today)
     met = streak >= CLEAN_DAYS_REQUIRED and len(covered) >= CLEAN_DAYS_REQUIRED
+    last_break = break_days[-1] if break_days else None
+    earliest = None
+    if last_break:
+        earliest = (
+            datetime.date.fromisoformat(last_break) + datetime.timedelta(days=CLEAN_DAYS_REQUIRED)
+        ).isoformat()
 
     lines = []
     for a in sorted(non_structural, key=lambda r: str(r.get("ts")))[-6:]:
-        when = datetime.datetime.fromisoformat(str(a["ts"])).astimezone(CST).strftime("%m-%d %H:%M")
-        first = (a.get("diffs") or ["?"])[0]
+        when = _cst_when(a)
+        first = _short((a.get("diffs") or ["?"])[0])
         lines.append(f"| {when} | {first} |")
     detail = (
         f"告警 {len(rows)} 条（{covered[0] if covered else '?'} .. {covered[-1] if covered else '?'}）："
         f"对账 mismatch **{len(mismatches)}** 条，其中只含 `cash delta` 的**已知项** "
         f"{len(structural)} 条、含持仓/其它差异的 **{len(non_structural)}** 条；"
         f"`order rejected` {len(rejected)} 条（最近 30 天 {len(recent_rejects)} 条）；"
-        f"critical 级 {len(critical)} 条。\n\n"
+        f"critical 级 {len(critical) + len(degraded)} 条"
+        f"（其中 {len(degraded)} 条是**已知外部条件**「网络降级」，另计，见下）。\n\n"
         f"清理后的连续干净天数 **{streak}**，账本覆盖 {len(covered)} 天。\n"
     )
+    if last_break:
+        detail += (
+            f"\n连击的**起点由最近一次打断决定**：{last_break}。"
+            f"即使此后一条新差异都没有，按「连续 {CLEAN_DAYS_REQUIRED} 天」的口径，"
+            f"这条门槛**最早也要到 {earliest} 才能满足**。\n"
+        )
+
+    # ---- rejection classes: what fired, when, and whether it can still fire ----
+    classes: dict[str, list[dict]] = {}
+    for alert in rejected:
+        key, _label = classify_reject(alert)
+        classes.setdefault(key, []).append(alert)
+    if classes:
+        detail += "\n**拒单按原因分类**（判断标准是「还会不会再发生」，不是「出现过几次」）：\n\n"
+        detail += "| 类别 | 次数 | 首次 | 最近 | 之后天数 |\n|---|---|---|---|---|\n"
+        for key, alert_list in sorted(classes.items(), key=lambda kv: -len(kv[1])):
+            days = sorted({_cst_day(a) for a in alert_list if a.get("ts")})
+            since = (today - datetime.date.fromisoformat(days[-1])).days
+            label = dict(REJECT_CLASSES).get(key, key)
+            detail += f"| `{key}` {label} | {len(alert_list)} | {days[0]} | {days[-1]} | **{since}** |\n"
+        last_reject = max(_cst_day(a) for a in rejected if a.get("ts"))
+        detail += (
+            f"\n最近一次拒单 **{last_reject}**，此后 "
+            f"{(today - datetime.date.fromisoformat(last_reject)).days} 天 0 条 —— "
+            "判据是这一列，而不是总数。\n"
+        )
     if lines:
         detail += "\n最近的**非结构性**对账差异：\n\n| 时间(CST) | 差异 |\n|---|---|\n" + "\n".join(lines) + "\n"
     if rejected:
@@ -322,20 +381,61 @@ def gate_execution(root: Path) -> dict:
             f"| {_cst_when(a)} | {a.get('symbol')} | `{_short(a.get('reason'))}` |"
             for a in sorted(rejected, key=lambda r: str(r.get("ts")))[-6:]
         ) + "\n"
+    if degraded:
+        deg_days = sorted({_cst_day(a) for a in degraded if a.get("ts")})
+        detail += (
+            f"\n**网络降级（已知外部条件，不计入事故）**：{len(degraded)} 次 / {len(deg_days)} 天，"
+            f"最近 {deg_days[-1]}。它是本地代理上游的周期性抖动，代码侧只做「停新开仓 + 保活 + 重试」，"
+            f"没有被修好（README §70.5）。\n"
+            f"⚠️ 它**在告警里是 `critical` 级** —— 如果按级别当事故数，这条门槛在这个环境里"
+            f"**永远不可能满足**（8 天里就有 {len(deg_days)} 天在抖）。这正是它单独计数的原因。\n"
+        )
     if critical:
-        titles = sorted({str(a.get("title")) for a in critical})
-        last = max(_cst_day(a) for a in critical if a.get("ts"))
-        detail += f"\ncritical 级告警共 {len(critical)} 条（{', '.join(titles)}），最近一次 {last}。\n"
+        rows_crit = [
+            f"| {_cst_when(a)} | {a.get('title')} | {_short(a.get('detail') or a.get('reason'), 70)} |"
+            for a in sorted(critical, key=lambda r: str(r.get("ts")))
+        ]
+        detail += (
+            f"\n**事故级事件（剔除网络降级后）**共 {len(critical)} 条：\n\n"
+            "| 时间(CST) | 事件 | 说明 |\n|---|---|---|\n" + "\n".join(rows_crit)
+            + "\n\n（其中 2026-10-01 的 kill switch 是**故意实测**，README §70 有记录 —— "
+            "这里仍然列出来，不做静默豁免。）\n"
+        )
     return {
         "id": 3,
         "name": "执行",
         "requirement": f"连续 {CLEAN_DAYS_REQUIRED} 天无「非结构性」对账差异、无重复出现的 order rejected、无事故级事件",
         "status": "met" if met else "unmet",
-        "value": f"{streak}/{CLEAN_DAYS_REQUIRED} 天（覆盖 {len(covered)} 天）",
+        "value": (
+            f"{streak}/{CLEAN_DAYS_REQUIRED} 天"
+            + (f" · 上次打断 {last_break}" if last_break else "")
+            + (f" · 最早 {earliest} 可满足" if earliest else "")
+        ),
         "detail": detail,
         "evidence": [rel(path)],
         "window": f"{covered[0]} .. {covered[-1]}" if covered else "—",
     }
+
+
+def classify_reject(alert: dict) -> tuple[str, str]:
+    """(class key, label) for one `order rejected` alert.
+
+    Keyed on the venue's `sCode` when it is present, otherwise on the text the
+    local guard wrote. Deliberately mechanical: the report's job is to show WHEN
+    each class last fired, not to declare it fixed.
+    """
+    reason = str(alert.get("reason") or "")
+    match = re.search(r'"sCode":"(\d+)"', reason)
+    if match:
+        code = match.group(1)
+        return code, dict(REJECT_CLASSES).get(code, "场馆拒单")
+    if "tdMode" in reason:
+        return "51000", dict(REJECT_CLASSES)["51000"]
+    if "InsufficientFunds" in reason:
+        return "51008", dict(REJECT_CLASSES)["51008"]
+    if "minimum amount" in reason or reason.startswith("dust") or "below the venue minimum" in reason:
+        return "dust", dict(REJECT_CLASSES)["dust"]
+    return "other", "其它"
 
 
 def _within(alert: dict, days: int, today: datetime.date) -> bool:
@@ -369,6 +469,7 @@ def gate_pipeline(root: Path) -> dict:
     status_path = root / JOB_STATUS
     runs = read_jsonl(history_path)
     latest = read_json(status_path)
+    log_runs = service_log_runs(root)
 
     green_days: dict[str, list[bool]] = {}
     for row in runs:
@@ -407,6 +508,18 @@ def gate_pipeline(root: Path) -> dict:
             if not met else "已满足。"
         )
     )
+    if log_runs.get("runs"):
+        detail += (
+            f"\n\n**服务日志给出的历史上界**（`{PIPELINE_LOG}`，**不带时间戳**，只能按轮数数）："
+            f"共 **{log_runs['runs']}** 轮，其中 **{log_runs['red']}** 轮有 `rc≠0`，"
+            f"末尾连续全绿 **{log_runs['trailing_green']}** 轮。"
+        )
+        if log_runs.get("last_red"):
+            detail += "最近一次红轮失败在：" + "、".join(f"`{s}`" for s in log_runs["last_red"]) + "。"
+        detail += (
+            "\n\n所以这条门槛**补不出历史** —— 旧日志既没有日期、又有红轮，"
+            "14 天只能从今天的逐轮留痕开始攒（这也是把它做出来的原因）。"
+        )
     return {
         "id": 4,
         "name": "数据管道",
@@ -414,8 +527,42 @@ def gate_pipeline(root: Path) -> dict:
         "status": "met" if met else "unmet",
         "value": f"{streak}/{PIPELINE_DAYS_REQUIRED} 天",
         "detail": detail,
-        "evidence": [rel(history_path), rel(status_path)],
+        "evidence": [rel(history_path), rel(status_path), rel(root / PIPELINE_LOG)],
         "window": f"{covered[0]} .. {covered[-1]}" if covered else "—",
+    }
+
+
+def service_log_runs(root: Path) -> dict:
+    """Count the daily job's own `=== summary ===` blocks in its service log.
+
+    The log carries no timestamps (each step prints a header and an rc table), so it
+    can bound the RUN count but never the DAYS - which is exactly why gate 4 needed
+    the appended history file. Kept here so the report says that out loud instead of
+    implying the log could answer the gate.
+    """
+    try:
+        lines = (root / PIPELINE_LOG).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return {}
+    runs: list[list[str]] = []
+    for i, line in enumerate(lines):
+        if line.strip() != "=== summary ===":
+            continue
+        j, steps = i + 1, []
+        while j < len(lines) and lines[j].startswith("  ") and "rc=" in lines[j]:
+            steps.append(lines[j].strip())
+            j += 1
+        runs.append([s for s in steps if not re.search(r"rc=0\b", s)])
+    trailing = 0
+    for red in reversed(runs):
+        if red:
+            break
+        trailing += 1
+    return {
+        "runs": len(runs),
+        "red": sum(1 for red in runs if red),
+        "trailing_green": trailing,
+        "last_red": next((red for red in reversed(runs) if red), None),
     }
 
 
