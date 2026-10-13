@@ -1,0 +1,83 @@
+# ---------------------------------------------------------------------------
+# On-chain new-token layer (Solana first).
+# The whole file is a SAFETY FILTER plus an execution *rehearsal* harness.
+# It never invents a buy signal, and it cannot broadcast without two consents.
+# ---------------------------------------------------------------------------
+
+[safety]
+reject_honeypot          = true
+require_lp_locked        = true
+max_sell_tax_pct         = 5.0
+max_top10_holder_pct     = 40.0
+min_holder_count         = 300
+min_liquidity_usd        = 50000.0
+min_age_minutes          = 30        # younger than this is too early / untradeable
+max_price_impact_pct     = 3.0
+max_slippage_bps         = 100
+min_volume_liquidity_ratio = 0.05    # 24h volume / liquidity
+# If a safety-critical field cannot be resolved from ANY source, reject the token
+# instead of assuming it is safe. Fail-closed is the only sane default.
+require_known_safety_fields = true
+
+[sizing]
+max_position_pct_per_token = 2.0     # tiny, because rug risk is real
+risk_per_trade_pct         = 0.2
+max_concurrent_tokens      = 2
+equity_usd                 = 1000.0  # reference equity for the risk gate; wire to your wallet
+
+[execution]
+slippage_bps          = 80
+max_priority_fee_sol  = 0.002
+use_jito              = true         # bundle + anti-sandwich protection (planning only here)
+dry_run               = true         # consent #1 - flip only after reading the docs
+signer                = "mock"       # refuse | mock | local-keypair | kms | hardware
+allow_broadcast       = false        # consent #2 - a mock signature can never broadcast
+
+[blacklist]
+mints       = []
+dev_wallets = []
+
+# ---------------------------------------------------------------------------
+# Data sources. Missing fields make a token FAIL the filter, never silently pass.
+# ---------------------------------------------------------------------------
+[data]
+cache_dir       = "data/onchain_cache"
+fixture_dir     = "fixtures/onchain"
+timeout_seconds = 8.0
+retries         = 2
+offline         = false            # true = never touch the network, fixtures/cache only
+
+[data.sources.dexscreener]
+enabled  = true
+endpoint = "https://api.dexscreener.com/latest/dex/tokens/{mint}"
+
+[data.sources.goplus]
+enabled  = true
+endpoint = "https://api.gopluslabs.io/api/v1/solana/token_security?contract_addresses={mint}"
+
+[data.sources.rugcheck]
+enabled  = true
+endpoint = "https://api.rugcheck.xyz/v1/tokens/{mint}/report"
+
+[data.sources.gmgn]
+enabled  = true
+# GMGN has no public, documented, SLA-backed API. These are the internal endpoints
+# the web app uses and they can change without notice. If they break, fix the
+# template here (or point it at your own proxy) instead of touching code.
+endpoint          = "https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}"
+trending_endpoint = "https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/1h"
+chain             = "sol"
+cookie_env        = "GMGN_COOKIE"   # optional: cookie from your own browser session
+headers = { "x-requested-with" = "XMLHttpRequest", "accept" = "application/json" }
+
+[rpc]
+url_env    = "SOLANA_RPC_URL"       # Helius / QuickNode / Triton; the public RPC is rate limited
+commitment = "processed"
+simulate   = true                   # a swap that fails simulation is never signed
+
+[jupiter]
+quote_endpoint            = "https://lite-api.jup.ag/swap/v1/quote"
+swap_endpoint             = "https://lite-api.jup.ag/swap/v1/swap"
+priority_level            = "high"
+max_priority_fee_lamports = 200000
+wrapped_sol               = true

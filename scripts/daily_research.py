@@ -114,6 +114,12 @@ DEFAULT_RETRY_SLEEP = 60.0
 # loader the others carry, and nothing noticed until a manual re-run).
 INPROCESS_STEPS: tuple[tuple[str, list[str]], ...] = (
     ("new_listing_track", ["--max-age-days", "400"]),
+    # 2026-10-13：**股票代币（instCategory=3）另立一本账**。原来只记 cat=1（真·加密新币），
+    # 于是近 8 天 OKX 上线的 32 个交易对里、8 个已成熟的 X***（股票代币）**一个都没被记录** ——
+    # 而那几个正是 TradFi 腿的池子成长候选（该腿的 13 个 symbol 定于 10-10，此后没再更新过）。
+    # 窗口刻意只有 60 天：这本账要的是「最近在长什么」，不是把 400 天的股票代币全补一遍。
+    ("new_listing_track", ["--categories", "3", "--max-age-days", "60",
+                           "--store", "data/new_listings/tradfi_records.jsonl"]),
     ("vol_monitor", []),
     ("options_surface", []),
     ("options_cost", []),

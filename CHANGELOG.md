@@ -1,14 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.2**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.3**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-13T08:20 起，3 条留痕）
+## v1.1.3 — 2026-10-13T11:03
 
-- `2026-10-13T08:21` **bug** 生成的 CHANGELOG 里每个版本后面都挂着半句样板（21 处）：`changelog_md` 的过滤只写了前半句
-- `2026-10-13T09:49` **research** 「低换手桶 ≥20 个代币」在本发现层下**凑不齐**：并集 162 个代币里只有 2 个换手比 <0.5 —— 那个等待条件可以撤了
-- `2026-10-13T10:49` **ops** 新币面板新增「队列对照 24h」KPI：过闸 vs 未过闸（年龄/深度对齐层）
+- 测试 **404** 绿 · 权益 $102,348.02 · 记录时的包版本 1.1.3
+
+新上币采集器不再静默跳过一整类：筛选抽成纯函数 + --categories/--store，并在 added 0 时报出被口径挡掉的分类计数（实测近 8 天 32 个 USDT 上市、8 个成熟的股票代币一个都没记）。顺带给 TradFi 腿另立一本账 data/new_listings/tradfi_records.jsonl（cat=3、60 天窗）并接进每日任务：首入库 48 条，48h 冲高 0/43、中位 +1.98% —— 与加密新币（25%、+8.89%）完全是两种曲线。
 
 ## v1.1.2 — 2026-10-13T08:20
 

@@ -41,11 +41,12 @@ from new_listing_study import instruments, study  # noqa: E402
 STORE = PROJECT / "data" / "new_listings" / "records.jsonl"
 
 
-def load_store() -> dict[str, dict]:
-    if not STORE.exists():
+def load_store(path: Path | None = None) -> dict[str, dict]:
+    target = path or STORE
+    if not target.exists():
         return {}
     out: dict[str, dict] = {}
-    for line in STORE.read_text(encoding="utf-8").splitlines():
+    for line in target.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
@@ -84,6 +85,49 @@ def scoreboard(rows: list[dict]) -> None:
     print(f"  上冲分布：中位 {st.median(ru):+.2f}%  均值 {st.mean(ru):+.2f}%  最大 {max(ru):+.2f}%")
 
 
+def pending_listings(rows: list[dict], store: dict, *, categories: set[str],
+                     cutoff_ms: int, mature_ms: int) -> list[tuple[str, int]]:
+    """该记录的 USDT 新上市（纯函数，便于测试）。
+
+    2026-10-13：把这个筛选抽出来，并给 `--categories` 一个出口 —— 原来写死 `instCategory == "1"`，
+    于是近 8 天上线的 32 个交易对里 **cat=3（股票代币）那 8 个已成熟的一个都不记**，
+    而日志只写「added 0」，读的人分不清「真的没有」和「被口径滤掉了」。
+    """
+    out = []
+    for row in rows:
+        inst = str(row.get("instId") or "")
+        listed = int(row.get("listTime") or 0)
+        if not (inst.endswith("-USDT") and row.get("state") == "live"):
+            continue
+        if str(row.get("instCategory")) not in categories:
+            continue
+        if not (cutoff_ms <= listed <= mature_ms):
+            continue
+        if inst in store:
+            continue
+        out.append((inst, listed))
+    out.sort(key=lambda x: x[1])
+    return out
+
+
+def filtered_by_category(rows: list[dict], *, categories: set[str],
+                         cutoff_ms: int, mature_ms: int) -> dict[str, int]:
+    """同一时间窗里，**被口径挡掉**的有多少、属于哪一类 —— 让「added 0」不再沉默。"""
+    out: dict[str, int] = {}
+    for row in rows:
+        inst = str(row.get("instId") or "")
+        listed = int(row.get("listTime") or 0)
+        if not (inst.endswith("-USDT") and row.get("state") == "live"):
+            continue
+        if not (cutoff_ms <= listed <= mature_ms):
+            continue
+        cat = str(row.get("instCategory"))
+        if cat in categories:
+            continue
+        out[cat] = out.get(cat, 0) + 1
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-age-days", type=float, default=400.0)
@@ -91,30 +135,32 @@ def main() -> int:
                     help="only record once this many days have passed (48h window complete)")
     ap.add_argument("--hours", type=int, default=48)
     ap.add_argument("--status", action="store_true", help="print the scoreboard and exit")
+    ap.add_argument("--categories", default="1",
+                    help='只记这些 instCategory（逗号分隔）。默认 "1" = 真·加密新币；'
+                         '"3" = 股票代币（TradFi 腿的池子成长，用 --store 分开放）')
+    ap.add_argument("--store", default=None,
+                    help="记录落哪个文件（默认 data/new_listings/records.jsonl）")
     args = ap.parse_args()
 
-    store = load_store()
+    store_path = Path(args.store) if args.store else STORE
+    store = load_store(store_path)
     if args.status:
-        print(f"store {STORE}  records={len(store)}")
+        print(f"store {store_path}  records={len(store)}")
         scoreboard(list(store.values()))
         return 0
 
     now_ms = int(time.time() * 1000)
     cutoff = now_ms - int(args.max_age_days * 86_400_000)
     mature = now_ms - int(args.mature_days * 86_400_000)
-    pending = [
-        (r["instId"], int(r["listTime"]))
-        for r in instruments()
-        if r["instId"].endswith("-USDT")
-        and r.get("instCategory") == "1"
-        and r.get("state") == "live"
-        and cutoff <= int(r["listTime"]) <= mature
-        and r["instId"] not in store
-    ]
-    pending.sort(key=lambda x: x[1])
+    rows = instruments()
+    wanted = {c.strip() for c in str(args.categories).split(",") if c.strip()}
+    pending = pending_listings(rows, store, categories=wanted,
+                               cutoff_ms=cutoff, mature_ms=mature)
+    skipped = filtered_by_category(rows, categories=wanted,
+                                   cutoff_ms=cutoff, mature_ms=mature)
 
     added = 0
-    STORE.parent.mkdir(parents=True, exist_ok=True)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
     for inst, ts in pending:
         try:
             row = study(inst, ts, now_ms, args.hours)
@@ -126,7 +172,7 @@ def main() -> int:
             continue
         row["age_days"] = round((now_ms - ts) / 86_400_000, 2)
         row["recorded_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        with STORE.open("a", encoding="utf-8") as fh:
+        with store_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
         store[inst] = row
         added += 1
@@ -135,6 +181,11 @@ def main() -> int:
         time.sleep(0.3)
 
     print(f"\nadded {added} record(s); store now {len(store)}")
+    if skipped:
+        # 「added 0」必须在说了这些之后才算说清楚：哪一类被口径挡了、各多少条。
+        detail = "、".join(f"cat={cat} {n} 条" for cat, n in sorted(skipped.items()))
+        print(f"本轮被口径（--categories {','.join(sorted(wanted))}）挡下的：{detail}"
+              " —— 这些不是「没有新上市」，是**不在本口径里**")
     scoreboard(list(store.values()))
     return 0
 

@@ -5934,5 +5934,42 @@ class DailyReviewDecompositionTests(unittest.TestCase):
         self.assertIn("拿不到：没有费率文件", text)
 
 
+class NewListingCategoryTests(unittest.TestCase):
+    """2026-10-13：`new_listing_track` 原来写死 `instCategory == "1"`，日志只写「added 0」——
+    近 8 天 OKX 上线的 32 个交易对里，8 个已成熟的 X***（股票代币，cat=3）一个都没记，
+    而读的人分不清「真的没有」和「被口径滤掉了」。"""
+
+    ROWS = [
+        {"instId": "AAA-USDT", "listTime": 1_000, "state": "live", "instCategory": "1"},
+        {"instId": "XBBB-USDT", "listTime": 1_000, "state": "live", "instCategory": "3"},
+        {"instId": "CCC-USDT", "listTime": 1_000, "state": "suspend",
+         "instCategory": "1"},                                    # 非 live → 丢
+        {"instId": "DDD-USDC", "listTime": 1_000, "state": "live",
+         "instCategory": "1"},                                    # 非 USDT → 丢
+        {"instId": "EEE-USDT", "listTime": 50, "state": "live",
+         "instCategory": "1"},                                    # 太老（不在窗口）→ 丢
+    ]
+
+    def test_pending_listings_filters_by_category_window_and_store(self) -> None:
+        from scripts.new_listing_track import pending_listings
+
+        got = pending_listings(self.ROWS, {}, categories={"1"}, cutoff_ms=500, mature_ms=2_000)
+        self.assertEqual(got, [("AAA-USDT", 1_000)])
+        # 已经记过的不再记（幂等）
+        again = pending_listings(self.ROWS, {"AAA-USDT": {}}, categories={"1"},
+                                 cutoff_ms=500, mature_ms=2_000)
+        self.assertEqual(again, [])
+        # 换成股票代币口径 → 拿到的就是那一类
+        x = pending_listings(self.ROWS, {}, categories={"3"}, cutoff_ms=500, mature_ms=2_000)
+        self.assertEqual(x, [("XBBB-USDT", 1_000)])
+
+    def test_filtered_by_category_makes_zero_visible(self) -> None:
+        from scripts.new_listing_track import filtered_by_category
+
+        counted = filtered_by_category(self.ROWS, categories={"1"},
+                                       cutoff_ms=500, mature_ms=2_000)
+        self.assertEqual(counted, {"3": 1})     # 「added 0」时也要说清挡掉了什么
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
