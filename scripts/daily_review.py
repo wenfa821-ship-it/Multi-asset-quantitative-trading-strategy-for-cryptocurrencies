@@ -206,6 +206,14 @@ def markdown(date: str, stats: dict) -> str:
         add(f"| ↳ **实盘费率口径** | **{live['total']:+,.4f}**"
             f"（按公开费率 × 当日持仓名义算；**这一栏才是可以引用的结论**，"
             f"上面那行是模拟盘到账）{note} |")
+        # 2026-10-13（10-12 复盘建议 ②）：把「可复制部分」单独给一行 —— 否则
+        # 「账面 +0.129%」会被单独引用，而其中大头是模拟盘费率买不到的钱。
+        if delta is not None:
+            other = delta - stats["funding_total"] + stats["fill_fees"]
+            add(f"| ↳ **可复制部分（下界）** | **{live['total'] + other:+,.4f}**"
+                f"（= 实盘费率口径资金费 {live['total']:+,.4f} + 其余 {other:+,.4f}）"
+                f"；其余 = 权益变化 − 账单资金费 + 手续费，含**价差与标记价变动**，"
+                f"无法逐笔核对；**账面百分比不要单独引用** |")
     elif live.get("reason"):
         add(f"| ↳ 实盘费率口径 | 拿不到：{live['reason']} |")
     add(f"| 期末持仓 | {stats['legs'][0]} 条现货腿 + {stats['legs'][1]} 条永续腿 |")

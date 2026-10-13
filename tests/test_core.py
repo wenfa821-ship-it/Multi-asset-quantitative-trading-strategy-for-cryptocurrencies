@@ -5823,5 +5823,41 @@ class PreconditionGuardTests(unittest.TestCase):
                 load(path)
 
 
+class DailyReviewDecompositionTests(unittest.TestCase):
+    """2026-10-13（10-12 复盘建议 ②）：复盘数字块必须给「可复制部分」一行 ——
+    否则「账面 +0.129%」会被单独引用，而其中大头是模拟盘费率买不到的钱。"""
+
+    def _stats(self, *, delta: float, funding_bill: float, fees: float,
+               live_total: float) -> dict:
+        return {
+            "equity_start": 100_000.0, "equity_end": 100_000.0 + delta,
+            "equity_peak": 100_000.0 + delta, "equity_trough": 100_000.0,
+            "fills": [], "fill_fees": fees, "funding_total": funding_bill,
+            "funding_rows": 1, "funding_by_symbol": {}, "funding_top": ("X", funding_bill),
+            "funding_backfilled": {}, "funding_live_rate": {"available": True,
+                                                            "total": live_total},
+            "blocked": [], "blocked_total": 0, "risk": [], "positions": {}, "legs": (0, 0),
+        }
+
+    def test_the_reproducible_part_is_spelled_out(self) -> None:
+        from scripts.daily_review import markdown
+
+        text = markdown("2026-10-12", self._stats(delta=131.58, funding_bill=129.8556,
+                                                  fees=0.1999, live_total=0.5617))
+        self.assertIn("可复制部分（下界）", text)
+        # 其余 = 131.58 − 129.8556 + 0.1999 = 1.9243；可复制 = 0.5617 + 1.9243 = 2.4860
+        self.assertIn("+2.4860", text)
+        self.assertIn("账面百分比不要单独引用", text)
+
+    def test_without_the_live_rate_row_nothing_is_claimed(self) -> None:
+        from scripts.daily_review import markdown
+
+        stats = self._stats(delta=131.58, funding_bill=129.8556, fees=0.1999, live_total=0.0)
+        stats["funding_live_rate"] = {"reason": "没有费率文件"}
+        text = markdown("2026-10-12", stats)
+        self.assertNotIn("可复制部分", text)
+        self.assertIn("拿不到：没有费率文件", text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
