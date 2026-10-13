@@ -447,8 +447,8 @@
    "id": "carry-rotation-bench",
    "item": "换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字",
    "state": "waiting_decision",
-   "gate": "2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来",
-   "next": "三选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状、只在报告里标注（当前就是这个状态）"
+   "gate": "2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来。**同日第六轮又查出两个输入都可能过期**：候选快照 3.2 天前且**没有任何定时任务在生产它**；资金费历史 142 条里 APT/TIA 冻在 09-30。已先加**时效护栏**（两侧默认 2 天，过期就拒绝出提议、保留读数表、把原因写进 `refusals` 并在门槛报告里显示）",
+   "next": "四选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状（护栏已在挡，只会拒绝、不会提议）。**另有第五个选项**：给候选快照排一个定时产出（每日任务加一步、或单独 launchd）—— 代价是每日任务多一个依赖网络的步骤，门槛 4「连续 14 天两轮全绿」会跟着受影响；不做的话规则就一直是「拒绝出提议」"
   }
  ]
 }

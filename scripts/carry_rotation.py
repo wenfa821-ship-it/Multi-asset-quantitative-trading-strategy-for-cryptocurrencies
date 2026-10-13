@@ -139,13 +139,45 @@ def screen_rows(screen: dict) -> list[dict]:
 def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: list[dict],
          *, days: int, floor_bps: float, round_trip_bps: float, min_hold_hours: float,
          intended_hold_days: float, settlements_per_day: float = 3.0,
-         now_ms: int | None = None) -> dict:
+         now_ms: int | None = None,
+         screen_generated_at_ms: int | None = None,
+         max_history_age_days: float = 2.0,
+         max_screen_age_days: float = 2.0) -> dict:
+    """What the rule WOULD do.
+
+    Freshness guards (2026-10-13). Found while asking why this rule never fires: it
+    reads its candidate list from a `screen_live.json` snapshot that **no scheduled
+    job produces** (only a manual `carry_live.py --write ...` run), and 142 funding
+    series on disk include two that froze on 2026-09-30. `daily_bps_series` takes the
+    last `days` days *with prints*, so a frozen file yields three perfectly good
+    looking buckets from two weeks ago - and `is_persistently_below` never checked
+    whether they were recent. Silently acting on either would be the same shape as
+    the frozen research bars and the stale candidate that overstated TRIA 2x.
+
+    Both sides are therefore age-checked and refused (with the reason recorded)
+    rather than silently trusted.
+    """
     now = now_ms or int(datetime.datetime.now(datetime.UTC).timestamp() * 1000)
     held_bases = {symbol.split("/")[0] for symbol in held}
     free = [c for c in candidates if c["symbol"].split("/")[0] not in held_bases]
     report = {"generated_at": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
               "days": days, "floor_bps": floor_bps, "round_trip_bps": round_trip_bps,
-              "pairs": [], "rotations": []}
+              "pairs": [], "rotations": [], "refusals": []}
+
+    if screen_generated_at_ms:
+        age_days = (now - float(screen_generated_at_ms)) / 86_400_000.0
+        if age_days > max_screen_age_days:
+            report["refusals"].append({
+                "what": "candidate screen",
+                "age_days": round(age_days, 2),
+                "why": (f"candidate snapshot is {age_days:.1f} days old "
+                        f"(limit {max_screen_age_days:g}) - nothing scheduled refreshes it"),
+            })
+            # Keep the per-pair diagnostics (the table is the useful half) and refuse
+            # only the PROPOSAL: a swap chosen off a three-day-old snapshot is the
+            # exact mistake this guard exists to stop.
+            free = []
+
     for symbol in sorted(held):
         base = symbol.split("/")[0]
         series = daily_bps_series(load_jsonl(history / f"{base}-USDT_USDT.jsonl"), days,
@@ -156,6 +188,23 @@ def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: li
         row = {"symbol": symbol, "daily_bps": series, "stale": low,
                "median_bps": round(statistics.median([bps for _d, bps, _n in series]), 3) if series else None,
                "age_hours": age_hours}
+        if series:
+            last_day = datetime.date.fromisoformat(series[-1][0])
+            today = datetime.datetime.fromtimestamp(now / 1000, datetime.UTC).date()
+            row["history_age_days"] = (today - last_day).days
+            if row["history_age_days"] > max_history_age_days:
+                # `low` is what the proposal branch below actually reads - clearing
+                # only `row["stale"]` would have left the proposal standing (caught
+                # by test_a_frozen_history_is_refused_not_read_as_persistently_below).
+                low = False
+                row["stale"], row["stale_history"] = False, True
+                report["refusals"].append({
+                    "what": f"history for {symbol}",
+                    "age_days": row["history_age_days"],
+                    "why": (f"last funding print is {row['history_age_days']} days old "
+                            f"(limit {max_history_age_days:g}) - cannot call it "
+                            f"'persistently below' on two-week-old prints"),
+                })
         report["pairs"].append(row)
         if not low or (age_hours is not None and age_hours < min_hold_hours):
             continue
@@ -185,26 +234,39 @@ def main() -> int:
     ap.add_argument("--round-trip-bps", type=float, default=DEFAULT_ROUND_TRIP_BPS)
     ap.add_argument("--min-hold-hours", type=float, default=24.0)
     ap.add_argument("--intended-hold-days", type=float, default=30.0)
+    ap.add_argument("--max-history-age-days", type=float, default=2.0,
+                    help="refuse to judge a pair whose last funding print is older than this")
+    ap.add_argument("--max-screen-age-days", type=float, default=2.0,
+                    help="refuse to propose from a candidate snapshot older than this")
     ap.add_argument("--out", default="data/carry/rotation.jsonl")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
     load_env_file(PROJECT / ".env")  # the pair/history files need no venue, but keep parity
     held = load_json(PROJECT / args.pairs, {})
-    candidates = screen_rows(load_json(PROJECT / args.screen, {}))
+    screen = load_json(PROJECT / args.screen, {})
+    candidates = screen_rows(screen)
     fills = [f for f in load_jsonl(PROJECT / args.ledger) if f.get("kind") == "fill"]
     report = plan(held, PROJECT / args.history, candidates, fills,
                   days=args.days, floor_bps=args.floor_bps,
                   round_trip_bps=args.round_trip_bps, min_hold_hours=args.min_hold_hours,
-                  intended_hold_days=args.intended_hold_days)
+                  intended_hold_days=args.intended_hold_days,
+                  screen_generated_at_ms=screen.get("generated_at"),
+                  max_history_age_days=args.max_history_age_days,
+                  max_screen_age_days=args.max_screen_age_days)
 
     print(f"{'pair':12s}{'median':>9s}{'age_h':>8s}  last {args.days}d bps/day")
     for row in report["pairs"]:
         days_txt = " ".join(f"{bps:g}" for _d, bps, _n in row["daily_bps"]) or "-"
         age = f"{row['age_hours']:g}" if row["age_hours"] is not None else "?"
         flag = " STALE" if row["stale"] else ""
+        hist = row.get("history_age_days")
+        if hist is not None and hist > args.max_history_age_days:
+            flag = f" HISTORY {hist}d OLD"
         print(f"{row['symbol']:12s}{row['median_bps'] if row['median_bps'] is not None else '-':>9}"
               f"{age:>8s}  {days_txt}{flag}")
+    for refusal in report["refusals"]:
+        print(f"REFUSED {refusal['what']}: {refusal['why']}")
     if report["rotations"]:
         print("\nrotation proposals (read-only):")
         for rot in report["rotations"]:

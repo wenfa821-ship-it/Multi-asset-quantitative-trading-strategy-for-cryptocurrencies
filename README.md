@@ -110,7 +110,7 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `live-readiness-gates` | README §70.6 的六条「切实盘门槛」数字化：`scripts/live_readiness.py` → `reports/live-readiness.md` + `data/readiness/readiness.json`，看板「切实盘门槛」面板 | **✅ 完成** | 用户目标是「等策略成熟再切实盘」，而「成熟」原来只活在散文里（§70.6）。2026-10-13 每条做成一个可复核的数：边缘（真跑 --fee-multiplier 1.25 的样本外回放，独立复现 §70.7）、样本（账本 157 笔/14 天）、执行（`cash delta` 已知项 + 21 条拒单按 sCode 分类 + 21 条 position 差异分三桶：库存窗口 4 / 灰尘 3 / **未解释 14**）、管道（新增 `data/daily_job_history.jsonl` 逐轮留痕）、资金费（到账 6/30 天、换腿 0 次）、第 6 条按定义标「不可自动判」。**同日查出三处「判据本身不可满足」**：① 网络降级按 `critical` 记账（8 天里 8 天在抖）→ 单独计数；② 第 4 条旧服务日志有 5 个红轮且无时间戳 → 报告明说「补不出历史」；③ 带 `position` 就算非结构性 → 库存实验的 tag 余额与「两侧皆零的灰尘」改为可核对后再豁免。口径：**豁免只给「已知外部条件」与「我们自己的记账口径」两类非缺陷，缺陷只随时间退出 30 天窗口** | 维护：已接进每日任务（`--write --backtest`，约 25 秒，只读本地日线）。门槛值随时间自己变，**不要手改报告**；要看的是哪条把门槛卡住（当前 0/5）与「上次打断/最早可满足」那一列。第 4 条的历史从 2026-10-13 起累积；第 3 条 3/30 天、最早 2026-11-09 可满足（前提是期间不再有新的未解释差异） |
 | `dashboard-restart-pending` | 三处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用） | **waiting_decision** | 2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）③ 新增「切实盘门槛」面板（读 data/readiness/readiness.json）。三处都已测试通过、HTML 即时生效部分已上线，但读指标 / 读进度表 / 读门槛的那一半需要重启进程 | 要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启 |
 | `data-files-in-git` | 父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`） | **waiting_decision** | 当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的 | 三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底） |
-| `carry-rotation-bench` | 换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字 | **waiting_decision** | 2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来 | 三选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状、只在报告里标注（当前就是这个状态） |
+| `carry-rotation-bench` | 换腿规则的两把尺子不同长（现任 3 天中位 vs 候选 ≈17 天中位），且候选可以选到「进不去」的名字 | **waiting_decision** | 2026-10-13 离线复跑 `scripts/carry_rotation.py --days 2` 出的提议是 `LTC/USDT → TRIA/USDT:USDT`（breakeven 4 天）。但候选读的是 `screen_live.json` 的 `median_daily_bps`（`samples=100` × 4h ⇒ ≈17 天），现任读的是 `--days 3`；同一个 TRIA 最近 5 天实测只有 5.2 bps/天，折算后回本是 ≈9 天。且 TRIA 的 `depth_ok=false`，按入场深度闸门根本进不来。**同日第六轮又查出两个输入都可能过期**：候选快照 3.2 天前且**没有任何定时任务在生产它**；资金费历史 142 条里 APT/TIA 冻在 09-30。已先加**时效护栏**（两侧默认 2 天，过期就拒绝出提议、保留读数表、把原因写进 `refusals` 并在门槛报告里显示） | 四选一（改哪一边都会改变「什么时候换腿」，所以先问）：① 候选也按同一窗口重算（口径一致，提议变少变实）② 候选额外要求 `depth_ok=true`（只提议进得去的名字）③ 两个都改 ④ 维持现状（护栏已在挡，只会拒绝、不会提议）。**另有第五个选项**：给候选快照排一个定时产出（每日任务加一步、或单独 launchd）—— 代价是每日任务多一个依赖网络的步骤，门槛 4「连续 14 天两轮全绿」会跟着受影响；不做的话规则就一直是「拒绝出提议」 |
 
 **合计**：✅ 完成 52 · ⏳ 等数据 8 · waiting_decision 4。
 <!-- PROGRESS:END -->
@@ -6097,6 +6097,33 @@ python3 scripts/live_readiness.py --write --backtest   # → reports/live-readin
 2. **期权腿的数字来自 `data/options/round_trip.jsonl`，不是印象。** 那里记着 4 次真实尝试的
    原文失败（ExchangeError 被拒 / InvalidOrder 被拒 / 卖一价在价格带外 / `buy fill unconfirmed`），
    所以"这套环境买不到期权"是一条**可复核的记录**，而不是一句结论。
+
+#### 70.10.5 换腿规则的两个输入都可能悄悄过期（同日第六轮）
+
+上面查"两把尺子"时顺手查了这两把尺子**还在不在走**，结果是：
+
+| 输入 | 现状 | 谁在生产它 |
+|---|---|---|
+| 候选快照 `data/carry/screen_live.json` | **3.2 天前**（10-10） | **没有任何定时任务** —— 只有手跑 `carry_live.py --write`；每日任务只刷新"裁决"，从不刷新"候选" |
+| 持仓腿的资金费历史 | 142 条里 140 条今天仍在更新，**APT / TIA 冻在 09-30** | `fetch_funding_history.py`，但它的名单来自 5 天前的 `data/universe/inventory.json` |
+
+危险的地方不在"旧"，而在**旧数据长得和新数据一样**：`daily_bps_series` 取的是"最后 N 个
+有印的日子"，冻住的文件照样产出三个形状完全正常的桶，而 `is_persistently_below` 从来不看日期。
+于是两周没更新的标的可以被判成"连续 3 天低于 floor"——这和研究侧日线冻结、
+候选用 17 天中位虚高一倍是同一个坑。
+
+**修法（只加护栏，不改规则）**：两侧都做时效检查（默认 2 天），过期就**拒绝出提议**，
+但**保留每对腿的读数表**（排查时要看的正是它），并把原因记进报告的 `refusals` 字段。
+现在 `--days 2` 会明确打印：
+
+```
+REFUSED candidate screen: candidate snapshot is 3.2 days old (limit 2) - nothing scheduled refreshes it
+```
+
+这条拒绝也进了看板读的那份门槛报告（"最近一轮规则自己的拒绝记录"），所以它不是只出现在
+某次命令行输出里。**写测试时抓到自己一个 bug**：护栏先把 `row["stale"]` 清成 False，
+而真正决定出不出提议的是局部变量 `low` —— 提议照样发出来了。这又是"你设的那个开关
+不是被读的那个开关"，四行断言就把它钉住了。
 
 ---
 

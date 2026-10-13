@@ -970,6 +970,14 @@ def gate_carry(root: Path) -> dict:
             f"按「入场前查不到深度就拒」的闸门，它**根本进不来**。"
             f"修哪一边是策略选择，所以这里只报数、不动规则。"
         )
+    refusals = (rot_rows[-1].get("refusals") or []) if rot_rows else []
+    if refusals:
+        detail += (
+            "\n\n**最近一轮规则自己的拒绝记录**（`carry_rotation.py` 的 `refusals`）："
+            + "；".join(f"{r.get('what')} —— {r.get('why')}" for r in refusals)
+            + "。护栏是 2026-10-13 加的：候选快照没有定时产出、历史目录里也有冻住的序列，"
+              "而 `daily_bps_series` 取的是「最后 N 个**有印**的日子」——冻住的文件照样给出正常形状的桶。"
+        )
     return {
         "id": 5,
         "name": "资金费证据",

@@ -2000,6 +2000,108 @@ class LiveFeedFundingTests(unittest.TestCase):
         self.assertIsNone(feed.funding_rate("SOL/USDT"))
 
 
+class CarryRotationFreshnessTests(unittest.TestCase):
+    """2026-10-13：换腿规则读两样东西 —— 持仓腿的资金费历史、以及一份候选快照。
+
+    查「为什么从没触发」时发现两边都可能悄悄过期：候选快照 `screen_live.json`
+    **没有任何定时任务在产出**（只有手跑 `carry_live.py --write`），而历史目录里有
+    两条序列冻在 09-30。`daily_bps_series` 取的是「最后 N 个**有印**的日子」，
+    所以冻住的文件照样能给出三个看起来正常的桶；`is_persistently_below` 从来不看日期。
+    照旧静默采信，就是研究侧日线冻结、候选虚高一倍那两个坑的同一形状。
+    """
+
+    def _module(self):
+        return _load_script("carry_rotation")
+
+    @staticmethod
+    def _write_history(root: Path, base: str, last_day, rate: float, days: int = 3) -> None:
+        import datetime as dt
+
+        rows = []
+        for back in range(days):
+            day = last_day - dt.timedelta(days=back)
+            for slot in range(3):
+                stamp = dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc)
+                rows.append({"ts": int(stamp.timestamp() * 1000) + slot * 8 * 3_600_000,
+                             "rate": rate})
+        (root / f"{base}-USDT_USDT.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    def _plan(self, module, root, today, *, screen_ms=None, held=("LTC/USDT",),
+              candidates=({"symbol": "TRIA/USDT:USDT", "bps": 12.0},), rate=0.00001,
+              history_last_day=None):
+        import datetime as dt
+
+        for symbol in held:
+            # 「现在」与「历史最后一天」必须能分开 —— 冻住的历史正是靠这两个错开才测得出来
+            self._write_history(root, symbol.split("/")[0],
+                                history_last_day or today, rate)
+        now_ms = int(dt.datetime(today.year, today.month, today.day, 12,
+                                 tzinfo=dt.timezone.utc).timestamp() * 1000)
+        return module.plan({s: {} for s in held}, root, list(candidates), [],
+                           days=3, floor_bps=1.0, round_trip_bps=44.9,
+                           min_hold_hours=0.0, intended_hold_days=30.0,
+                           now_ms=now_ms, screen_generated_at_ms=screen_ms)
+
+    def test_a_fresh_pair_and_screen_still_produce_a_proposal(self) -> None:
+        """先证明护栏没把正常路堵死：两边都新鲜时，规则照旧出提议。"""
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        screen_ms = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=screen_ms)
+        self.assertEqual(report["refusals"], [])
+        self.assertEqual(len(report["rotations"]), 1)
+        self.assertEqual(report["rotations"][0]["from"], "LTC/USDT")
+
+    def test_a_frozen_history_is_refused_not_read_as_persistently_below(self) -> None:
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        screen_ms = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # 历史停在 13 天前（实测：APT/TIA 两条序列冻在 09-30），内容"看起来"完全合格
+            report = self._plan(module, root, today, screen_ms=screen_ms,
+                                history_last_day=today - dt.timedelta(days=13))
+        self.assertEqual(report["rotations"], [])
+        self.assertTrue(report["pairs"][0]["stale_history"])
+        self.assertFalse(report["pairs"][0]["stale"])
+        self.assertIn("days old", report["refusals"][0]["why"])
+
+    def test_a_stale_candidate_snapshot_refuses_the_proposal_but_keeps_the_table(self) -> None:
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        screen_ms = int(dt.datetime(2026, 10, 10, 3, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=screen_ms)
+        self.assertEqual(report["rotations"], [])
+        # 换腿提议被拒，但每对腿的读数必须保留 —— 那才是排查时要看的东西
+        self.assertEqual(len(report["pairs"]), 1)
+        self.assertEqual(report["pairs"][0]["symbol"], "LTC/USDT")
+        self.assertIn("candidate screen", report["refusals"][0]["what"])
+
+    def test_no_generated_at_means_no_guard(self) -> None:
+        """老快照没有 `generated_at` 字段时不能假装它新鲜，也不能因此判它过期 ——
+        结果应当是"不额外拦截"，由调用方自己保证。"""
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), dt.date(2026, 10, 13), screen_ms=None)
+        self.assertEqual(report["refusals"], [])
+        self.assertEqual(len(report["rotations"]), 1)
+
+
 class CarryRotationRuleTests(unittest.TestCase):
     """1.2's decision half: what the RUNNER may close, given the detector's report.
 

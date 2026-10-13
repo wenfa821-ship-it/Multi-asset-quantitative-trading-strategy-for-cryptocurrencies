@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.11**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.12**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.12 — 2026-10-13T16:51
+
+- 测试 **432** 绿 · 权益 $102,436.77 · 记录时的包版本 1.1.12
+
+换腿规则的两个输入都可能悄悄过期：候选快照 screen_live.json 3.2 天前且没有任何定时任务在生产它，资金费历史 142 条里 APT/TIA 冻在 09-30；而 daily_bps_series 取「最后 N 个有印的日子」、is_persistently_below 不看日期，所以冻住的序列照样给出正常形状的桶。加时效护栏（两侧默认 2 天）：过期拒绝出提议、保留每对腿读数、原因写进 refusals 并在门槛报告里显示。测试期间抓到 row['stale'] 与局部 low 不一致导致提议未被拦住的 bug。432 测试绿。
 
 ## v1.1.11 — 2026-10-13T16:42
 
