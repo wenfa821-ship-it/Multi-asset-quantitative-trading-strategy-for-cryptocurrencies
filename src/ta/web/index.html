@@ -343,13 +343,27 @@ function renderNewcoin(nc) {
     ? ('判定 ' + (inv.checked || 0) + ' 条 · 判不了 ' + (inv.blind || 0) + ' 条'
        + (invClosest ? ' · 最近 ' + invClosest.symbol + ' ' + invClosest.deepest_pct + '%' : ''))
     : '还没跑（该项目 scripts/check_invalidations.py --write）';
+  // 2026-10-13: 队列对照（过闸 vs 深度）—— 兄弟项目的核心问题，读它发布的 cohort.json。
+  // 三层里只有「年龄/深度对齐」那层接近筛查自己的判别力，所以 KPI 报这一层。
+  const co = nc.cohort || {};
+  const coAligned = ((co.aligned || {})['24h']) || {};
+  const coPaired = ((co.paired || {})['24h']) || {};
+  const coValue = (coAligned.diff == null) ? '—'
+    : ((coAligned.diff >= 0 ? '+' : '') + Math.round(coAligned.diff) + ' bps');
+  const coHint = (coAligned.diff == null)
+    ? '还没跑（该项目 scripts/cohort_study.py --write）'
+    : ('对齐后：过闸 ' + ((coAligned.passed || {}).tokens || 0) + ' vs 未过闸 '
+       + ((coAligned.failed || {}).tokens || 0) + ' 标的（<20 只作方向）｜同轮配对中位 '
+       + (coPaired.median_diff == null ? '—' : Math.round(coPaired.median_diff) + ' bps'));
   $('#nc-bars').innerHTML = [
+
     ncKpi('版本', 'v' + esc(nc.version), '包 ' + esc(nc.package_version || '?')),
     ncKpi('进度', (counts.done || 0) + '/' + total, Object.entries(counts).map(([k,v]) => `${NC_STATE[k] || k} ${v}`).join(' · ')),
     ncKpi('今日候选', String((nc.candidates && nc.candidates.rows || []).length),
       '过闸 ' + ((nc.candidates && nc.candidates.passed) || 0) + ' 个'),
     ncKpi('论点前向 1h', tsValue, tsHint),
     ncKpi('失效条件', (inv.pending ? inv.pending + ' 条待结案' : '0 条待结案'), invHint),
+    ncKpi('队列对照 24h', coValue, coHint),
   ncKpi('决策样本', (j.opened || 0) + ' / ' + (j.closed || 0), '开仓 / 结案（门槛 30 / 20）'),
   ncKpi('③+④ 占比', j.drift_share == null ? 'n/a' : (j.drift_share * 100).toFixed(0) + '%',
       '时间盒 + 执行/数据，门槛 ≤30%'),
