@@ -525,6 +525,58 @@ class HttpClientTests(unittest.TestCase):
 
 
 
+class NarrowedBucketVerdictTests(unittest.TestCase):
+    """1.3 的收窄判定（2026-10-13，用户批准选项 ②）。
+
+    原判据要求「低换手桶也 ≥20 个代币」，而本发现层（推广 feed + trending）**结构上产不出安静池**
+    —— 研究并集 162 个代币里中位换手比 <1 的只有 3 个、<0.5 的只有 2 个。于是把低侧参照换成
+    **全场（pool）**：问「高换手侧有没有比一般代币强」。判据不变：两侧各 ≥20 代币，且差额要跨过
+    1.4% 成本墙。这样 +1h 首次**达到**样本判据（实测 73 vs 119 代币），结论是负的（−0.82pp）。
+    """
+
+    @staticmethod
+    def _report():
+        return {
+            "bucket_by": "turnover",
+            "horizons": [3600],
+            "coverage": {3600: {"with_forward": 11081, "scored": 12772, "fraction": 0.87}},
+            "buckets": {3600: {
+                "0-1": {"n": 792, "tokens": 7, "median": -0.06, "mean": -0.2,
+                        "win_rate": 44.0, "p10": -2.0, "p90": 1.7},
+                "1-5": {"n": 2507, "tokens": 48, "median": -1.13, "mean": -0.5,
+                        "win_rate": 40.1, "p10": -14.0, "p90": 13.8},
+                "20+": {"n": 3076, "tokens": 73, "median": -1.55, "mean": 57.0,
+                        "win_rate": 46.3, "p10": -27.0, "p90": 35.0},
+            }},
+            "pool": {3600: {"n": 11081, "tokens": 119, "median": -0.73, "mean": 12.0,
+                            "win_rate": 45.0, "p10": -20.0, "p90": 25.0}},
+            "zero_change": {}, "passed_vs_rejected": {},
+        }
+
+    def test_the_narrowed_line_compares_the_top_bucket_against_the_pool(self) -> None:
+        from ta.onchain.study import format_report
+
+        text = format_report(self._report(), store_rows=999)
+        line = next(l for l in text.splitlines() if "收窄" in l and "+1h" in l)
+        self.assertIn("20+ 中位 -1.55%", line)
+        self.assertIn("全场", line)
+        self.assertIn("-0.73%", line)
+        self.assertIn("-0.82pp", line)
+        # 73 与 119 都 ≥20 → 达到判据；因此**不该**出现"未达判据"的告警
+        self.assertNotIn("未达判据", line)
+
+    def test_a_thin_pool_or_bucket_still_warns(self) -> None:
+        """达到「两侧各 ≥20 代币」之前，收窄判定同样只能说"样本仍不足"。"""
+        from ta.onchain.study import format_report
+
+        report = self._report()
+        report["buckets"][3600]["20+"]["tokens"] = 8      # 高分侧只有 8 个代币
+        text = format_report(report, store_rows=999)
+        line = next(l for l in text.splitlines() if "收窄" in l)
+        self.assertIn("未达判据", line)
+        self.assertIn("8/119", line)
+
+
 class CollapseStatsTests(unittest.TestCase):
     """2026-10-13：`ta scan evaluate` 每轮打印「11% 是重复写入，说明有多个扫描器在写同一账本」。
 

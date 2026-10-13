@@ -132,7 +132,36 @@ def screen_rows(screen: dict) -> list[dict]:
         symbol = str(row.get("symbol") or "")
         daily = row.get("median_daily_bps", row.get("daily_bps"))
         if symbol and daily is not None:
-            out.append({"symbol": symbol, "bps": float(daily)})
+            out.append({"symbol": symbol, "bps": float(daily),
+                        "screen_bps": float(daily),
+                        "eligible": row.get("eligible"),
+                        "depth_ok": bool(row.get("depth_ok"))})
+    return sorted(out, key=lambda r: -r["bps"])
+
+
+def remeasure_candidates(candidates: list[dict], history: Path, days: int,
+                         settlements_per_day: float = 3.0) -> list[dict]:
+    """候选的 bps 改从**与现任同一把尺子**上重算（本地费率历史，同窗口同口径）。
+
+    2026-10-13（用户批准执行选项 ①）：候选原来读 `screen_live.json` 的 `median_daily_bps`
+    —— 那是它最近 `samples` 个印的中位（`samples=100` × 4h 结算 ≈ **17 天**），而现任读的是
+    `--days 3` 的中位。两把尺子不一样长，同一个名字能看着比它近期实际支付的好一倍
+    （TRIA：快照 11.933 vs 最近 5 天 5.2）。现在两边都用 `daily_bps_series(...)` 的
+    同窗口中位；快照那份值只留作对照（`screen_bps`）。
+
+    历史不齐（不足 `days` 天）的候选直接丢掉：宁可少一个候选，也不拿"最近 N 个有印的日子"
+    冒充"最近 N 天" —— 那是研究侧日线冻结那一课的同一个形状。深度（`depth_ok`）仍来自快照，
+    但在 `plan()` 里只在快照足够新时才作为过滤条件（旧快照的 depth 字段本身也可能过期）。
+    """
+    out: list[dict] = []
+    for cand in candidates:
+        base = cand["symbol"].split("/")[0]
+        series = daily_bps_series(load_jsonl(history / f"{base}-USDT_USDT.jsonl"), days,
+                                  settlements_per_day)
+        if len(series) < days:
+            continue
+        out.append({**cand, "series": series,
+                    "bps": round(statistics.median([bps for _d, bps, _n in series]), 3)})
     return sorted(out, key=lambda r: -r["bps"])
 
 
@@ -164,19 +193,24 @@ def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: li
               "days": days, "floor_bps": floor_bps, "round_trip_bps": round_trip_bps,
               "pairs": [], "rotations": [], "refusals": []}
 
+    # 2026-10-13（选项 ②）：快照的年龄现在只决定**深度过滤要不要用**，不再决定能不能出提议 ——
+    # 候选的 bps 已改由本地费率历史同窗口重算（见 remeasure_candidates），对快照不再有依赖；
+    # 快照过旧时它的 `depth_ok` 同样过时，此时交给 runner 自己的入场深度闸门兜底。
+    screen_age_days = None
+    depth_filter = False
     if screen_generated_at_ms:
-        age_days = (now - float(screen_generated_at_ms)) / 86_400_000.0
-        if age_days > max_screen_age_days:
+        screen_age_days = (now - float(screen_generated_at_ms)) / 86_400_000.0
+        depth_filter = screen_age_days <= max_screen_age_days
+        if not depth_filter:
             report["refusals"].append({
-                "what": "candidate screen",
-                "age_days": round(age_days, 2),
-                "why": (f"candidate snapshot is {age_days:.1f} days old "
-                        f"(limit {max_screen_age_days:g}) - nothing scheduled refreshes it"),
+                "what": "candidate depth filter",
+                "age_days": round(screen_age_days, 2),
+                "why": (f"candidate snapshot is {screen_age_days:.1f} days old "
+                        f"(limit {max_screen_age_days:g}) - its depth field is stale, so "
+                        f"depth is NOT used to filter candidates; the runner's own "
+                        f"entry-depth gate is the backstop. Ranking now comes from the "
+                        f"local funding history window, not from the snapshot."),
             })
-            # Keep the per-pair diagnostics (the table is the useful half) and refuse
-            # only the PROPOSAL: a swap chosen off a three-day-old snapshot is the
-            # exact mistake this guard exists to stop.
-            free = []
 
     for symbol in sorted(held):
         base = symbol.split("/")[0]
@@ -210,13 +244,37 @@ def plan(held: dict[str, dict], history: Path, candidates: list[dict], fills: li
             continue
         current = row["median_bps"] or 0.0
         for cand in free:
-            gain = cand["bps"] - current
-            be = breakeven_days(round_trip_bps, gain)
+            if depth_filter and not cand.get("depth_ok"):
+                continue
+            # 快照新鲜时，它自己的鲁棒性过滤（`eligible`，如 positive_share < 80%）也一起用 ——
+            # 那一条是"拒绝只靠尖峰撑起来的名字"，与这里的持续性检验同向，没必要丢掉。
+            if depth_filter and cand.get("eligible") is False:
+                continue
+            # 与现任**对称**的持续性检验（2026-10-13 选项 ① 的配套）：现任要"连续 N 天每天都
+            # 低于 floor"才算死；候选就必须"连续 N 天每一天都赢够"，否则一个插针日就能把它送上
+            # 候选位（同窗口中位数会被尖峰拉着走 —— 实测 NG 的 2 天中位 135 bps/天）。
+            # 回本天数用**最差的一天**算，宁可保守：换腿要付 44.9 bps，一次误换就是净支出。
+            cand_series = cand.get("series") or []
+            if len(cand_series) != days:
+                continue
+            worst = min(bps for _d, bps, _n in cand_series)
+            if worst <= current:
+                continue
+            be = breakeven_days(round_trip_bps, worst - current)
             if be is None or be > intended_hold_days:
                 continue
             report["rotations"].append({
                 "from": symbol, "to": cand["symbol"], "current_bps": current,
-                "candidate_bps": cand["bps"], "gain_bps_per_day": round(gain, 3),
+                "daily_bps": cand_series,
+                "worst_day_bps": round(worst, 3),
+                # 回本用最差的一天算，所以 `candidate_bps` 与 `gain_bps_per_day` 也是保守值；
+                # 同窗中位（`candidate_bps_median`）与快照值一起留痕，便于下一个人核对口径。
+                "candidate_bps": round(worst, 3),
+                "candidate_bps_median": cand["bps"],
+                # 同一把尺子上的数（bps）与快照那份对照（screen_bps），两个都留痕：
+                "candidate_bps_screen": cand.get("screen_bps"),
+                "depth_ok": cand.get("depth_ok"),
+                "gain_bps_per_day": round(worst - current, 3),
                 "breakeven_days": be, "age_hours": age_hours,
             })
             break
@@ -245,7 +303,9 @@ def main() -> int:
     load_env_file(PROJECT / ".env")  # the pair/history files need no venue, but keep parity
     held = load_json(PROJECT / args.pairs, {})
     screen = load_json(PROJECT / args.screen, {})
-    candidates = screen_rows(screen)
+    # 选项 ①：候选的 bps 从**和现任同一把尺子**上重算（本地费率历史、同窗口），
+    # 快照那份只留作对照（screen_bps）—— 它没有定时产出、也不该决定排名。
+    candidates = remeasure_candidates(screen_rows(screen), PROJECT / args.history, args.days)
     fills = [f for f in load_jsonl(PROJECT / args.ledger) if f.get("kind") == "fill"]
     report = plan(held, PROJECT / args.history, candidates, fills,
                   days=args.days, floor_bps=args.floor_bps,

@@ -2001,13 +2001,16 @@ class LiveFeedFundingTests(unittest.TestCase):
 
 
 class CarryRotationFreshnessTests(unittest.TestCase):
-    """2026-10-13：换腿规则读两样东西 —— 持仓腿的资金费历史、以及一份候选快照。
+    """换腿规则两侧的「尺子」与「新鲜度」（2026-10-13 两轮改动）。
 
-    查「为什么从没触发」时发现两边都可能悄悄过期：候选快照 `screen_live.json`
-    **没有任何定时任务在产出**（只有手跑 `carry_live.py --write`），而历史目录里有
-    两条序列冻在 09-30。`daily_bps_series` 取的是「最后 N 个**有印**的日子」，
-    所以冻住的文件照样能给出三个看起来正常的桶；`is_persistently_below` 从来不看日期。
-    照旧静默采信，就是研究侧日线冻结、候选虚高一倍那两个坑的同一形状。
+    第一轮查出：候选读的快照 `screen_live.json` **没有任何定时任务在产出**（只有手跑
+    `carry_live.py --write`），而 `daily_bps_series` 取的是「最后 N 个**有印**的日子」，
+    冻住的序列照样给出三个正常形状的桶 —— 于是加了时效护栏（过期就拒绝出提议）。
+
+    第二轮（用户批准执行选项 ①+②）改成：**候选的 bps 从本地费率历史、按与现任相同的窗口
+    重算**，快照只提供深度/资格过滤（且只在快照够新时用）；候选侧加**与现任对称的持续性检验**
+    —— 现任要「连续 N 天每天都低于 floor」才算死，候选就要「连续 N 天每一天都赢够」，
+    且回本天数用**最差的一天**算。理由：同窗中位数会被尖峰拉着走（实测 NG 2 天中位 135 bps/天）。
     """
 
     def _module(self):
@@ -2027,9 +2030,18 @@ class CarryRotationFreshnessTests(unittest.TestCase):
         (root / f"{base}-USDT_USDT.jsonl").write_text(
             "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
+    @staticmethod
+    def _cand(symbol: str, day_bps: list[float], *, depth_ok: bool = True,
+              eligible=True, screen_bps: float | None = None) -> dict:
+        """一个已经过 `remeasure_candidates` 的候选：带 series、bps（中位）与快照字段。"""
+        series = [(f"2026-10-{11 + i}", bps, 3) for i, bps in enumerate(day_bps)]
+        median = sorted(day_bps)[len(day_bps) // 2]
+        return {"symbol": symbol, "bps": median, "series": series,
+                "screen_bps": screen_bps if screen_bps is not None else median,
+                "eligible": eligible, "depth_ok": depth_ok}
+
     def _plan(self, module, root, today, *, screen_ms=None, held=("LTC/USDT",),
-              candidates=({"symbol": "TRIA/USDT:USDT", "bps": 12.0},), rate=0.00001,
-              history_last_day=None):
+              candidates=(), rate=0.00001, history_last_day=None):
         import datetime as dt
 
         for symbol in held:
@@ -2043,63 +2055,115 @@ class CarryRotationFreshnessTests(unittest.TestCase):
                            min_hold_hours=0.0, intended_hold_days=30.0,
                            now_ms=now_ms, screen_generated_at_ms=screen_ms)
 
-    def test_a_fresh_pair_and_screen_still_produce_a_proposal(self) -> None:
-        """先证明护栏没把正常路堵死：两边都新鲜时，规则照旧出提议。"""
+    def test_a_candidate_that_clears_the_bar_every_day_produces_a_proposal(self) -> None:
+        """正常路（护栏没把它堵死）：现任连续 3 天低于 floor、候选 3 天每天都赢够。"""
         import datetime as dt
         import tempfile
 
         module = self._module()
         today = dt.date(2026, 10, 13)
-        screen_ms = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        fresh = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        cand = self._cand("TRIA/USDT:USDT", [5.0, 6.0, 7.0], screen_bps=11.933)
         with tempfile.TemporaryDirectory() as tmp:
-            report = self._plan(module, Path(tmp), today, screen_ms=screen_ms)
-        self.assertEqual(report["refusals"], [])
+            report = self._plan(module, Path(tmp), today, screen_ms=fresh, candidates=[cand])
         self.assertEqual(len(report["rotations"]), 1)
-        self.assertEqual(report["rotations"][0]["from"], "LTC/USDT")
+        rot = report["rotations"][0]
+        self.assertEqual(rot["from"], "LTC/USDT")
+        self.assertEqual(rot["to"], "TRIA/USDT:USDT")
+        # 回本用最差的一天（5.0），不是中位/最好的一天；中位与快照值一起留痕
+        self.assertEqual(rot["candidate_bps"], 5.0)
+        self.assertEqual(rot["worst_day_bps"], 5.0)
+        self.assertEqual(rot["candidate_bps_median"], 6.0)
+        self.assertEqual(rot["candidate_bps_screen"], 11.933)
 
-    def test_a_frozen_history_is_refused_not_read_as_persistently_below(self) -> None:
+    def test_one_bad_day_disqualifies_a_candidate(self) -> None:
+        """**对称性**：插针日不能把候选送上位。中位可以很好看，但有一天没赢够就不算。"""
         import datetime as dt
         import tempfile
 
         module = self._module()
         today = dt.date(2026, 10, 13)
-        screen_ms = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        fresh = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        spike = self._cand("TRIA/USDT:USDT", [0.2, 40.0, 45.0])   # 中位 40，但第一天只有 0.2
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=fresh,
+                                candidates=[spike])
+        self.assertEqual(report["rotations"], [])
+        self.assertEqual(report["pairs"][0]["stale"], True)        # 现任确实"死"了
+        # 换一个每天都赢够的候选 → 立刻就能出提议（上一条不是被别的条件挡住的）
+        good = self._cand("TRIA/USDT:USDT", [5.0, 5.0, 5.0])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=fresh, candidates=[good])
+        self.assertEqual(len(report["rotations"]), 1)
+
+    def test_a_candidate_with_incomplete_history_is_dropped(self) -> None:
+        """候选历史不足 `days` 天 → 丢掉，而不是拿「最近 N 个有印的日子」冒充窗口。"""
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            # 历史停在 13 天前（实测：APT/TIA 两条序列冻在 09-30），内容"看起来"完全合格
-            report = self._plan(module, root, today, screen_ms=screen_ms,
+            self._write_history(root, "TRIA", today, 0.0005, days=3)
+            self._write_history(root, "ONLYTWO", today, 0.0005, days=2)
+            screen = {"rows": [{"symbol": "TRIA/USDT:USDT", "median_daily_bps": 9.0},
+                               {"symbol": "ONLYTWO/USDT:USDT", "median_daily_bps": 99.0}]}
+            kept = module.remeasure_candidates(module.screen_rows(screen), root, 3)
+        names = [c["symbol"] for c in kept]
+        self.assertEqual(names, ["TRIA/USDT:USDT"])
+        self.assertIn("series", kept[0])          # 序列随候选一起带到报告里，便于复核
+
+    def test_a_stale_screen_no_longer_blocks_the_ranking(self) -> None:
+        """快照过旧 → 只停用深度/资格过滤（并写明原因），**不再**挡住提议：
+        排名现在来自本地费率历史，与快照无关。"""
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        stale = int(dt.datetime(2026, 10, 10, 3, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        # depth_ok=False 且 eligible=False：若过滤生效就会被挡掉
+        cand = self._cand("TRIA/USDT:USDT", [5.0, 5.0, 5.0], depth_ok=False, eligible=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=stale, candidates=[cand])
+        self.assertEqual(len(report["rotations"]), 1)              # 排名照常
+        refusals = report["refusals"]
+        self.assertEqual(len(refusals), 1)
+        self.assertIn("depth field is stale", refusals[0]["why"])
+        self.assertEqual(len(report["pairs"]), 1)                  # 每对腿的读数表保留
+
+    def test_a_fresh_unsuitable_candidate_is_filtered(self) -> None:
+        """快照新鲜时，它自己的过滤仍然生效：depth_ok=False 或 eligible=False 的候选不用。"""
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        fresh = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        shallow = self._cand("TRIA/USDT:USDT", [5.0, 5.0, 5.0], depth_ok=False)
+        ineligible = self._cand("ONLYSPIKE/USDT:USDT", [5.0, 5.0, 5.0], eligible=False)
+        good = self._cand("GOOD/USDT:USDT", [4.0, 4.0, 4.0])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=fresh,
+                                candidates=[shallow, ineligible, good])
+        self.assertEqual([r["to"] for r in report["rotations"]], ["GOOD/USDT:USDT"])
+
+    def test_a_frozen_incumbent_history_is_refused_not_read_as_persistently_below(self) -> None:
+        import datetime as dt
+        import tempfile
+
+        module = self._module()
+        today = dt.date(2026, 10, 13)
+        fresh = int(dt.datetime(2026, 10, 13, 8, tzinfo=dt.timezone.utc).timestamp() * 1000)
+        cand = self._cand("TRIA/USDT:USDT", [5.0, 5.0, 5.0])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = self._plan(module, Path(tmp), today, screen_ms=fresh, candidates=[cand],
                                 history_last_day=today - dt.timedelta(days=13))
         self.assertEqual(report["rotations"], [])
         self.assertTrue(report["pairs"][0]["stale_history"])
         self.assertFalse(report["pairs"][0]["stale"])
         self.assertIn("days old", report["refusals"][0]["why"])
-
-    def test_a_stale_candidate_snapshot_refuses_the_proposal_but_keeps_the_table(self) -> None:
-        import datetime as dt
-        import tempfile
-
-        module = self._module()
-        today = dt.date(2026, 10, 13)
-        screen_ms = int(dt.datetime(2026, 10, 10, 3, tzinfo=dt.timezone.utc).timestamp() * 1000)
-        with tempfile.TemporaryDirectory() as tmp:
-            report = self._plan(module, Path(tmp), today, screen_ms=screen_ms)
-        self.assertEqual(report["rotations"], [])
-        # 换腿提议被拒，但每对腿的读数必须保留 —— 那才是排查时要看的东西
-        self.assertEqual(len(report["pairs"]), 1)
-        self.assertEqual(report["pairs"][0]["symbol"], "LTC/USDT")
-        self.assertIn("candidate screen", report["refusals"][0]["what"])
-
-    def test_no_generated_at_means_no_guard(self) -> None:
-        """老快照没有 `generated_at` 字段时不能假装它新鲜，也不能因此判它过期 ——
-        结果应当是"不额外拦截"，由调用方自己保证。"""
-        import datetime as dt
-        import tempfile
-
-        module = self._module()
-        with tempfile.TemporaryDirectory() as tmp:
-            report = self._plan(module, Path(tmp), dt.date(2026, 10, 13), screen_ms=None)
-        self.assertEqual(report["refusals"], [])
-        self.assertEqual(len(report["rotations"]), 1)
 
 
 class CarryRotationRuleTests(unittest.TestCase):
@@ -5509,10 +5573,16 @@ class CarryRotationTests(unittest.TestCase):
             )
             (history / "CRV-USDT_USDT.jsonl").write_text(low + "\n", encoding="utf-8")
             fills = [{"symbol": "CRV/USDT", "side": "buy", "qty": 10.0, "ts": self._day(1)}]
+            # 2026-10-13：候选现在必须带**同窗口序列**（`remeasure_candidates` 的产物），
+            # 而且回本用**最差的一天**算 —— 这里三天都是 4.49，所以与旧断言同解。
+            series = [("2026-10-08", 4.49, 3), ("2026-10-09", 4.49, 3), ("2026-10-10", 4.49, 3)]
             report = module.plan(
                 {"CRV/USDT": {"pair_id": "x", "base_qty": 10.0}},
                 history,
-                [{"symbol": "WLFI/USDT:USDT", "bps": 4.49}, {"symbol": "CRV/USDT:USDT", "bps": 9.0}],
+                [{"symbol": "WLFI/USDT:USDT", "bps": 4.49, "series": series,
+                  "depth_ok": True, "eligible": True},
+                 {"symbol": "CRV/USDT:USDT", "bps": 9.0, "series": series,
+                  "depth_ok": True, "eligible": True}],
                 fills,
                 days=3, floor_bps=1.0, round_trip_bps=44.9, min_hold_hours=24.0,
                 intended_hold_days=30.0,

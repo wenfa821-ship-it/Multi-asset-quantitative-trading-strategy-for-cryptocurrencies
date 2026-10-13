@@ -402,6 +402,10 @@ def bucket_report(
             stats["tokens"] = len({str(r.get("mint")) for r, _ in group})
             buckets[label] = stats
         report["buckets"][horizon] = buckets
+        # 全场（pool）参照：2026-10-13 收窄 1.3 判定用 —— 见 format_report 的说明。
+        pool = _stats([r["fwd"][horizon] for r, _ in with_data])
+        pool["tokens"] = len({str(r.get("mint")) for r, _ in with_data})
+        report.setdefault("pool", {})[horizon] = pool
 
     # the same comparison on the binary gate we already rely on
     for horizon in horizons:
@@ -493,6 +497,12 @@ def format_report(report: dict[str, Any], store_rows: int) -> str:
             )
         buckets = report["buckets"][horizon]
         filled = [(label, stats) for label, stats in buckets.items() if stats.get("n")]
+        # 1.3 的**收窄判定**（2026-10-13，用户批准）：原来要求"低换手桶也 ≥20 个代币"，
+        # 而本发现层（推广 feed + trending）结构上产不出安静池 —— 实测研究并集 162 个代币里
+        # 中位换手比 <1 的只有 3 个、<0.5 的只有 2 个，再等也不会到 20。于是改成拿
+        # **全场（pool）**当低侧参照：问的是"高换手侧有没有比一般代币强"，而不是
+        # "安静池有没有比高换手强"。判据仍是两侧各 ≥20 个代币、且差额要跨过 1.4% 成本墙。
+        pool = (report.get("pool") or {}).get(horizon) or {}
         if len(filled) >= 2:
             low_label, low = filled[0]
             high_label, high = filled[-1]
@@ -513,6 +523,17 @@ def format_report(report: dict[str, Any], store_rows: int) -> str:
                     else f"（n={low.get('n')}/{high.get('n')}，代币={low.get('tokens')}/{high.get('tokens')}，样本仍不足）"
                 )
             )
+            if pool.get("n"):
+                pool_edge = high.get("median", 0.0) - pool.get("median", 0.0)
+                pool_enough = (high.get("n", 0) >= 20 and high.get("tokens", 0) >= 20
+                               and pool.get("tokens", 0) >= 20)
+                verdicts.append(
+                    f"+{label}（收窄）：{high_label} 中位 {high.get('median', 0):+.2f}% vs "
+                    f"**全场** 中位 {pool.get('median', 0):+.2f}% → 差 {pool_edge:+.2f}pp"
+                    f"（全场 n={pool.get('n')}，代币={pool.get('tokens')}）"
+                    + ("" if pool_enough
+                       else f" ⚠️ 未达判据（需两侧各 ≥20 代币，现 {high.get('tokens')}/{pool.get('tokens')}）")
+                )
 
     lines.append("\n=== 判定 ===")
     if not verdicts:
