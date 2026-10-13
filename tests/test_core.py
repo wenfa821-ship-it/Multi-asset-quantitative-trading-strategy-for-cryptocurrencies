@@ -279,6 +279,17 @@ class CcxtFeeCurrencyTests(unittest.TestCase):
         self.assertIn("no free", order.reason)
 
 
+def _load_script(name: str):
+    """Load `scripts/<name>.py` by path: they are not an installed package, and
+    several of them are CLI entry points rather than importable modules."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, PROJECT / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def account(
     cash: float = 10_000.0,
     equity: float | None = None,
@@ -6065,6 +6076,223 @@ class NewListingCategoryTests(unittest.TestCase):
         counted = filtered_by_category(self.ROWS, categories={"1"},
                                        cutoff_ms=500, mature_ms=2_000)
         self.assertEqual(counted, {"3": 1})     # 「added 0」时也要说清挡掉了什么
+
+
+class LiveReadinessTests(unittest.TestCase):
+    """README 70.6 的六条「切实盘门槛」以前只活在散文里，每次都要重新论证一遍。
+    2026-10-13 把它们做成 `scripts/live_readiness.py` 的**可复核数字**。这批测试
+    盯的是三个最容易出错的地方：能不能从真实输出里解析出样本外数字、已知项与
+    非结构性差异的分类、以及「没数据」必须说没数据而不是给个 0。
+    """
+
+    def _mod(self):
+        return _load_script("live_readiness")
+
+    # 这是 `ta backtest --split` 的真实输出形状（2026-10-13 实测，见 README 70.7）
+    OOS = """
+walk-forward split at ts=1790000000000
+  --- in-sample (shape only; this is where tuning would happen)
+
+backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=3000  timeframe=15m
+  total_return_pct     12.34
+  trades               99
+
+  --- out-of-sample (the only number that means anything)
+
+backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
+  final_equity         9991.69
+  total_return_pct     -0.08
+  trades               5
+  win_rate_pct         33.3
+  profit_factor        0.38
+  exits                {'stop_loss': 2}
+
+  out-of-sample at 3x costs: -0.11% (decay 0.03 pp)
+  !! only 5 out-of-sample trades: not enough to conclude anything
+"""
+
+    def test_parse_oos_reads_the_out_of_sample_block_not_the_in_sample_one(self) -> None:
+        got = self._mod().parse_oos(self.OOS)
+        self.assertEqual(got["total_return_pct"], -0.08)   # 不是 in-sample 的 12.34
+        self.assertEqual(got["trades"], 5)
+        self.assertEqual(got["win_rate_pct"], 33.3)
+        self.assertIsNone(got.get("nope"))
+
+    def test_an_unreadable_backtest_block_is_empty_not_zero(self) -> None:
+        """解析不出样本外段时不能返回 {'total_return_pct': 0}：那会读成「不赚不亏」。"""
+        self.assertEqual(self._mod().parse_oos("no walk-forward here"), {})
+
+    def _root(self, tmp: str) -> Path:
+        root = Path(tmp)
+        (root / "data" / "readiness").mkdir(parents=True, exist_ok=True)
+        (root / "logs").mkdir(parents=True, exist_ok=True)
+        return root
+
+    def test_gate1_says_unmeasured_when_the_backtest_file_is_absent(self) -> None:
+        import tempfile
+
+        module = self._mod()
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = module.gate_edge(self._root(tmp))
+        self.assertEqual(gate["status"], "unmeasured")
+        self.assertIn("--backtest", gate["detail"])
+
+    def test_gate1_needs_a_positive_strategy_with_enough_trades(self) -> None:
+        import tempfile
+
+        module = self._mod()
+        rows = [
+            # 有 180 笔但为负：样本够、边缘不够 —— 这正是 2026-10-13 的现实
+            {"strategy": "perp_trend_funding", "total_return_pct": -1.61, "trades": 180,
+             "tb_selected_for_gate1": False},
+            # 正收益但只有 3 笔：不够下结论
+            {"strategy": "trend_breakout_daily", "total_return_pct": 0.02, "trades": 3,
+             "tb_selected_for_gate1": False},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "readiness" / "edge.json").write_text(
+                json.dumps({"generated_at": "2026-10-13T07:56:50+00:00", "rows": rows},
+                           ensure_ascii=False), encoding="utf-8")
+            gate = module.gate_edge(root)
+        self.assertEqual(gate["status"], "unmet")
+        self.assertIn("0/1", gate["value"])
+
+        rows[1]["tb_selected_for_gate1"] = True
+        rows[1]["trades"] = 40
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "readiness" / "edge.json").write_text(
+                json.dumps({"rows": rows}, ensure_ascii=False), encoding="utf-8")
+            gate = module.gate_edge(root)
+        self.assertEqual(gate["status"], "met")
+        self.assertIn("1/2", gate["value"])
+
+    def test_gate2_counts_fills_and_calendar_days_from_the_ledger(self) -> None:
+        import tempfile
+
+        module = self._mod()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            day = 1_790_000_000_000  # 毫秒；同一天里放几行
+            rows = [{"kind": "fill", "ts": day + i * 1000} for i in range(3)]
+            rows += [{"kind": "equity", "ts": day + 5_000}]
+            (root / "data" / "ledger.okx_demo.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_sample(root)
+        self.assertEqual(gate["status"], "unmet")     # 3 笔、1 天，两个门槛都没到
+        self.assertIn("3 笔", gate["value"])
+        self.assertIn("1 个交易日", gate["value"])
+
+    def test_gate3_known_cash_residual_does_not_break_the_streak(self) -> None:
+        """只含 `cash delta` 的是**已知项**（期望线跟着资金费走）；含 `position` 的才是新闻。"""
+        import tempfile
+        from datetime import datetime, timedelta
+
+        module = self._mod()
+        cst = module.CST
+        today = datetime.now(cst).date()
+
+        def alert(day, diffs):
+            when = datetime(day.year, day.month, day.day, 12, 0, tzinfo=cst)
+            return {"ts": when.isoformat(), "level": "warning",
+                    "title": "reconciliation mismatch", "diffs": diffs}
+
+        cash = ["cash delta: expected 92464.40 but venue shows 91405.50"]
+        rows = [alert(today - timedelta(days=n), cash) for n in range(4)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "logs" / "alerts.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_execution(root)
+            self.assertEqual(gate["value"], "4/30 天（覆盖 4 天）")
+            self.assertIn("已知项", gate["detail"])
+
+            # 昨天出现一条带持仓差异的 → 连击从今天重新开始
+            rows.append(alert(today - timedelta(days=1),
+                              ["position BTC/USDT: local=2.5e-09 venue=0.0012"] + cash))
+            (root / "logs" / "alerts.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_execution(root)
+        self.assertEqual(gate["value"], "1/30 天（覆盖 4 天）")
+        self.assertIn("position BTC/USDT", gate["detail"])
+
+    def test_gate4_counts_two_green_runs_per_day(self) -> None:
+        import tempfile
+        from datetime import datetime, timedelta
+
+        module = self._mod()
+        today = datetime.now(module.CST).date()
+        rows = []
+        for back in range(3):
+            date = (today - timedelta(days=back)).isoformat()
+            for _ in range(2):
+                rows.append({"date": date, "needs_rerun": [], "generated_at": "x"})
+        # 第 4 天只跑了一轮 → 不算一天
+        rows.append({"date": (today - timedelta(days=3)).isoformat(), "needs_rerun": []})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "daily_job_history.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_pipeline(root)
+        self.assertEqual(gate["value"], "3/14 天")
+
+        rows.append({"date": (today - timedelta(days=1)).isoformat(),
+                     "needs_rerun": ["options_gate.py"]})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._root(tmp)
+            (root / "data" / "daily_job_history.jsonl").write_text(
+                "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            gate = module.gate_pipeline(root)
+        self.assertEqual(gate["value"], "1/14 天")     # 昨天有一轮红了 → 只有今天
+
+    def test_the_daily_job_appends_a_dated_run_row(self) -> None:
+        """`data/daily_job_status.json` 每轮被覆盖，只答得了「最近一轮」；
+        门槛 4 问的是 14 天，所以必须另有一份 append-only 的逐轮记录。"""
+        import tempfile
+        from datetime import datetime
+
+        module = self._mod()  # 复用 PROJECT 常量，别让测试写到真项目里
+        with tempfile.TemporaryDirectory() as tmp:
+            history = Path(tmp) / "history.jsonl"
+            daily = _load_script("daily_research")
+            daily.write_status(Path(tmp) / "status.json", {"a": 0, "b": 1}, {"a": 1, "b": 3}, history)
+            rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["needs_rerun"], ["b"])
+        self.assertEqual(rows[0]["steps"], {"a": 0, "b": 1})
+        today = datetime.now(module.CST).date().isoformat()
+        self.assertEqual(rows[0]["date"], today)
+
+    def test_report_marks_the_venue_gate_as_never_auto_judgeable(self) -> None:
+        module = self._mod()
+        gate = module.gate_venue_only()
+        self.assertEqual(gate["status"], "not_auto")
+        self.assertIn("最小仓位", gate["detail"])
+
+    def test_dashboard_shows_the_gates_or_says_why_it_cannot(self) -> None:
+        import tempfile
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            # 还没有跑过 live_readiness.py：要说原因，不能显示成「一条都不满足」
+            self.assertFalse(DashboardData(work / "config").readiness()["available"])
+
+            (work / "data" / "readiness").mkdir(parents=True)
+            (work / "data" / "readiness" / "readiness.json").write_text(
+                json.dumps({"generated_cst": "2026-10-13 15:56", "met": 0, "judgeable": 5,
+                            "gates": [{"id": 6, "name": "模拟盘测不到的", "status": "not_auto",
+                                       "requirement": "r", "value": "不可自动判", "window": "—"}]},
+                           ensure_ascii=False), encoding="utf-8")
+            out = DashboardData(work / "config").readiness()
+        self.assertTrue(out["available"])
+        self.assertEqual(out["judgeable"], 5)
+        self.assertEqual(out["gates"][0]["status"], "not_auto")
 
 
 if __name__ == "__main__":

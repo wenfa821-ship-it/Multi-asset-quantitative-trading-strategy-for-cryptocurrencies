@@ -423,10 +423,17 @@
    "next": "维护：新增前置/实验时先登记（新 id）；要重做已结案的事必须**新立条目**，不允许把 closed 改回 open。检查器 6 条测试守着"
   },
   {
+   "id": "live-readiness-gates",
+   "item": "README §70.6 的六条「切实盘门槛」数字化：`scripts/live_readiness.py` → `reports/live-readiness.md` + `data/readiness/readiness.json`，看板「切实盘门槛」面板",
+   "state": "done",
+   "gate": "用户目标是「等策略成熟再切实盘」，而「成熟」原来只活在散文里（§70.6）。2026-10-13 每条做成一个可复核的数：边缘（真跑 --fee-multiplier 1.25 的样本外回放，独立复现 §70.7）、样本（账本 157 笔/14 天）、执行（告警按「只含 cash delta = 已知项」分类）、管道（新增 `data/daily_job_history.jsonl` 逐轮留痕，服务日志里答不了 14 天）、资金费（到账 6/30 天、换腿 0 次）、第 6 条按定义标「不可自动判」",
+   "next": "维护：已接进每日任务（`--write --backtest`，约 25 秒，只读本地日线）。门槛值随时间自己变，**不要手改报告**；要看的是哪条把门槛卡住（当前 0/5）。第 4 条的历史从 2026-10-13 起累积"
+  },
+  {
    "id": "dashboard-restart-pending",
-   "item": "两处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用）",
+   "item": "三处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用）",
    "state": "waiting_decision",
-   "gate": "2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）。两处都已测试通过、HTML 即时生效部分已上线，但读指标/读进度表的那一半需要重启进程",
+   "gate": "2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）③ 新增「切实盘门槛」面板（读 data/readiness/readiness.json）。三处都已测试通过、HTML 即时生效部分已上线，但读指标 / 读进度表 / 读门槛的那一半需要重启进程",
    "next": "要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启"
   },
   {

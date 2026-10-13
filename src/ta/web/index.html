@@ -111,6 +111,12 @@
     <div class="muted" style="margin-top:6px">来源：本项目的 <code>docs/progress.json</code> 与兄弟项目发布的进度表 ——
       只列 <code>state = waiting_decision</code> 的行。其余「等数据/等闸门」的条目不在这一块。</div>
   </section>
+  <section class="span12" id="readiness-section" hidden><h2>切实盘门槛（README §70.6）</h2>
+    <div id="readiness"></div>
+    <div class="muted" style="margin-top:6px">来源：<code>reports/live-readiness.md</code>
+      （<code>scripts/live_readiness.py</code> 每天算一次，只读本地文件）。第 6 条按定义不可自动判 ——
+      它要的是实盘最小仓位实测，不是算出来的数。</div>
+  </section>
   <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
   <section class="span12"><h2>常驻服务与告警看门狗</h2>
     <div id="services"></div>
@@ -955,6 +961,32 @@ function renderDecisions(d) {
       <td class="dim">${esc(r.next || '')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
+function renderReadiness(d) {
+  // 2026-10-13：README 70.6 的六条门槛以前只活在散文里，每次问「能不能切实盘」都要
+  // 重新论证一遍。live_readiness.py 把它们算成数字，这里只负责把数字摆出来 ——
+  // 「第 6 条永远不可自动判」也要显示，否则面板会暗示「全绿就能上」。
+  const r = d.readiness || {};
+  const section = $('#readiness-section');
+  if (!r.available) { section.hidden = true; return; }
+  const label = { met: '✅ 满足', unmet: '❌ 未满足', unmeasured: '⬜ 未测量', not_auto: '🚫 不可自动判' };
+  const cls = { met: 'strategy', unmet: 'bug', unmeasured: 'info', not_auto: 'info' };
+  const gates = r.gates || [];
+  section.hidden = gates.length === 0;
+  if (!gates.length) return;
+  $('#readiness').innerHTML =
+    `<div class="muted">${esc(r.generated_cst || '')} 生成 ·
+      <b>${r.met}/${r.judgeable}</b> 条可自动判的门槛已满足${r.met < r.judgeable ? ' —— 现在仍不能切实盘' : ''}</div>
+     <div class="scroll" style="margin-top:6px"><table><thead><tr>
+       <th>#</th><th>门槛</th><th>要求</th><th>当前值</th><th>结论</th><th>数据窗口</th>
+     </tr></thead><tbody>${gates.map(g => `<tr>
+       <td class="dim">${esc(g.id)}</td>
+       <td>${esc(g.name)}</td>
+       <td class="dim">${esc(g.requirement)}</td>
+       <td class="num">${esc(g.value)}</td>
+       <td><span class="chip ${cls[g.status] || 'info'}">${esc(label[g.status] || g.status)}</span></td>
+       <td class="dim">${esc(g.window)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
 function renderArtifacts(list) {
   const size = (b) => b > 1048576 ? n(b/1048576,1)+' MB' : (b > 1024 ? n(b/1024,0)+' KB' : b+' B');
   $('#artifacts tbody').innerHTML = (list || []).map(a => `<tr>
@@ -988,6 +1020,7 @@ async function refresh() {
     renderRefit(d.refit);
     renderArtifacts(d.artifacts);
     renderDecisions(d);
+    renderReadiness(d);
     renderNewcoin(d.newcoin);
     if (AUDIT.length !== d.audit.length) { AUDIT = d.audit; renderAuditFilter(); }
     renderAudit();

@@ -784,6 +784,20 @@ class DashboardData:
                       "next": r.get("next"), "gate": r.get("gate")} for r in rows],
         }
 
+    def readiness(self) -> dict[str, Any]:
+        """切实盘门槛（README 70.6）的数字版。
+
+        2026-10-13：六条门槛原来只写在散文里，每次问「能不能切实盘」都要重新论证一遍。
+        `scripts/live_readiness.py` 每天把每条算成一个可复核的数，落 `data/readiness/readiness.json`；
+        这里只读它 —— 读不到就给原因，不编一个 0（缺文件 ≠ 门槛全灭）。
+        """
+        path = self.root / "data" / "readiness" / "readiness.json"
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return {"available": False, "reason": f"{type(exc).__name__}: {exc}"}
+        return {"available": True, **payload}
+
     def artifacts(self) -> list[dict[str, Any]]:
         """Raw trail: reports, archives and the running logs, newest first."""
         out: list[dict[str, Any]] = []
@@ -1644,6 +1658,7 @@ class DashboardData:
             "monitor": self.monitor(),
             "redflags": self.redflags(),
             "decisions": self.decisions(),
+            "readiness": self.readiness(),
             "services": self.services(),
             "newcoin": self.newcoin(),
         }

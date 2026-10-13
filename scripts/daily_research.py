@@ -61,7 +61,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -176,6 +176,12 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # paying" into a daily series instead of a memory. Acting on it is a separate
     # user-approved step; this only records what the rule WOULD do.
     ("carry_rotation.py", ["--write"]),
+    # README 70.6's six "mature enough for real money" gates, as numbers instead of
+    # prose (2026-10-13). Offline and read-only; it reads the ledger/alerts/carry
+    # artifacts the steps above just refreshed, so it runs after them. `--backtest`
+    # re-runs the five walk-forward replays at real fees (~25s, local bars only) so
+    # gate 1 is a fresh measurement rather than a remembered number.
+    ("live_readiness.py", ["--write", "--backtest"]),
     # The NUMBERS half of the daily review, written to docs/reviews/<date>.md. It
     # reviews the PREVIOUS complete CST day (so the 09:10 run closes yesterday, and
     # the 21:10 run rewrites the same file - idempotent by construction). The prose
@@ -231,11 +237,19 @@ def run_with_retry(
     return code, used
 
 
-def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int]) -> list[str]:
+def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int],
+                 history_path: Path | None = None) -> list[str]:
     """Persist what still needs a re-run so the dashboard can show it.
 
     A failed step used to be visible only to whoever read the launchd log. The
     file is best-effort: not being able to write it must not fail the job.
+
+    2026-10-13: `path` is OVERWRITTEN every run, so the file can answer "is the
+    latest run green?" and nothing else. README 70.6 gate 4 asks a question about
+    the last 14 days ("每日任务连续 14 天两轮全绿"), and there was no way to answer
+    it from disk - the history simply was not kept. `history_path` is the fix: one
+    appended row per run (CST date + UTC instant + the rc table), which is what
+    `scripts/live_readiness.py` counts. Same best-effort contract as `path`.
     """
     needs_rerun = [name for name, code in codes.items() if code != 0]
     payload = {
@@ -251,6 +265,23 @@ def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     except OSError as exc:
         print(f"could not write {path}: {exc}", flush=True)
+    if history_path is not None:
+        # CST, because the schedule that produces these runs is CST (09:10/21:10)
+        # and "one day = two runs" only holds on that boundary.
+        cst = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
+        row = {
+            "date": cst.date().isoformat(),
+            "generated_at": payload["generated_at"],
+            "needs_rerun": needs_rerun,
+            "steps": {name: int(code) for name, code in codes.items()},
+            "attempts": {name: int(attempts_used.get(name, 1)) for name in codes},
+        }
+        try:
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            with history_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        except OSError as exc:
+            print(f"could not append {history_path}: {exc}", flush=True)
     return needs_rerun
 
 
@@ -272,6 +303,11 @@ def main(argv: list[str] | None = None) -> int:
         "--status-file",
         default="data/daily_job_status.json",
         help="where to record the steps that still need a re-run",
+    )
+    parser.add_argument(
+        "--history-file",
+        default="data/daily_job_history.jsonl",
+        help="append-only per-run record (one row per run; what readme 70.6 gate 4 counts)",
     )
     parser.add_argument(
         "--rerun-failed",
@@ -331,7 +367,10 @@ def main(argv: list[str] | None = None) -> int:
     status_path = Path(args.status_file)
     if not status_path.is_absolute():
         status_path = PROJECT / status_path
-    needs_rerun = write_status(status_path, codes, attempts_used)
+    history_path = Path(args.history_file)
+    if not history_path.is_absolute():
+        history_path = PROJECT / history_path
+    needs_rerun = write_status(status_path, codes, attempts_used, history_path)
     if needs_rerun:
         print(f"NEEDS RERUN ({len(needs_rerun)}): " + ", ".join(needs_rerun))
     if all(code != 0 for code in codes.values()):

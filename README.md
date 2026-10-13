@@ -31,7 +31,7 @@
 | `archive/versions/<v>/` | **冻结快照**：`config/*.toml` + `changelog.jsonl` + `progress.json` + `manifest.json` + `NOTES.md`；同一版本拒绝重复冻结 |
 | git tag `v<版本>` | 代码侧的同一件事：`archive/` 让人一眼看懂当时状态，git 让 `git diff v0.4.6 v0.5.0` 回答「到底改了什么」 |
 
-**当前版本 v1.1.5**（2026-10-13）。版本线：1.0.0 = 四腿封板；1.1.0 = 期权腿的适配/数据层交付（策略未接入，因为这套模拟环境买不到期权）；**1.1.1~1.1.5 = 修复/观测/工具**（资金费双口径、前置执行闸门、看板面板、研究侧日线解冻…），逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
+**当前版本 v1.1.7**（2026-10-13）。版本线：1.0.0 = 四腿封板；1.1.0 = 期权腿的适配/数据层交付（策略未接入，因为这套模拟环境买不到期权）；**1.1.1~1.1.7 = 修复/观测/工具**（资金费双口径、前置执行闸门、看板面板、研究侧日线解冻、§70.6 门槛数字化…），逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
 接入实盘配置并运行 + 风控四道闸门 + 对账 + funding 入账 + 数据管道 + 上文这套发布管理**。
 
 2026-10-10 范围调整（用户决定）：原五步路径的第 5 步**期权策略移入 1.1**（它等的是 5–7 天
@@ -107,10 +107,11 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `carry-income-report` | carry 真实收入的「两个口径对照」报告（非尖峰篮子）：市场费率 vs 模拟盘到账 | **✅ 完成** | 用户 2026-10-11 同意先算一份非尖峰标的的 carry 真实收入报告；越算越发现 `income.jsonl` 本身口径错（滚动窗口重复计费、bps 少除窗口天数），一并修掉 | 每天由 `daily_research.py` 跑 `scripts/carry_income_report.py --write` 累积到 `data/carry/income_report.json`（代理不通时退化为只读费率面板，不会让任务变红）。结论：市场费率 ~2.03 bps/天、44.9 bps 往返回本 22.2 天、30 天净 +15.9 bps → **低于自己的 20 bps 边际门槛**，今天不该新开 carry 对，也不该触发换腿。等 §70.6 第 5 条门槛（非尖峰 ≥30 天实测，现只有 4 天）满 |
 | `dashboard-two-projects` | 运营看板分开展示两个项目（tab 切换 + 「新币主观量化策略」面板） | **✅ 完成** | 用户 2026-10-11 要求分开展示并优化 UI；读对方发布的 `data/reports/latest.json`，**不 import 对方代码**（独立仓库/独立证据标准） | 维护：新币项目每 6 小时自动刷新该报告；报告缺失或超过 26 小时未更新时，面板显示**原因**而不是 0。面板以对方的证据标准进度开头（开仓/结案/③+④），并新增「失效条件」KPI（2026-10-12，读对方发布的 invalidations.json：待结案 / 判不了 / 最深那只）—— 「有几条触发还没结案」是它现在唯一的待办出口 |
 | `preconditions-guard` | 前置的**执行闸门**：`config/preconditions.json` + `scripts/preconditions.py --check <id>`（closed / blocked / 过期一律非零退出） | **✅ 完成** | 2026-10-12 的 $0.27：`docs/options-sleeve-spec.md` §6.1 只在**文档里**被划掉，代码侧没有拦截 → 同一件事被重跑。判据改成**能被脚本读**，并写进 spec §6 的执行须知 | 维护：新增前置/实验时先登记（新 id）；要重做已结案的事必须**新立条目**，不允许把 closed 改回 open。检查器 6 条测试守着 |
-| `dashboard-restart-pending` | 两处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用） | **waiting_decision** | 2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）。两处都已测试通过、HTML 即时生效部分已上线，但读指标/读进度表的那一半需要重启进程 | 要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启 |
+| `live-readiness-gates` | README §70.6 的六条「切实盘门槛」数字化：`scripts/live_readiness.py` → `reports/live-readiness.md` + `data/readiness/readiness.json`，看板「切实盘门槛」面板 | **✅ 完成** | 用户目标是「等策略成熟再切实盘」，而「成熟」原来只活在散文里（§70.6）。2026-10-13 每条做成一个可复核的数：边缘（真跑 --fee-multiplier 1.25 的样本外回放，独立复现 §70.7）、样本（账本 157 笔/14 天）、执行（告警按「只含 cash delta = 已知项」分类）、管道（新增 `data/daily_job_history.jsonl` 逐轮留痕，服务日志里答不了 14 天）、资金费（到账 6/30 天、换腿 0 次）、第 6 条按定义标「不可自动判」 | 维护：已接进每日任务（`--write --backtest`，约 25 秒，只读本地日线）。门槛值随时间自己变，**不要手改报告**；要看的是哪条把门槛卡住（当前 0/5）。第 4 条的历史从 2026-10-13 起累积 |
+| `dashboard-restart-pending` | 三处 Python 侧改动**要重启 dashboard 才生效**（HTML 改动不用） | **waiting_decision** | 2026-10-13 起累积：①「网络降级」改按最近 24h 次数判（>5 次/24h 才 warn）② 新增「待你决定」面板（读 docs/progress.json 的 waiting_decision 行）③ 新增「切实盘门槛」面板（读 data/readiness/readiness.json）。三处都已测试通过、HTML 即时生效部分已上线，但读指标 / 读进度表 / 读门槛的那一半需要重启进程 | 要用户决定：现在重启（一条 launchctl kickstart，KeepAlive 的正常路径）还是继续攒着等下次自然重启 |
 | `data-files-in-git` | 父项目的数据/留痕文件是否纳入 git（`.gitignore` 里的 `*.jsonl`） | **waiting_decision** | 当前未跟踪的包括 `docs/changelog.jsonl`（留痕本体）、`data/ledger.okx_demo.jsonl`（账本）、`data/onchain/snapshots.jsonl`、`data/history/**`、`data/new_listings/*.jsonl`（含 10-13 新建的 TradFi 账）。冻结快照 `archive/versions/<v>/` 已跟踪，所以**每个已发布版本**的留痕是安全的 | 三选一：① 只把 `docs/changelog.jsonl` 纳入（小、纯文本、逐行可 blame）② 连账本与关键数据一起纳入（体积 11MB+ 且每次采集都改，会污染 diff）③ 维持现状（靠冻结快照 + CHANGELOG.md 兜底） |
 
-**合计**：✅ 完成 51 · ⏳ 等数据 8 · waiting_decision 3。
+**合计**：✅ 完成 52 · ⏳ 等数据 8 · waiting_decision 3。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。
@@ -5960,6 +5961,47 @@ TradFi 日线(3 笔) 的样本量根本不足以判断（工具自己会打 `not
 它把**原始账单按 UTC 日重新分桶**，结构上不可能重叠，并同时输出市场费率侧与
 **到账 ÷ 市场**的比值（产物剔除的依据）。已接进每日任务；磁盘上旧的 3 行**不改写**，
 但它们的 `bps_per_day` / `days` 字段**从此不可用于计算**。
+
+### 70.10 把六条门槛变成每天算一次的数（`scripts/live_readiness.py`，2026-10-13）
+
+用户的原话是「等策略成熟了再切换到实盘」。§70.6 把"成熟"写成了六条门槛 —— 但**写在散文里的
+门槛会退化**：每问一次"能不能切实盘"就得重新论证一遍，而且这个项目已经两次被"散文与现实脱节"
+咬过（研究侧日线冻了 5.5 天、入口文档停在五个版本之前）。所以六条各做成一个**可复核的数**：
+
+```bash
+python3 scripts/live_readiness.py --write --backtest   # → reports/live-readiness.md + data/readiness/readiness.json
+```
+
+**2026-10-13 第一次跑出来的六行**（看板上「切实盘门槛」面板显示的就是它）：
+
+| # | 门槛 | 要求 | 当前值 | 结论 |
+|---|---|---|---|---|
+| 1 | 边缘 | 样本外为正、扣掉 10 bps/边仍为正（≥30 笔才算数） | **0/2 条**可判策略为正 | ❌ |
+| 2 | 样本 | ≥200 笔成交 或 ≥60 个交易日 | **157 笔 / 14 天** | ❌ |
+| 3 | 执行 | 连续 30 天无非结构性对账差异、无重复拒单、无事故 | **1/30 天**（覆盖 14 天） | ❌ |
+| 4 | 数据管道 | 每日任务连续 14 天两轮全绿 | **0/14 天** | ❌ |
+| 5 | 资金费证据 | 非尖峰 ≥30 天实测 + 换腿至少触发过一次 | **6/30 天 · 换腿 0 次** | ❌ |
+| 6 | 模拟盘测不到的 | 真实滑点 / 对手方深度 / 期权流动性 | —— | 🚫 不可自动判 |
+
+**0/5 条可自动判的门槛满足 → 现在仍不能切实盘**，与 §70.6 的结论一致，区别只是这次有数是数。
+
+三处刻意的设计：
+
+1. **第 1 条真跑回测，不引用记忆**。`--backtest` 用 `--source history --split 0.7 --fee-multiplier 1.25`
+   重放五条策略（本地日线，约 25 秒），落 `data/readiness/edge.json`。它**独立复现了 §70.7 的表**
+   （`trend_breakout` −1.70%/94 笔、`perp_trend_funding` −1.61%/180 笔、`trend_pullback` 0 笔、
+   `trend_breakout_daily` +0.02%/3 笔）—— 同一个结论第二次用另一条路径得到，比表格更可信。
+2. **第 4 条先补上历史**。`data/daily_job_status.json` 每轮被覆盖，只答得了"最近一轮"；门槛问的是
+   14 天，而磁盘上**根本没有那份历史**。所以 `daily_research.py` 现在另写一份 append-only 的
+   `data/daily_job_history.jsonl`（每轮一行：CST 日期 + UTC 时刻 + 各步 rc），门槛从它数。
+   它从今天起累积，脚本如实报出"覆盖 0 天"而不是假装有 14 天。
+3. **第 3 条把"已知项"和"新闻"分开**。只含 `cash delta` 的对账残余（期望线跟着资金费走之后的
+   稳定地板）**不算**打断连击；带 `position` 的一律算 —— 哪怕它来自已知的 BTC 库存实验窗口。
+   顺带把 21 条 `order rejected` 的**原文**列出来（`InsufficientFunds` / `tdMode error` /
+   最小额精度），因为门槛要判的是"重复出现的拒单"，不是"有没有出现过一次"。
+
+**第 6 条永远不会变成数字**，这是它的定义：滑点、对手方深度、期权流动性只存在于有真实尺寸的场所。
+所以它的验收方式写的是"实盘最小仓位实测"，而在此之前任何按模拟盘结论放量的动作都跳过它。
 
 ---
 

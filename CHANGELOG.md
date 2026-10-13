@@ -1,8 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.6**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.7**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
+
+## v1.1.7 — 2026-10-13T16:02
+
+- 测试 **419** 绿 · 权益 $102,423.64 · 记录时的包版本 1.1.7
+
+README 70.6 的六条切实盘门槛数字化：scripts/live_readiness.py → reports/live-readiness.md + data/readiness/readiness.json（看板新增「切实盘门槛」面板）；daily_research.py 新增 data/daily_job_history.jsonl 逐轮留痕（门槛 4 原来在磁盘上无历史）；419 测试绿。当前 0/5 条可自动判的门槛满足。
 
 ## v1.1.6 — 2026-10-13T15:50
 

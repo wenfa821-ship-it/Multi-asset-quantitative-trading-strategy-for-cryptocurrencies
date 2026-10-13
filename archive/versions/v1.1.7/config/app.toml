@@ -1,0 +1,206 @@
+# Global application / venue wiring.
+# Secrets are NEVER stored here - only the NAME of the environment variable that holds them.
+
+[app]
+mode            = "demo"           # paper | demo | live
+base_currency   = "USDT"
+data_dir        = "data"
+log_dir         = "logs"
+timezone        = "Asia/Shanghai"
+kill_switch_file = "KILL_SWITCH"
+# Second venue for carry's hedge leg (README 37). Empty would disable carry
+# outright - a carry signal without a hedge venue is refused rather than
+# half-executed as a naked long.
+hedge_venue     = "okx_demo_swap"
+
+# ---------------------------------------------------------------------------
+# Universe: decision frequency + the tiered symbol pool.
+#
+# timeframe  = the base clock. In paper mode one loop tick = one base bar, so
+#              this is what actually raises trade frequency.
+# timeframes = extra frames kept warm for confirmation.
+#
+# The lists below are CANDIDATES. With your proxy up, run this once:
+#     ta symbols check --venue okx_demo          # validate what is configured
+#     ta symbols scan  --venue okx_demo --top 40 # discover by real 24h volume
+# and delete anything the venue does not actually offer.
+# ---------------------------------------------------------------------------
+[universe]
+timeframe   = "15m"
+# "1d" added 2026-10-09 for the TradFi sleeve: its strategy decides on daily bars
+# (config/strategies.toml [strategies.trend_breakout_daily]). validate() refuses
+# a strategy whose timeframe is not warmed here, which is what stops a daily
+# signal being computed from a feed that never fetched a daily bar.
+timeframes  = ["1h", "4h", "1d"]
+bar_limit   = 300                  # per timeframe (OKX caps one request near 300)
+symbols     = []                   # tiers below are authoritative
+
+[universe.symbols_by_tier]
+majors = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "OKB/USDT"]
+
+# liquid, established, higher beta than majors
+# 2026-10-09: DOGE/LINK/SUI/NEAR moved OUT to `carry`. The four gates that select
+# carry candidates (funding, depth, basis, measured round-trip cost) put those
+# four at the top - 46.4 / 33.7 / 37.0 / 36.2 bps over 30 days - while the
+# directional strategies that used to hold them are negative out of sample at
+# every cadence tested (README 54), and negative even at ZERO cost. A symbol has
+# to be traded by one leg or the other, never both (validate enforces it), so the
+# evidence says give them to the leg with a positive edge.
+alts = [
+  "XRP/USDT", "ADA/USDT", "AVAX/USDT", "APT/USDT",
+  "INJ/USDT", "TIA/USDT", "PEPE/USDT",
+]
+
+# recent listings: tightest limits, smallest size, fastest exits
+new = [
+  "JUP/USDT", "PYTH/USDT", "ONDO/USDT", "W/USDT", "PENGU/USDT",
+]
+
+# Tokenised equities (OKX TradFi, instCategory=3) + one commodity token (XCU).
+# 2026-10-09 (README 62/63): membership is NOT "everything starting with X" -
+# that prefix also captures 9 cryptos (XRP/XLM/XMR/XTZ/XAUT/XEM/XPL/XPO/XUC),
+# which are pinned to the spot leg in risk.toml. Of the 20 that really are
+# TradFi, this list keeps the 13 whose daily bars actually trade: share of bars
+# with a real print >=80% AND share of zero-return bars <10%. The six dropped
+# ones (XSPCX/XMSTR/XQQQ/XMRVL/XINTC/XNVDA) never moved - XSPCX and XMSTR have a
+# single distinct close in their entire history. XCU is excluded too: it is a
+# commodity token and belongs on this leg by asset class, but it has no 1d
+# history on the demo venue, no ask on its book (7.089 bid only), and the
+# 2026-10-08 carry probe already found it rejects orders from this account
+# (scripts/carry_tradable.py). It can come back the day it has a book.
+#
+# What this tier is FOR, right now: acquiring real fills and real cost data on a
+# sleeve that has never traded (0/30% used since the split). It is not a claim
+# that a daily breakout works on equities - that needs years, not 90 bars.
+#
+# NARROWED TO ONE SYMBOL on 2026-10-10, and the reading is now unambiguous rather
+# than preliminary: with one measurement taken INSIDE the US session (13:46 UTC,
+# 16 minutes after the open), `scripts/tradfi_tier.py` reports XMU/USDT as
+# tradable (300 1h bars, two-sided) and the other twelve as `no_data` - zero bars
+# on 1d/1h/15m and 11 of them showing a bid with no ask. Session-limited would
+# have looked different: data outside the window, none inside. These have none at
+# any hour, so they are not a session problem, they are simply not served.
+#   python3 scripts/tradfi_tier.py --write   # re-run when the venue changes
+tradfi = [
+  "XMU/USDT",
+]
+
+
+# Carry's screened pool (2026-10-08, README 41/42). These are the perps whose
+# live funding pays for their own round trip inside 30 days AND that have a spot
+# leg to hedge against. They are a separate tier because they are a separate
+# kind of trade: the entry rule is funding, not price.
+carry = [
+  # Tradability-filtered 2026-10-08 (scripts/carry_tradable.py): 37 of the 48
+  # screened candidates actually accept orders from this account. The 11 that do
+  # not are WLFI, XPL, SLX, SYRUP, XCU, A, BARD, BIO, RE, RESOLV and XRP - the
+  # first three of which were among the HIGHEST funding, so without this filter the
+  # strategy kept picking a blocked instrument and opened nothing at all.
+  # The probe is fill-free: a limit buy at half price either rests (tradable) or is
+  # rejected (blocked), so no fee and no position is created by testing.
+  # Overlap removed 2026-10-08: ADA, DOGE, LINK, NEAR, PEPE and SUI also sat in
+  # `alts`, which the directional strategies trade - and a directional exit there
+  # sells the SPOT LEG ONLY, leaving the carry's perp short naked. That is also
+  # what looked like carry churning. `Config.validate` refuses any such overlap,
+  # so this list cannot silently regress.
+  # 2026-10-09: DOGE/LINK/SUI/NEAR came back - not by relaxing the rule but by
+  # REMOVING them from `alts`. They are the top four by net carry (46.4/33.7/
+  # 37.0/36.2 bps per 30 days once depth, basis and measured round trip are
+  # charged), and the directional leg that held them has no demonstrated edge.
+  # ADA and PEPE stayed in `alts`: ADA's perp trades at a 25 bps discount (basis
+  # gate), and PEPE does not make the net-positive list.
+  "ACT/USDT", "ALGO/USDT", "AUCTION/USDT", "BAND/USDT",
+  "BNB/USDT", "BOME/USDT", "CELO/USDT", "CFX/USDT",
+  "COMP/USDT", "CRV/USDT", "ETC/USDT", "ETHFI/USDT",
+  "ETHW/USDT", "FIL/USDT", "GRAM/USDT", "HBAR/USDT",
+  "IOTA/USDT", "LPT/USDT", "LQTY/USDT", "LTC/USDT",
+  "MASK/USDT", "NEO/USDT", "NOT/USDT", "QTUM/USDT",
+  "SAHARA/USDT", "SHIB/USDT", "SUSHI/USDT", "THETA/USDT",
+  "YB/USDT", "YGG/USDT", "ZRO/USDT",
+  # 2026-10-09, moved out of `alts` (see that list): the four with the best
+  # measured net carry.
+  "DOGE/USDT", "LINK/USDT", "SUI/USDT", "NEAR/USDT",
+]
+
+
+# ---------------------------------------------------------------------------
+# Verified 2026-09-29 with `ta symbols check`: the OKX DEMO venue exposes
+# ~2,395 pairs while the live venue has ~4,646, so absence here is not the same
+# as absence on OKX. Removed from the lists above:
+#   live OKX only  -> ARB/USDT, ENA/USDT, MEW/USDT, EIGEN/USDT, VIRTUAL/USDT
+#                     (add them back when you move off the demo environment)
+#   not on OKX     -> TON/USDT, POPCAT/USDT   (do not re-add)
+# ---------------------------------------------------------------------------
+
+[loop]
+poll_seconds    = 60               # <= the base bar; one decision cycle per poll
+max_iterations  = 0                # 0 = run until stopped (Ctrl-C or kill switch)
+
+# ---------------------------------------------------------------------------
+# Paper venue: local simulator, no network, no keys.
+# ---------------------------------------------------------------------------
+[venues.paper]
+initial_cash    = 10000.0
+fee_bps         = 8.0              # 0.08% taker
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# OKX Demo Trading. Key must be created INSIDE the demo environment.
+# ccxt sandbox mode adds the `x-simulated-trading: 1` header.
+# ---------------------------------------------------------------------------
+[venues.okx_demo]
+exchange_id     = "okx"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"   # OKX requires an API passphrase
+fee_bps         = 10.0             # taker, measured on this account 2026-09-29 (Lv1)
+maker_fee_bps   = 8.0              # maker; no rebate at Lv1
+slippage_bps    = 5.0
+
+# ---------------------------------------------------------------------------
+# Binance Spot Testnet (testnet.binance.vision).
+# For USDⓈ-M futures testnet use exchange_id = "binanceusdm".
+# ---------------------------------------------------------------------------
+# Swap venue for carry's hedge leg (README 37). Same demo account and keys as
+# [venues.okx_demo]; only market_type differs, which is what makes ccxt load SWAP
+# markets and route orders to the perp side.
+[venues.okx_demo_swap]
+exchange_id     = "okx"
+market_type     = "swap"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"
+fee_bps         = 5.0
+maker_fee_bps   = 2.0
+slippage_bps    = 5.0
+
+# Options (1.1). Coin-margined: the premium, the minimum size and the settlement
+# are all in the UNDERLYING's coin, which is why this sleeve cannot start until
+# the account actually holds some of that coin - measured 2026-10-10 the account
+# holds no BTC and no ETH at all (only the carry legs' coins + USDT). The contract
+# facts come from scripts/options_probe.py: ctVal=1, ctMult=0.01, minSz=1,
+# tickSz=0.0001, settleCcy=BTC, and the smallest possible order costs ~0.0006 BTC
+# (~$50). Nothing trades this venue yet - the strategy waits on the IV/RV gate.
+[venues.okx_demo_option]
+exchange_id     = "okx"
+market_type     = "option"
+sandbox         = true
+api_key_env     = "OKX_DEMO_API_KEY"
+secret_env      = "OKX_DEMO_SECRET"
+password_env    = "OKX_DEMO_PASSPHRASE"
+fee_bps         = 5.0
+maker_fee_bps   = 2.0
+slippage_bps    = 5.0
+
+[venues.binance_testnet]
+exchange_id     = "binance"
+market_type     = "spot"
+sandbox         = true
+api_key_env     = "BINANCE_TESTNET_API_KEY"
+secret_env      = "BINANCE_TESTNET_SECRET"
+password_env    = ""
+fee_bps         = 8.0
+slippage_bps    = 5.0
