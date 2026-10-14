@@ -7154,3 +7154,60 @@ class Gate4StepListTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             gate = self._gate(rows, tmp)
         self.assertNotIn("步骤表不一致", gate["detail"])
+
+
+class UnitMultipleDiffTests(unittest.TestCase):
+    """2026-10-14：把「未解释」里那条 **ctVal/张 10 倍假象** 分出来（README 已记录过它）。
+
+    判据要**窄**：整条差异都必须是「两边非零、同号、比值是小整数」——
+    混合形状（比如同一行里还有一条 venue=0）仍算未解释，因为那种情况里
+    「场馆说没有、我们说有」是**真实的**分歧（2026-10-08 的 carry 乱局就是它）。"""
+
+    def _alert(self, diffs: list[str]) -> dict:
+        return {"ts": "2026-10-09T03:47:27+00:00", "title": "reconciliation mismatch",
+                "diffs": diffs}
+
+    def test_a_clean_integer_ratio_is_a_units_artifact(self) -> None:
+        import scripts.live_readiness as lr
+        # ACT/USDT:USDT: 22,912 张 × ctVal 10 = 229,120 币（README 记录过的那条）
+        # 要先能定价（"这条差异值不值钱"），才谈得上"这是单位差"：
+        # 一笔恰好 2 倍的**灰尘**不算，这是下面那个测试守着的边界。
+        kind = lr.classify_position_diff(
+            self._alert(["position ACT/USDT:USDT: local=-22912 venue=-229120"]),
+            {}, {"ACT/USDT": 0.013})
+        self.assertEqual(kind, "unit_multiple")
+
+    def test_venue_zero_stays_unexplained(self) -> None:
+        """场馆说 0、我们说有 —— 那不是单位差，是真实的仓位分歧（10-08 的 carry 乱局）。"""
+        import scripts.live_readiness as lr
+        kind = lr.classify_position_diff(
+            self._alert(["position ACT/USDT: local=289693.836 venue=0.0"]), {},
+            {"ACT/USDT": 0.013})
+        self.assertEqual(kind, "unexplained")
+
+    def test_a_mixed_row_is_not_excused(self) -> None:
+        """同一行里既有整数倍、又有 venue=0 → 整条按未解释（不许只挑好看的那半边）。"""
+        import scripts.live_readiness as lr
+        kind = lr.classify_position_diff(self._alert([
+            "position ACT/USDT:USDT: local=-22912 venue=-229120",
+            "position BAND/USDT:USDT: local=3755.0 venue=0.0",
+        ]), {}, {"ACT/USDT": 0.013, "BAND/USDT": 1.0})
+        self.assertEqual(kind, "unexplained")
+
+    def test_opposite_signs_are_not_a_units_artifact(self) -> None:
+        import scripts.live_readiness as lr
+        kind = lr.classify_position_diff(
+            self._alert(["position ACT/USDT:USDT: local=-22912 venue=229120"]), {},
+            {"ACT/USDT": 0.013})
+        self.assertEqual(kind, "unexplained")
+
+    def test_the_real_alerts_now_split_one_case_out(self) -> None:
+        """真账本上跑一遍：那条 10-09 的 ACT 从「未解释」里分出去。"""
+        import scripts.live_readiness as lr
+        rows = lr.read_jsonl(PROJECT / lr.ALERTS)
+        ledger = lr.read_jsonl(PROJECT / lr.LEDGER)
+        windows, prices = lr.inventory_fills(ledger), lr.reference_prices(ledger)
+        kinds = [lr.classify_position_diff(a, windows, prices) for a in rows
+                 if a.get("title") == "reconciliation mismatch" and not lr.is_cash_only(a)]
+        self.assertEqual(kinds.count("unit_multiple"), 1)
+        self.assertGreaterEqual(kinds.count("unexplained"), 10)

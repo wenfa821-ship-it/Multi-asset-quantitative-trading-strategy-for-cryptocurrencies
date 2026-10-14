@@ -518,6 +518,9 @@ def gate_execution(root: Path) -> dict:
     diff_rows = [(a, classify_position_diff(a, windows, prices)) for a in non_structural]
     inventory = [a for a, kind in diff_rows if kind == "inventory"]
     dust = [a for a, kind in diff_rows if kind == "dust"]
+    # ctVal/张 的口径差（2026-10-14 从"未解释"里分出来）：README 已记录过这个 10 倍假象，
+    # 它是**我们自己的记账口径**，不是真实的仓位分歧 —— 按 2026-10-13 定下的规则，不打断连击。
+    unit_multiple = [a for a, kind in diff_rows if kind == "unit_multiple"]
     unexplained = [a for a, kind in diff_rows if kind == "unexplained"]
     rejected = [a for a in rows if a.get("title") == "order rejected"]
     degraded = [a for a in rows if a.get("title") == VENUE_DEGRADED_TITLE]
@@ -560,7 +563,8 @@ def gate_execution(root: Path) -> dict:
         f"告警 {len(rows)} 条（{covered[0] if covered else '?'} .. {covered[-1] if covered else '?'}）："
         f"对账 mismatch **{len(mismatches)}** 条，其中只含 `cash delta` 的**已知项** "
         f"{len(structural)} 条、含持仓/其它差异的 **{len(non_structural)}** 条。后者再分三桶："
-        f"**已知库存窗口 {len(inventory)}**、**灰尘对灰尘 {len(dust)}**、**未解释 {len(unexplained)}**。"
+        f"**已知库存窗口 {len(inventory)}**、**灰尘对灰尘 {len(dust)}**、"
+        f"**单位倍数（ctVal/张）{len(unit_multiple)}**、**未解释 {len(unexplained)}**。"
         f"`order rejected` {len(rejected)} 条（最近 30 天 {len(recent_rejects)} 条）；"
         f"critical 级 {len(critical) + len(degraded)} 条"
         f"（其中 {len(degraded)} 条是**已知外部条件**「网络降级」，另计，见下）。\n\n"
@@ -600,6 +604,14 @@ def gate_execution(root: Path) -> dict:
         )
     else:
         detail += "\n**未解释**的对账差异：一条都没有。\n"
+    if unit_multiple:
+        last_unit = max(_cst_day(a) for a in unit_multiple if a.get("ts"))
+        detail += (
+            f"\n**单位倍数 {len(unit_multiple)} 条**（最近 {last_unit}）：两边都非零、同号、"
+            "比值是小整数 —— 那是 README 已记录的 **ctVal/张口径差**（`ACT/USDT:USDT: local=-22912 "
+            "venue=-229120`：22,912 张 × ctVal 10 = 229,120 币），**我们自己的记账口径**，"
+            "不是真实的仓位分歧。判据是**整条差异**都满足这个形状；混合形状仍算未解释。\n"
+        )
     if inventory:
         last = max(_cst_day(a) for a in inventory if a.get("ts"))
         detail += (
@@ -851,9 +863,9 @@ def position_diffs(alert: dict) -> list[tuple[str, float, float]]:
 
 def classify_position_diff(alert: dict, windows: dict[str, list[float]],
                            prices: dict[str, float]) -> str:
-    """"inventory" / "dust" / "unexplained" for one non-cash-only mismatch.
+    """"inventory" / "dust" / "unit_multiple" / "unexplained" for one non-cash-only mismatch.
 
-    Two documented shapes are known, and BOTH still get counted and printed - this
+    Three documented shapes are known, and ALL of them still get counted and printed - this
     only decides whether they break the clean streak:
 
     * `dust`       - both sides round to nothing in dollars (`INJ local=8.29e-06
@@ -864,6 +876,10 @@ def classify_position_diff(alert: dict, windows: dict[str, list[float]],
                      that instant (within 0.01% of the balance). That is the ledger
                      saying "yes, we bought this and have not sold it back" - the
                      known difference is WHOSE book it sits in, not whether it is ours.
+    * `unit_multiple` (2026-10-14) - both sides non-zero, same sign, and the ratio is a
+                     small integer: that is the **ctVal/张 unit artifact** README already
+                     recorded (`ACT/USDT:USDT: local=-22912 venue=-229120` - 22,912 张 ×
+                     ctVal 10 = 229,120 币). Our own accounting口径, not a real divergence.
     * anything else, including a new symbol, is "unexplained" and keeps the streak
       from starting. That is the whole point: 2026-10-08's carry mess must not
       become invisible because a later change taught the script to be polite.
@@ -888,6 +904,19 @@ def classify_position_diff(alert: dict, windows: dict[str, list[float]],
             material.append(symbol)
     if not material:
         return "dust"
+
+    # `unit_multiple`：两边都非零、同号，比值是小整数 —— ctVal/张 的口径差（README 记录过）。
+    # **只在整条差异都是这个形状时才认**：混合形状（比如一条 venue=0）仍算未解释。
+    ratios = []
+    for symbol, local, venue in diffs:
+        if local == 0 or venue == 0 or (local > 0) != (venue > 0):
+            break
+        ratios.append(abs(venue / local))
+    else:
+        if ratios and all(2.0 <= r <= 1000.0 and abs(r - round(r)) <= 0.005 * round(r)
+                          for r in ratios):
+            return "unit_multiple"
+
 
     try:
         when = datetime.datetime.fromisoformat(str(alert["ts"])).timestamp() * 1000.0
