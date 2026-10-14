@@ -69,6 +69,8 @@ PROJECT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(PROJECT / "src"))
 
+from ta.jobfail import classify_run  # noqa: E402
+
 
 def run(module_name: str, argv: list[str]) -> int:
     mod = importlib.import_module(module_name)
@@ -90,14 +92,27 @@ def run(module_name: str, argv: list[str]) -> int:
 VENV_PYTHON = os.environ.get("TA_PYTHON") or "/opt/anaconda3/bin/python3"
 
 
+# 失败文本（只留失败的那些步骤）：门槛 4 要把"网络抖动"与"自己的缺陷"分开，
+# 而分开的唯一依据就是**失败的原文**（见 src/ta/jobfail.py）。
+FAILURES: dict[str, str] = {}
+
+
 def run_script(script: str, argv: list[str]) -> int:
     path = HERE / script
     if not Path(VENV_PYTHON).exists():
         print(f"{script}: skipped - {VENV_PYTHON} not found", flush=True)
         return 0
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [VENV_PYTHON, "-u", str(path), *argv], cwd=str(PROJECT), check=False
+        [VENV_PYTHON, "-u", str(path), *argv], cwd=str(PROJECT), check=False,
+        capture_output=True, text=True,
     )
+    # 输出照样进日志（先打出来），失败时再额外留一份原文给分类用。
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stdout.write(proc.stderr)
+    if proc.returncode != 0:
+        FAILURES[script] = ((proc.stdout or "") + (proc.stderr or ""))[-2000:]
     return int(proc.returncode)
 
 
@@ -224,6 +239,7 @@ def run_with_retry(
     attempts: int = DEFAULT_ATTEMPTS,
     sleep_seconds: float = DEFAULT_RETRY_SLEEP,
     sleep=time.sleep,
+    failures: dict | None = None,
 ) -> tuple[int, int]:
     """Run `action` until it succeeds or `attempts` is exhausted.
 
@@ -242,6 +258,8 @@ def run_with_retry(
             code = int(exc.code or 0)
         except Exception as exc:  # noqa: BLE001 - one track must not kill the rest
             print(f"{name}: attempt {attempt}/{tries} failed {type(exc).__name__}: {exc}", flush=True)
+            if failures is not None:
+                failures[name] = f"{type(exc).__name__}: {exc}"
             code = 1
         if code == 0:
             return 0, used
@@ -255,7 +273,8 @@ def run_with_retry(
 
 
 def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int],
-                 history_path: Path | None = None) -> list[str]:
+                 history_path: Path | None = None,
+                 failures: dict | None = None) -> list[str]:
     """Persist what still needs a re-run so the dashboard can show it.
 
     A failed step used to be visible only to whoever read the launchd log. The
@@ -269,6 +288,9 @@ def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int
     `scripts/live_readiness.py` counts. Same best-effort contract as `path`.
     """
     needs_rerun = [name for name, code in codes.items() if code != 0]
+    # `classify_run` 会把 (class, why, text) **写回** 这个字典，所以发布的就是它。
+    enriched = dict(failures or {})
+    classified = classify_run(needs_rerun, enriched)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "needs_rerun": needs_rerun,
@@ -276,6 +298,10 @@ def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int
             name: {"rc": code, "attempts": attempts_used.get(name, 1)}
             for name, code in codes.items()
         },
+        # 「红轮」要分类：已知外部条件（网络/场馆抖动）不该像自己的缺陷那样打断连击 ——
+        # 门槛 3 已经这么做了，门槛 4 原来没有（见 src/ta/jobfail.py 与 README 70.6）。
+        "failures": enriched,
+        "external_only": bool(classified["external_only"]),
     }
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -292,6 +318,8 @@ def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int
             "needs_rerun": needs_rerun,
             "steps": {name: int(code) for name, code in codes.items()},
             "attempts": {name: int(attempts_used.get(name, 1)) for name in codes},
+            "failures": payload["failures"],
+            "external_only": payload["external_only"],
         }
         try:
             history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -336,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     if not status_path.is_absolute():
         status_path = PROJECT / status_path
     steps, script_steps = INPROCESS_STEPS, SCRIPT_STEPS
+    FAILURES.clear()                       # 每轮清空：失败文本只描述**这一轮**
     codes: dict[str, int] = {}
     attempts_used: dict[str, int] = {}
     if args.rerun_failed:
@@ -366,7 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         codes[name], attempts_used[name] = run_with_retry(
             name,
             lambda n=name, a=step_argv: run(n, a),
-            attempts=args.attempts,
+            attempts=args.attempts, failures=FAILURES,
             sleep_seconds=args.retry_sleep,
         )
     for script, step_argv in script_steps:
@@ -374,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
         codes[script], attempts_used[script] = run_with_retry(
             script,
             lambda s=script, a=step_argv: run_script(s, a),
-            attempts=args.attempts,
+            attempts=args.attempts, failures=FAILURES,
             sleep_seconds=args.retry_sleep,
         )
 
@@ -387,7 +416,8 @@ def main(argv: list[str] | None = None) -> int:
     history_path = Path(args.history_file)
     if not history_path.is_absolute():
         history_path = PROJECT / history_path
-    needs_rerun = write_status(status_path, codes, attempts_used, history_path)
+    needs_rerun = write_status(status_path, codes, attempts_used, history_path,
+                               failures=FAILURES)
     if needs_rerun:
         print(f"NEEDS RERUN ({len(needs_rerun)}): " + ", ".join(needs_rerun))
     if all(code != 0 for code in codes.values()):

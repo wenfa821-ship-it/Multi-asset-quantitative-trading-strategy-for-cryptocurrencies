@@ -7014,3 +7014,99 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class JobFailureClassTests(unittest.TestCase):
+    """2026-10-14：门槛 4 与门槛 3 得过同一种病 ——
+    把**网络抖动**当成"红轮"会让 14 天连击永远不可能满足（门槛 3 实测 8 天里 8 天在抖）。
+    分类判据只有一条：**这条失败还会不会再发生**；读不出原因的一律按"自己的缺陷"处理。"""
+
+    def test_known_external_conditions_are_recognised(self) -> None:
+        from ta.jobfail import classify_failure
+        for text in ("NetworkError: okx GET ...", "HTTP Error 503: Service Temporarily Unavailable",
+                     "URLError: <urlopen error timed out>", "Too many requests"):
+            rule, why = classify_failure(text)
+            self.assertEqual(rule, "external", f"{text} -> {why}")
+
+    def test_our_own_defects_win_over_the_broad_external_markers(self) -> None:
+        """「API key is not set」看着像外部，其实是我们的配置问题 —— 先判 own。"""
+        from ta.jobfail import classify_failure
+        self.assertEqual(classify_failure("API key is not set. Export OKX_DEMO_API_KEY")[0], "own")
+        self.assertEqual(classify_failure("changelog_md.py rc=1 attempts=3")[0], "own")
+        self.assertEqual(classify_failure("KeyError: 'depth_notional_usd'")[0], "own")
+
+    def test_unknown_is_not_an_exemption(self) -> None:
+        from ta.jobfail import classify_failure, classify_run
+        self.assertEqual(classify_failure("完全看不懂的一段话")[0], "unknown")
+        self.assertEqual(classify_failure("")[0], "unknown")
+        # 只要有一条读不出原因，这一轮就不能被豁免
+        out = classify_run(["a", "b"], {"a": "NetworkError", "b": "???"})
+        self.assertFalse(out["external_only"])
+        self.assertEqual((out["external"], out["unknown"]), (1, 1))
+
+    def test_external_only_needs_every_failed_step_to_be_external(self) -> None:
+        from ta.jobfail import classify_run
+        ok = classify_run(["a", "b"], {"a": "NetworkError", "b": "HTTP Error 503"})
+        self.assertTrue(ok["external_only"])
+        mixed = classify_run(["a", "b"], {"a": "NetworkError", "b": "rc=1"})
+        self.assertFalse(mixed["external_only"])
+        self.assertEqual((mixed["external"], mixed["own"]), (1, 1))
+        self.assertFalse(classify_run([], {})["external_only"])      # 没红轮就不叫豁免
+
+
+class Gate4StreakTests(unittest.TestCase):
+    """门槛 4 的连击口径：绿轮算、外部条件轮不打断但如实计数、自己的红轮打断。"""
+
+    @staticmethod
+    def _today():
+        import datetime as _dt
+        return _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8))).date()
+
+    def _gate(self, rows: list[dict], tmp: str):
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        root = _P(tmp)
+        (root / "data").mkdir(parents=True, exist_ok=True)
+        (root / lr.JOB_HISTORY).write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+        (root / lr.JOB_STATUS).write_text(json.dumps({"generated_at": "t", "needs_rerun": []}),
+                                          encoding="utf-8")
+        return lr.gate_pipeline(root)
+
+    def test_an_external_only_round_does_not_break_the_streak(self) -> None:
+        import datetime as _dt
+        import tempfile
+        today = self._today()
+        days = [today.isoformat(), (today - _dt.timedelta(days=1)).isoformat()]
+        rows = [{"date": days[1], "needs_rerun": []},
+                {"date": days[1], "needs_rerun": []},
+                {"date": days[0], "needs_rerun": []},
+                {"date": days[0], "needs_rerun": ["sync_funding.py"], "external_only": True}]
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = self._gate(rows, tmp)
+        self.assertEqual(gate["status"], "unmet")
+        # 两天都算满（今天那轮的"外部条件红"不打断）—— 只是离 14 天还远
+        self.assertIn("2/", gate["value"])
+        self.assertIn("外部条件轮 **1**", gate["detail"])
+
+    def test_our_own_red_round_breaks_it(self) -> None:
+        import datetime as _dt
+        import tempfile
+        today = self._today()
+        yesterday = (today - _dt.timedelta(days=1)).isoformat()
+        rows = [{"date": yesterday, "needs_rerun": []}, {"date": yesterday, "needs_rerun": []},
+                {"date": today.isoformat(), "needs_rerun": ["progress.py"]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = self._gate(rows, tmp)
+        # 今天那轮是**自己的红轮** → 今天不算数，连击只数到昨天（1 天）——
+        # 这就是"红轮打断连击"在读数上的样子（它不会把已经过去的天数抹掉）
+        self.assertIn("1/", gate["value"])
+        self.assertIn("红轮 **1**", gate["detail"])
+
+    def test_an_old_row_without_the_flag_is_not_retroactively_excused(self) -> None:
+        """历史行没有 `external_only` 字段 → 按红轮处理（不许追认豁免）。"""
+        import tempfile
+        rows = [{"date": self._today().isoformat(), "needs_rerun": ["sync_funding.py"]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = self._gate(rows, tmp)
+        self.assertIn("0/", gate["value"])          # 只有今天一轮、而且是红的 → 0 天

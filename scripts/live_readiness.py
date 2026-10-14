@@ -920,16 +920,31 @@ def gate_pipeline(root: Path) -> dict:
     latest = read_json(status_path)
     log_runs = service_log_runs(root)
 
-    green_days: dict[str, list[bool]] = {}
+    # 一轮有三种状态（2026-10-14，与门槛 3 同一条口径）：
+    #   green       —— needs_rerun 为空；
+    #   external    —— 红了，但**所有**失败步骤都被判成"已知外部条件"（网络/场馆抖动）；
+    #   red         —— 里面有我们自己的缺陷，或读不出原因（unknown 按 own 处理）。
+    # 连击只看 red；external 逐轮**如实报出**，不假装它没发生。
+    # 每天三个计数（不是布尔列表）：绿轮 / 外部条件轮 / 自己的红轮。
+    # 第一版把"外部条件轮"也往 `green_days` 里 append 了一个 `False`，于是 `all(flags)` 永远是假 ——
+    # 豁免写了却没生效（测试当场照出来）。
+    day_counts: dict[str, dict[str, int]] = {}
     for row in runs:
         date = str(row.get("date") or "")
         if not date:
             continue
-        green_days.setdefault(date, []).append(not (row.get("needs_rerun") or []))
+        needs = row.get("needs_rerun") or []
+        # 旧行没有 `external_only` 字段 → 按 red 处理（保守：历史不许被追认豁免）
+        kind = "green" if not needs else ("external" if row.get("external_only") else "red")
+        slot = day_counts.setdefault(date, {"green": 0, "external": 0, "red": 0})
+        slot[kind] += 1
 
     def day_ok(date: str) -> bool:
-        flags = green_days.get(date) or []
-        return len(flags) >= RUNS_PER_DAY and all(flags)
+        slot = day_counts.get(date) or {}
+        # 一天算数 = **绿轮 + 外部条件轮**够数（外部条件不打断连击，但会单独报出来）、
+        # 且**没有自己的红轮**（读不出原因也算红轮）。
+        return (slot.get("green", 0) + slot.get("external", 0) >= RUNS_PER_DAY
+                and slot.get("red", 0) == 0)
 
     today = datetime.datetime.now(CST).date()
     streak = 0
@@ -938,7 +953,7 @@ def gate_pipeline(root: Path) -> dict:
         streak += 1
         cursor -= datetime.timedelta(days=1)
 
-    covered = sorted(green_days)
+    covered = sorted(day_counts)
     met = streak >= PIPELINE_DAYS_REQUIRED
     latest_note = "无 `data/daily_job_status.json`"
     if latest:
@@ -951,7 +966,12 @@ def gate_pipeline(root: Path) -> dict:
         f"逐轮留痕 `{JOB_HISTORY}`：**{len(runs)}** 轮、覆盖 **{len(covered)}** 天"
         + (f"（{covered[0]} .. {covered[-1]}，CST）" if covered else "（文件还不存在或为空）")
         + f"。\n\n{latest_note}\n\n"
-        "每天需要 ≥2 轮全绿才算一天。"
+        f"每天需要 ≥{RUNS_PER_DAY} 轮全绿才算一天；**红轮按原因分两类**"
+        "（2026-10-14 起，与门槛 3 同一条口径）："
+        f"已知外部条件（网络/场馆抖动）**不打断连击**但如实计数，我们自己的缺陷（或读不出原因）打断。"
+        f"到目前：绿轮 **{sum(v['green'] for v in day_counts.values())}**、"
+        f"外部条件轮 **{sum(v['external'] for v in day_counts.values())}**、"
+        f"红轮 **{sum(v['red'] for v in day_counts.values())}**。"
         + (
             f"当前连续 **{streak}** 天，还差 {PIPELINE_DAYS_REQUIRED - streak} 天。"
             if not met else "已满足。"
