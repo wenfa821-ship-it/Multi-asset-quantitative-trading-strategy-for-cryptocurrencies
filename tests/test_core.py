@@ -6150,6 +6150,71 @@ class VersionSnapshotGateTests(unittest.TestCase):
         self.assertIn("拒绝冻结", str(ctx.exception))
 
 
+class VersionSyncReadmeTests(unittest.TestCase):
+    """2026-10-14：版本号有**第四处** —— README 头部那句「当前版本 vX」。
+
+    实测它停在 **v1.1.7**，而 `VERSION` 已经是 **1.1.22**：十五个版本的漂移，就在入口文档的第一段。
+    一直没人发现，是因为 `version_sync.py` 的「三处」从来只数代码（`VERSION` / `pyproject.toml` /
+    `__version__`），`docs/RELEASING.md` 第 4 步要求人顺手改 README，而**靠记性的那一步没有失过一次手
+    才怪**。现在它进对账，且这个脚本的 `--check` 已经挂在每日任务里。
+    """
+
+    def _mod(self):
+        return _load_script("version_sync")
+
+    def test_the_live_project_has_all_four_in_agreement(self) -> None:
+        found = self._mod().read_versions(PROJECT)
+        self.assertIn("README.md", found, "README 那句没被读进来，等于没对账")
+        self.assertEqual(set(found.values()), {found["VERSION"]})
+        self.assertEqual(found["README.md"], (PROJECT / "VERSION").read_text(encoding="utf-8").strip())
+
+    def test_a_stale_readme_line_is_a_failure(self) -> None:
+        """把 README 写旧一版，四处就不再一致 —— 这正是 v1.1.7 那个状态。"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "ta").mkdir(parents=True)
+            (root / "VERSION").write_text("9.9.9\n", encoding="utf-8")
+            (root / "pyproject.toml").write_text('version = "9.9.9"\n', encoding="utf-8")
+            (root / "src" / "ta" / "__init__.py").write_text('__version__ = "9.9.9"\n',
+                                                             encoding="utf-8")
+            (root / "README.md").write_text("**当前版本 v9.9.8**（昨天）。版本线：…\n",
+                                            encoding="utf-8")
+            found = self._mod().read_versions(root)
+            self.assertEqual(found["README.md"], "9.9.8")
+            self.assertEqual(set(found.values()), {"9.9.9", "9.9.8"})   # 不一致 → --check 会红
+
+    def test_a_removed_readme_line_does_not_break_the_check(self) -> None:
+        """README 头部被重写、那句话没了：**不加进对账**，也不许因此判红。
+
+        「没写」与「写错」是两件事 —— 前者该由人决定要不要恢复，后者才是漂移。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "ta").mkdir(parents=True)
+            (root / "VERSION").write_text("9.9.9\n", encoding="utf-8")
+            (root / "pyproject.toml").write_text('version = "9.9.9"\n', encoding="utf-8")
+            (root / "src" / "ta" / "__init__.py").write_text('__version__ = "9.9.9"\n',
+                                                             encoding="utf-8")
+            (root / "README.md").write_text("# 这个 README 不提版本\n", encoding="utf-8")
+            found = self._mod().read_versions(root)
+            self.assertNotIn("README.md", found)
+            self.assertEqual(set(found.values()), {"9.9.9"})
+
+    def test_a_version_mentioned_elsewhere_in_the_readme_is_not_mistaken(self) -> None:
+        """正文里到处是别的版本号（「1.0 的范围」「1.1 的门槛」）—— 只认『当前版本 vX』。"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text(
+                "1.0 的范围 = 四腿系统；1.1 的门槛见 docs/RELEASING.md。\n"
+                "**当前版本 v3.2.1**（今天）。\n"
+                "git tag v0.4.6 与 archive/versions/v9.9.9 是历史快照。\n",
+                encoding="utf-8")
+            self.assertEqual(self._mod().read_readme_version(root), "3.2.1")
+
+
 class VenueDegradedFreshnessTests(unittest.TestCase):
     """2026-10-13（10-12 复盘建议 ③）：只报「累计 N 次」等于永远等不到阈值 ——
     一次网络抖动会永久挂在面板上。改成按**最近 24h 次数**判，>5 次才 warn。"""

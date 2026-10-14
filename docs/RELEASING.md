@@ -57,7 +57,9 @@
 2. 更新 `docs/progress.json`，并 `python3 scripts/progress.py && python3 scripts/progress.py --check`
    （`progress.py` 直接渲染，没有 `--write`；只有 `changelog_md.py` 需要显式的 `--write`）；
 3. 追加 `docs/changelog.jsonl`（每条改动/决定/研究结论）；
-4. 改 `VERSION`（并让 `scripts/version_sync.py --check` 通过）；
+4. 改 `VERSION`、`pyproject.toml`、`src/ta/__init__.py`，**并把 README 头部那句
+   「**当前版本 vX**」一起改**（`scripts/version_sync.py --check` 会把四处一起比 ——
+   2026-10-14 之前它只比代码那三处，README 那句因此停在 v1.1.7 整整 15 个版本，见 §70.10.18）；
 5. `python3 scripts/version_snapshot.py --version vX.Y.Z --notes "..."`；
 6. `python3 scripts/changelog_md.py --write`；
 7. git：`git add -A && git commit -m "release: vX.Y.Z" && git tag vX.Y.Z`。
