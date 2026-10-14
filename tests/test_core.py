@@ -7211,3 +7211,34 @@ class UnitMultipleDiffTests(unittest.TestCase):
                  if a.get("title") == "reconciliation mismatch" and not lr.is_cash_only(a)]
         self.assertEqual(kinds.count("unit_multiple"), 1)
         self.assertGreaterEqual(kinds.count("unexplained"), 10)
+
+
+class Gate5WordingTests(unittest.TestCase):
+    """2026-10-14：门槛 5 的说明**一度落后于代码**。
+
+    它原来写着「两边的尺子不是同一把：现任按 3 天中位、候选按快照的 ≈17 天中位」——
+    那句在 10-13 当晚是真的，但同一天稍后规则改成**候选也用本地费率历史同窗口重算**，
+    排名不再读快照。留旧措辞会让人以为规则还在拿两把尺子比 —— 这正是这个项目反复修的
+    「说明比行为慢一版」。"""
+
+    def test_the_gate5_text_describes_the_current_rule(self) -> None:
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        root = _P(PROJECT)
+        candidate = lr.candidate_window(root, held_names=[])
+        self.assertIsNotNone(candidate, "读不到候选就没法核对这段话")
+        # 判据：新的措辞必须在、旧的断言必须不在
+        source = (PROJECT / "scripts" / "live_readiness.py").read_text(encoding="utf-8")
+        self.assertIn("排名**不再**读快照", source)
+        self.assertIn("remeasure_candidates", source)
+        self.assertNotIn("**两边的尺子不是同一把**", source)
+        self.assertEqual(candidate["rule_days"], 3.0)          # 引用的规则窗口要对得上
+
+    def test_candidate_window_still_reports_both_windows(self) -> None:
+        """它现在回答的是"快照那个数代表什么"：必须同时给快照窗口与最近实测，不能只给一个。"""
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        candidate = lr.candidate_window(_P(PROJECT), held_names=[])
+        for key in ("screen_bps", "window_days", "recent_bps", "recent_days", "depth_ok"):
+            self.assertIn(key, candidate)
+        self.assertGreater(candidate["window_days"], candidate["recent_days"])

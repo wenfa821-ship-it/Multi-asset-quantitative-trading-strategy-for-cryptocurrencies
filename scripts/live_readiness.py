@@ -679,11 +679,19 @@ def gate_execution(root: Path) -> dict:
 def candidate_window(root: Path, held_names: list[str], recent_days: int = 5) -> dict | None:
     """Re-measure the rotation rule's top candidate over a window you can compare.
 
-    Found 2026-10-13 while asking why the rule never fires: the incumbent side is a
-    `--days 3` median, but the candidate side is `screen_live.json`'s
-    `median_daily_bps`, which is a median over its last `samples` prints - 100 prints
-    at a 4h settle interval is ~17 days. So a name can look 2x better than it has
-    actually been paying lately.
+    Found 2026-10-13 while asking why the rule never fires: **at that moment** the
+    incumbent side was a `--days 3` median while the candidate side was
+    `screen_live.json`'s `median_daily_bps` - a median over its last `samples` prints
+    (100 prints at a 4h settle interval is ~17 days), so a name could look 2x better
+    than it had actually been paying lately.
+
+    2026-10-14: that comparison is **historical**. Later the same day the rule was
+    changed to re-measure candidates from the local funding history over the **same
+    window** as the incumbents (`carry_rotation.remeasure_candidates`), so ranking no
+    longer reads this snapshot at all; the snapshot is now only depth/eligibility
+    (and only while it is ≤2 days old - see the daily `carry_live.py` step). What
+    this function measures is therefore no longer "the two rulers differ" but
+    "**what the snapshot's number means**": its window versus the last few days.
 
     This only measures; it does not change what the rule proposes (that is a
     strategy choice, and the rule is deliberately read-only).
@@ -724,6 +732,7 @@ def candidate_window(root: Path, held_names: list[str], recent_days: int = 5) ->
         "samples": samples,
         "settle_hours": settle_hours,
         "window_days": samples / per_day if per_day else 0.0,
+        "rule_days": 3.0,          # 规则自己的窗口（--days 3），上面那段话要引用它
         "recent_days": len(per_day_bps),
         "recent_bps": recent_bps,
         "recent_breakeven": float("inf") if gain <= 0 else 44.9 / gain,
@@ -1144,19 +1153,28 @@ def gate_carry(root: Path) -> dict:
             )
     if candidate:
         detail += (
-            f"\n\n⚠️ **两边的尺子不是同一把**：规则里**现任**用 `--days 3` 的中位（3 天），"
-            f"而**候选**读的是扫描快照 `{CARRY_SCREEN}` 的 `median_daily_bps` —— "
-            f"`samples={candidate['samples']}`、每 {candidate['settle_hours']:g}h 结算一次，"
-            f"那其实是 **≈{candidate['window_days']:.0f} 天**的中位。"
-            f"同一个名字 `{candidate['symbol']}`：快照 **{candidate['screen_bps']} bps/天**，"
-            f"但按最近 {candidate['recent_days']} 天实测只有 **{candidate['recent_bps']:.1f} bps/天**"
-            f"（{candidate['recent']}）。用「2 天窗口」跑一次规则会提议 "
-            f"`LTC/USDT → {candidate['symbol']}`、breakeven 4 天；"
-            f"拿最近的数折算，同一个提议是 **≈{candidate['recent_breakeven']:.0f} 天**回本。"
-            f"\n\n方向不变（LTC 确实是最弱的一条腿），**倍数是虚的**；"
-            f"而且这个候选在快照里 `depth_ok={candidate['depth_ok']}`（查不到深度），"
-            f"按「入场前查不到深度就拒」的闸门，它**根本进不来**。"
-            f"修哪一边是策略选择，所以这里只报数、不动规则。"
+            # 2026-10-14：这段话在 10-13 当晚被**修过口径**了 —— 那时它写的是「两边的尺子不是同一把」，
+            # 指的是「现任按 3 天中位、候选按快照的 ≈17 天中位」。同一天稍后规则改成
+            # **候选也用本地费率历史同窗口重算**（carry_rotation.remeasure_candidates），
+            # 排名不再读快照 —— 快照只剩 depth/eligible 两个用途，而且只在 ≤2 天新鲜时才生效
+            # （所以 10-14 把 carry_live.py 挂进了每日任务）。留着旧措辞会让人以为规则还在拿两把尺子比。
+            f"\n\n**候选那一侧的口径（2026-10-14 复核）**：排名**不再**读快照 —— 候选与现任都由"
+            f"本地费率历史在**同一个窗口**上重算（`carry_rotation.remeasure_candidates`）；"
+            f"快照 `{CARRY_SCREEN}` 现在只剩两个用途：`depth_ok` / `eligible` 过滤，"
+            f"且只在 ≤2 天新鲜时才生效（过期时规则会在 `refusals` 里写明「深度不参与筛选」）。"
+            f"\n\n下面这组数**不是**在说两把尺子，而是在说**快照里那个数代表什么**："
+            f"`{candidate['symbol']}` 在快照里是 **{candidate['screen_bps']} bps/天**，"
+            f"而它的窗口是 `samples={candidate['samples']}` × 每 {candidate['settle_hours']:g}h"
+            f"≈ **{candidate['window_days']:.0f} 天**；同样这个名字，最近 "
+            f"{candidate['recent_days']} 天实测是 **{candidate['recent_bps']:.1f} bps/天**"
+            f"（{candidate['recent']}）—— 快照那个数算的是**很长一段时间的平均**（≈"
+            f"{candidate['window_days']:.0f} 天），与规则要的「最近 {candidate['rule_days']:g} 天」"
+            f"根本不是一回事。**偏哪个方向要看行情**：这一次它偏低（按快照算回本 4 天、"
+            f"按最近 {candidate['recent_days']} 天算 ≈{candidate['recent_breakeven']:.0f} 天），"
+            f"换个时候也可能偏高 —— 所以它只能当参考，不能当「现在值多少」。"
+            f"\n\n另外这个候选 `depth_ok={candidate['depth_ok']}`（查不到深度）：按"
+            f"「入场前查不到深度就拒」的闸门它**进不来**，这也正是深度过滤不该被关掉的原因。"
+            f"改哪一边是策略选择，这里只报数、不动规则。"
         )
     refusals = (rot_rows[-1].get("refusals") or []) if rot_rows else []
     if refusals:
