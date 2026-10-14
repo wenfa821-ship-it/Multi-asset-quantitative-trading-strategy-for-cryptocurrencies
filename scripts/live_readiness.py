@@ -207,7 +207,7 @@ def gate_edge(root: Path) -> dict:
         return {
             "id": 1,
             "name": "边缘",
-            "requirement": "至少一条腿/策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
+            "requirement": edge_requirement(None),
             "status": "unmeasured",
             "value": "未测量",
             "detail": (
@@ -217,6 +217,7 @@ def gate_edge(root: Path) -> dict:
             "evidence": [rel(path)],
             "window": "—",
         }
+    assumption = edge_requirement(payload)
     rows = payload.get("rows") or []
     # `--backtest` writes the verdict per row; a hand-written edge.json from an
     # earlier run may not, so fall back to the same rule applied to its numbers.
@@ -267,7 +268,7 @@ def gate_edge(root: Path) -> dict:
     return {
         "id": 1,
         "name": "边缘",
-        "requirement": "至少一条腿/策略样本外为正、且扣掉 10 bps/边成本后仍为正（样本外 ≥30 笔才算数）",
+        "requirement": assumption,
         "status": "met" if qualifying else "unmet",
         "value": f"{len(qualifying)}/{len(decided)} 条可判策略为正",
         "detail": detail,
@@ -444,6 +445,27 @@ def _is_gate1_winner(row: dict) -> bool:
     if isinstance(row.get("tb_selected_for_gate1"), bool):
         return row["tb_selected_for_gate1"]
     return (row.get("trades") or 0) >= 30 and (row.get("total_return_pct") or 0.0) > 0
+
+
+def edge_requirement(payload: dict | None) -> str:
+    """第 1 条的「要求」里那个成本数字**不写死**。
+
+    它 2026-10-14 之前一直硬编码成「10 bps/边」—— 而真值是
+    `config/app.toml` 的 `venues.paper.fee_bps`（8.0）× `--fee-multiplier`（1.25）。
+    今天两处恰好都是 10.0，所以看不出来；可一旦费率配置变了，**印出来的判据**
+    就会和脚本实际用的成本分道扬镳（这正是门槛 3/4 那一天修的两个病）。
+    有 `edge.json` 就引用它自己的数，没有就说清「按当前配置折算」而不是报一个孤零零的 10。
+    """
+    bps = (payload or {}).get("implied_fee_bps_per_side")
+    if isinstance(bps, (int, float)):
+        return (
+            f"至少一条腿/策略样本外为正、且扣掉 **{bps:g} bps/边**成本后仍为正"
+            f"（样本外 ≥30 笔才算数）"
+        )
+    return (
+        "至少一条腿/策略样本外为正、且扣掉**实盘费率**（配置的 `venues.paper.fee_bps` "
+        f"× `--fee-multiplier`，回放时算出）后仍为正（样本外 ≥30 笔才算数）"
+    )
 
 
 def _pct(value) -> str:

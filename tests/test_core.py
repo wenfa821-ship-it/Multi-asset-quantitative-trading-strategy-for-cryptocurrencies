@@ -7292,3 +7292,28 @@ class Gate34WordingTests(unittest.TestCase):
         self.assertNotIn("4. **数据管道**：每日任务连续 14 天两轮全绿", readme)
         self.assertIn("连续 30 天无**未解释**的对账差异", readme)
         self.assertIn("每天 ≥2 轮、且**没有我们自己的红轮**", readme)
+
+    def test_gate1_requirement_quotes_the_bps_it_actually_uses(self) -> None:
+        """第 1 条的「要求」不许把成本写死：真值是 config 的费率 × 乘数，读 edge.json 自己的数。
+
+        2026-10-14 之前它硬编码「10 bps/边」。今天配置算出来恰好也是 10.0，所以看不出问题 ——
+        但费率一改，**印出来的判据**就会和脚本实际用的成本分道扬镳，这正是门槛 3/4 修的那个病。
+        """
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        payload = lr.read_json(_P(PROJECT) / lr.EDGE)
+        self.assertIsNotNone(payload, "读不到 edge.json 就没法核对这句话")
+        bps = payload["implied_fee_bps_per_side"]
+        req = lr.gate_edge(_P(PROJECT))["requirement"]
+        self.assertIn(f"{bps:g} bps/边", req)
+        # 反向：它必须能跟着 payload 变，而不是恰好等于硬编码的 10
+        tweaked = dict(payload, implied_fee_bps_per_side=12.5)
+        self.assertIn("12.5 bps/边", lr.edge_requirement(tweaked))
+        self.assertNotIn("10 bps/边", lr.edge_requirement(tweaked))
+
+    def test_gate1_requirement_still_reads_well_without_a_measurement(self) -> None:
+        """没有 edge.json 时不能说「10 bps/边」（那是没经过测量的断言），要说清它是怎么折算的。"""
+        import scripts.live_readiness as lr
+        req = lr.edge_requirement(None)
+        self.assertIn("fee-multiplier", req)
+        self.assertNotIn("10 bps", req)
