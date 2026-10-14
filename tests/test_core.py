@@ -7242,3 +7242,53 @@ class Gate5WordingTests(unittest.TestCase):
         for key in ("screen_bps", "window_days", "recent_bps", "recent_days", "depth_ok"):
             self.assertIn(key, candidate)
         self.assertGreater(candidate["window_days"], candidate["recent_days"])
+
+
+class Gate34WordingTests(unittest.TestCase):
+    """2026-10-14：第 3、4 条的「要求」文案比行为狠一版。
+
+    第 3 条写「无**非结构性**对账差异」，但 `classify_position_diff()` 早把仓位差异分成四桶、
+    只有「未解释」打断连击 —— 字面读比实际更硬。第 4 条写「连续 14 天**两轮全绿**」，
+    而 `day_ok()` 判的是「绿轮 + 已知外部条件轮 ≥ 2 且自己的红轮 = 0」；
+    按字面读，14 天里连一次代理抖动都不能有，在这个环境里等于「永远不成立」。
+
+    这批测试钉的是**三处会各自漂移的副本**：脚本给的 `requirement`、报告末尾的口径脚注、
+    README §70.6 的原文。看板渲染的是脚本那一份，所以它跟着脚本走。
+    """
+
+    def _gate(self, fn: str):
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        return getattr(lr, fn)(_P(PROJECT))
+
+    def test_gate3_requirement_says_unexplained_not_non_structural(self) -> None:
+        req = self._gate("gate_execution")["requirement"]
+        self.assertIn("未解释", req)
+        self.assertNotIn("非结构性", req)          # 那句把已知的三桶也算进了判据
+        self.assertIn("order rejected", req)
+
+    def test_gate4_requirement_counts_our_own_red_rounds(self) -> None:
+        req = self._gate("gate_pipeline")["requirement"]
+        self.assertIn("红轮", req)
+        self.assertNotIn("两轮全绿", req)           # 字面读会让门槛永远不成立
+        self.assertIn("外部条件", req)
+
+    def test_the_report_footnotes_repeat_the_same_rules(self) -> None:
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        gates = [lr.gate_edge(_P(PROJECT)), lr.gate_sample(_P(PROJECT)),
+                 lr.gate_execution(_P(PROJECT)), lr.gate_pipeline(_P(PROJECT)),
+                 lr.gate_carry(_P(PROJECT)), lr.gate_venue_only()]
+        text = lr.render(gates, {"generated_at": "t", "generated_cst": "t"})
+        self.assertIn("只有「未解释」那一桶打断连击", text)
+        self.assertIn("绿轮 + 已知外部条件轮", text)
+        self.assertNotIn("带 `position` 的一律算非结构性", text)
+
+    def test_readme_section_70_6_carries_the_current_wording(self) -> None:
+        readme = (PROJECT / "README.md").read_text(encoding="utf-8")
+        # §70.6 的**规范条文**必须改；§70.10 里那张「第一次跑出来的六行」是留档快照，
+        # 允许保留原措辞（它上面已经挂了一条指向 §70.10.17 的说明）。
+        self.assertNotIn('3. **执行**：连续 30 天无"非结构性"对账差异', readme)
+        self.assertNotIn("4. **数据管道**：每日任务连续 14 天两轮全绿", readme)
+        self.assertIn("连续 30 天无**未解释**的对账差异", readme)
+        self.assertIn("每天 ≥2 轮、且**没有我们自己的红轮**", readme)

@@ -282,7 +282,8 @@ def write_status(path: Path, codes: dict[str, int], attempts_used: dict[str, int
 
     2026-10-13: `path` is OVERWRITTEN every run, so the file can answer "is the
     latest run green?" and nothing else. README 70.6 gate 4 asks a question about
-    the last 14 days ("每日任务连续 14 天两轮全绿"), and there was no way to answer
+    the last 14 days (今天的要求是「每天 ≥2 轮且没有我们自己的红轮」-- 它当时写的是
+    "两轮全绿"，2026-10-14 改写，见 README §70.10.17), and there was no way to answer
     it from disk - the history simply was not kept. `history_path` is the fix: one
     appended row per run (CST date + UTC instant + the rc table), which is what
     `scripts/live_readiness.py` counts. Same best-effort contract as `path`.

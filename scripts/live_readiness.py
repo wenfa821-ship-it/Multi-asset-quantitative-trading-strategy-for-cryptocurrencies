@@ -663,7 +663,11 @@ def gate_execution(root: Path) -> dict:
     return {
         "id": 3,
         "name": "执行",
-        "requirement": f"连续 {CLEAN_DAYS_REQUIRED} 天无「非结构性」对账差异、无重复出现的 order rejected、无事故级事件",
+        "requirement": (
+            f"连续 {CLEAN_DAYS_REQUIRED} 天无**未解释**对账差异"
+            f"（带持仓的差异已分三桶：已知库存窗口 / 灰尘对灰尘 / 张数口径，都不打断），"
+            f"无重复出现的 order rejected、无事故级事件"
+        ),
         "status": "met" if met else "unmet",
         "value": (
             f"{streak}/{CLEAN_DAYS_REQUIRED} 天"
@@ -1046,7 +1050,11 @@ def gate_pipeline(root: Path) -> dict:
     return {
         "id": 4,
         "name": "数据管道",
-        "requirement": f"每日任务连续 {PIPELINE_DAYS_REQUIRED} 天两轮全绿（needs_rerun 为空）",
+        "requirement": (
+            f"每日任务连续 {PIPELINE_DAYS_REQUIRED} 天每天 ≥{RUNS_PER_DAY} 轮、"
+            f"且**没有我们自己的红轮**（已知外部条件的轮次照算但不打断；"
+            f"旧行没有外部条件标记，一律按红）"
+        ),
         "status": "met" if met else "unmet",
         "value": f"{streak}/{PIPELINE_DAYS_REQUIRED} 天",
         "detail": detail,
@@ -1416,11 +1424,18 @@ def render(gates: list[dict], meta: dict) -> str:
         "## 口径说明（会自己验证的几件事）",
         "",
         f"* 第 3 条的「已知项」= 对账差异**只**含 `cash delta`（期望线跟着资金费走之后的稳定残余）。"
-        f"带 `position` 的一律算非结构性。",
+        f"带 `position` 的先分三桶（已知库存窗口 / 灰尘对灰尘 / 张数口径），"
+        f"**只有「未解释」那一桶打断连击** —— 这正是 2026-10-14 从第 3 条的要求里删掉"
+        f"「无『非结构性』差异」那句话的原因：原措辞把已知的三类非缺陷也算进了判据。",
         f"* 第 3 条的豁免**只给两类非缺陷**：① 已知外部条件（代理降级——它按 `critical` 记账，"
-        f"按级别数会让门槛永远不成立）② 我们**自己的记账口径**（库存实验的 tag 余额、两侧都约等于 0 的灰尘）。"
+        f"按级别数会让门槛永远不成立）② 我们**自己的记账口径**（库存实验的 tag 余额、两侧都约等于 0 的灰尘、"
+        f"ctVal/张 的整倍数口径）。"
         f"**缺陷不豁免，只会随时间自然退出 30 天窗口** —— 10-08 的 carry 乱局与 10-09 的单位假差异"
         f"仍然在打断连击。少一条豁免，门槛就更硬；多一条，它就变成装饰。",
+        f"* 第 4 条的一天 = **绿轮 + 已知外部条件轮 ≥ {RUNS_PER_DAY} 且自己的红轮 = 0**"
+        f"（2026-10-14 起，与第 3 条同一口径）。旧措辞写的是「两轮全绿」—— 那等于要求 14 天里"
+        f"连一次代理抖动都不能有，在这个环境里和「永远不成立」等价（第 3 条当年实测 8 天里 8 天在抖）。"
+        f"外部条件轮**照样逐轮如实计数**，只是不打断连击。",
         f"* 第 4 条的逐轮留痕从 2026-10-13 起累积：那之前 `data/daily_job_status.json` "
         f"每轮被覆盖，历史无法追溯（脚本如实报出覆盖窗口，而不是假装有 14 天）。",
         f"* 第 1 条读的是 `{EDGE}`，`--backtest` 生成；数字随时间会变，看 `generated_at`。",
