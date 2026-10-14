@@ -7110,3 +7110,47 @@ class Gate4StreakTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             gate = self._gate(rows, tmp)
         self.assertIn("0/", gate["value"])          # 只有今天一轮、而且是红的 → 0 天
+
+
+class Gate4StepListTests(unittest.TestCase):
+    """同一天两轮跑的是**同一个脚本、同样的参数**，所以步骤集合应当一致；
+    若有人白天改了步骤表，那天的「两轮全绿」就不是"跑了两遍同样的东西"——
+    门槛要**说出来**（只报，不算打断）。2026-10-14 当天正好发生了这件事（加 carry_live.py）。"""
+
+    @staticmethod
+    def _today():
+        import datetime as _dt
+        return _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8))).date()
+
+    def _gate(self, rows: list[dict], tmp: str):
+        import scripts.live_readiness as lr
+        from pathlib import Path as _P
+        root = _P(tmp)
+        (root / "data").mkdir(parents=True, exist_ok=True)
+        (root / lr.JOB_HISTORY).write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+        (root / lr.JOB_STATUS).write_text(json.dumps({"generated_at": "t", "needs_rerun": []}),
+                                          encoding="utf-8")
+        return lr.gate_pipeline(root)
+
+    def test_a_step_added_mid_day_is_reported(self) -> None:
+        import tempfile
+        today = self._today().isoformat()
+        rows = [
+            {"date": today, "needs_rerun": [], "steps": {"a": 0, "b": 0}},
+            {"date": today, "needs_rerun": [], "steps": {"a": 0, "b": 0, "carry_live.py": 0}},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = self._gate(rows, tmp)
+        self.assertIn("两轮步骤表不一致", gate["detail"])
+        self.assertIn("carry_live.py", gate["detail"])
+        self.assertIn("1/", gate["value"])          # 仍然算满一天：它是**报**，不是打断
+
+    def test_matching_step_lists_stay_quiet(self) -> None:
+        import tempfile
+        today = self._today().isoformat()
+        rows = [{"date": today, "needs_rerun": [], "steps": {"a": 0, "b": 0}},
+                {"date": today, "needs_rerun": [], "steps": {"a": 0, "b": 0}}]
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = self._gate(rows, tmp)
+        self.assertNotIn("步骤表不一致", gate["detail"])

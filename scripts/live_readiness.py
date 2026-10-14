@@ -929,6 +929,7 @@ def gate_pipeline(root: Path) -> dict:
     # 第一版把"外部条件轮"也往 `green_days` 里 append 了一个 `False`，于是 `all(flags)` 永远是假 ——
     # 豁免写了却没生效（测试当场照出来）。
     day_counts: dict[str, dict[str, int]] = {}
+    day_steps: dict[str, list[set]] = {}
     for row in runs:
         date = str(row.get("date") or "")
         if not date:
@@ -938,6 +939,10 @@ def gate_pipeline(root: Path) -> dict:
         kind = "green" if not needs else ("external" if row.get("external_only") else "red")
         slot = day_counts.setdefault(date, {"green": 0, "external": 0, "red": 0})
         slot[kind] += 1
+        # 同一天两轮的**步骤表**也要看一眼（2026-10-14）：两轮跑的是同一个脚本、同样的参数，
+        # 所以正常情况下步骤集合完全一致；如果有人白天改了步骤表（今天就加了 carry_live.py），
+        # 那天的两轮就**不是同一件事** —— 要说出来，别让"两轮全绿"读起来像"跑了同样的两轮"。
+        day_steps.setdefault(date, []).append(set((row.get("steps") or {}).keys()))
 
     def day_ok(date: str) -> bool:
         slot = day_counts.get(date) or {}
@@ -989,6 +994,17 @@ def gate_pipeline(root: Path) -> dict:
             "\n\n所以这条门槛**补不出历史** —— 旧日志既没有日期、又有红轮，"
             "14 天只能从今天的逐轮留痕开始攒（这也是把它做出来的原因）。"
         )
+    # 同一天两轮步骤不一致的日子（只报，不算打断）
+    uneven = []
+    for date, sets in sorted(day_steps.items()):
+        if len(sets) >= 2 and len(set(map(frozenset, sets))) > 1:
+            union = set().union(*sets)
+            common = set.intersection(*sets)
+            uneven.append(f"{date}（只有某些轮跑了 {sorted(union - common)}）")
+    if uneven:
+        detail += ("\n\n⚠ 有 **" + str(len(uneven)) + "** 天的两轮步骤表不一致："
+                   + "；".join(uneven) + " —— 两轮跑的是同一个脚本，所以这通常意味着"
+                   "**白天改过步骤表**；那些天的「两轮全绿」读起来像跑了两遍同样的东西，其实不是。")
     return {
         "id": 4,
         "name": "数据管道",
