@@ -181,6 +181,14 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # Offline, 0.1s, read-only against the venue - it turns "which pair stopped
     # paying" into a daily series instead of a memory. Acting on it is a separate
     # user-approved step; this only records what the rule WOULD do.
+    #
+    # 2026-10-14：**先刷新候选快照再跑规则**。实测发现规则读的
+    # `data/carry/screen_live.json` 是 10-10 11:25 的**手工**产物，没有任何定时任务产出它，
+    # 于是规则自己在 refusals 里写：`candidate snapshot is 3.9 days old (limit 2) -
+    # its depth field is stale, so depth is NOT used to filter candidates` ——
+    # 换腿在"卖得掉吗"这一维上是盲的，而深度正是这个账户唯一在乎的东西。
+    # `carry_live.py` 只读公共费率与行情（不下单、不要 key），走全场永续目录约 139 条。
+    ("carry_live.py", ["--write", "data/carry/screen_live.json", "--days", "3"]),
     ("carry_rotation.py", ["--write"]),
     # README 70.6's six "mature enough for real money" gates, as numbers instead of
     # prose (2026-10-13). Offline and read-only; it reads the ledger/alerts/carry

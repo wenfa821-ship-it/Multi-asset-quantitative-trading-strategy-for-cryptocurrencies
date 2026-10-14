@@ -5515,6 +5515,9 @@ class EnvLoaderIsSharedTests(unittest.TestCase):
             sorted(checked),
             [
                 "carry_income_report.py",
+                # 2026-10-14 加进每日任务：换腿规则读的候选快照必须每天刷新，
+                # 否则它的深度过滤会一直被关掉（见 docs/LIVE-PREFLIGHT.md 的 P1）
+                "carry_live.py",
                 "funding_income.py",
                 "refresh_daily_bars.py",
                 "sync_funding.py",

@@ -40,6 +40,10 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
+# 模块级导入 `load_env_file`：`daily_research.py` 的测试会走步骤表逐个断言
+# 「用 build_venue 的脚本必须用**同一个** load_env_file」（2026-10-14 加进步骤表后它生效了）。
+from ta.config import load_env_file  # noqa: E402
+
 # Measured on the demo venue 2026-10-07 with a real two-leg round trip (README
 # 27.3): fees 30.0bps + spread/leg-risk 14.8bps. Reused rather than re-guessed,
 # because carry's whole economics is this number divided by the funding it
@@ -164,6 +168,11 @@ def main() -> int:
     from ta.config import Config
     from ta.venues import build_venue
 
+    # 2026-10-14：这一步挂进每日任务之后必须自己加载 .env —— 它要建 venue 做**深度探测**
+    # （候选进不进得去，是这个规则唯一在乎的东西）。`daily_research.py` 的测试会走步骤表
+    # 逐个检查"用 build_venue 的脚本必须 load_env_file"，这一行就是那条纪律的落地。
+    load_env_file(PROJECT / ".env")
+
     config = Config.load("config-exp")          # holds the swap venue section
     venue = build_venue(config, args.venue)
     try:
@@ -173,6 +182,14 @@ def main() -> int:
     venue.connect()
     if not venue.market_type == "swap":
         raise SystemExit("this screener needs market_type = swap")
+
+    # 2026-10-14：`connect()` 容忍目录加载失败（降级启动优于崩溃重启），
+    # 所以 `venue.ex.markets` 可能是 None —— 而这个筛选器**必须要全量目录**才能做深度探测。
+    # 没有目录就直接说不写快照（宁可不写，也不写一份"深度未知"的快照去喂换腿规则）。
+    if not venue.ensure_markets():
+        print(f"  ⚠ 场馆目录拿不到（{venue.last_connect_error}）—— 没目录就做不了深度探测，"
+              "本轮不写快照（换腿规则会照它在 refusals 里说的那样不用深度）")
+        return 1
 
     markets = [
         (symbol, market)
