@@ -168,7 +168,14 @@ def _venue_swap_positions(venue) -> dict[str, float]:
         if not symbol or abs(contracts) < 1e-12:
             continue
         signed = abs(contracts)
-        out[symbol] = -signed if str(row.get("side") or "").lower() == "short" else signed
+        # 2026-10-16：与 `CcxtVenue` 同一条纪律 —— **同一 symbol 的两行要相加**。
+        # 双向持仓（long/short）模式下 OKX 会分别报两条腿；原来这里是
+        # `out[symbol] = ...`，后一行盖掉前一行，于是把一条腿当成了净头寸
+        # （实测 CRV：venue 报 -13,357，而我们净额是 -5,970）。
+        signed = -signed if str(row.get("side") or "").lower() == "short" else signed
+        out[symbol] = out.get(symbol, 0.0) + signed
+        if abs(out[symbol]) < 1e-12:
+            out.pop(symbol, None)
     return out
 
 

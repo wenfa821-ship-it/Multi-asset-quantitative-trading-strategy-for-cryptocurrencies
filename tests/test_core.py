@@ -4503,6 +4503,77 @@ class ReconcileSwapUnitsTests(unittest.TestCase):
         self.assertEqual(self._positions(7.0, "short", 1.0), {"ACT/USDT:USDT": -7.0})
 
 
+class TwoSidedPositionTests(unittest.TestCase):
+    """2026-10-16：OKX 在**双向持仓**（long/short）下，同一个 symbol 会返回两行。
+
+    两处解析（`CcxtVenue.get_account` 与 `reconcile_ledger_to_venue._venue_swap_positions`）
+    原来都是 `out[symbol] = ...` —— **后一行覆盖前一行**，等于把一条腿当成了净头寸。
+    症状就是那条持续 24 小时、每小时响一次的告警：`local=-5,970 venue=-13,357`
+    （差 7,387 = 10-15 那笔买回；双向模式下 `buy` 开的是**多腿**，两腿相加才等于账本净额）。
+    账本是净头寸，所以两行必须**相加**。
+    """
+
+    ROWS = [
+        {"symbol": "CRV/USDT:USDT", "contracts": 7387.0, "side": "long"},
+        {"symbol": "CRV/USDT:USDT", "contracts": 13357.0, "side": "short"},
+    ]
+    CANCELLING = [
+        {"symbol": "X/USDT:USDT", "contracts": 5.0, "side": "long"},
+        {"symbol": "X/USDT:USDT", "contracts": 5.0, "side": "short"},
+    ]
+
+    def _script_positions(self, rows: list[dict]) -> dict:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "reconcile_ledger_to_venue", PROJECT / "scripts" / "reconcile_ledger_to_venue.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class Ex:
+            markets = {"CRV/USDT:USDT": {"contractSize": 1.0}}
+
+            def fetch_positions(self):
+                return rows
+
+        return module._venue_swap_positions(type("V", (), {"ex": Ex()})())
+
+    def _venue_positions(self, rows: list[dict]) -> dict:
+        from ta.venues.ccxt_venue import CcxtVenue
+        venue = CcxtVenue("okx", api_key="k", secret="s", password="p", sandbox=True)
+
+        class Ex:
+            markets = {"CRV/USDT:USDT": {"contractSize": 1.0}}
+
+            def fetch_balance(self):
+                return {"USDT": {"free": 0.0, "total": 0.0}, "info": []}
+
+            def fetch_positions(self):
+                return rows
+
+            def fetch_open_orders(self, symbol=None):
+                return []
+
+        venue.ex = Ex()
+        venue.markets = dict(Ex.markets)
+        venue._mark_for = lambda symbol: 0.34          # 不联网
+        state = venue.get_account()
+        return {s: p.qty for s, p in state.positions.items()}
+
+    def test_two_rows_for_one_symbol_are_summed_not_overwritten(self) -> None:
+        # 场馆两腿：多 7,387 / 空 13,357 → 净 -5,970（正是账本的数字）
+        self.assertEqual(self._script_positions(self.ROWS), {"CRV/USDT:USDT": -5970.0})
+        self.assertEqual(self._venue_positions(self.ROWS), {"CRV/USDT:USDT": -5970.0})
+
+    def test_two_legs_that_cancel_leave_no_position(self) -> None:
+        self.assertEqual(self._script_positions(self.CANCELLING), {})
+        self.assertEqual(self._venue_positions(self.CANCELLING), {})
+
+    def test_one_sided_rows_still_work(self) -> None:
+        short_only = [{"symbol": "A/USDT:USDT", "contracts": 10.0, "side": "short"}]
+        self.assertEqual(self._script_positions(short_only), {"A/USDT:USDT": -10.0})
+        self.assertEqual(self._venue_positions(short_only), {"A/USDT:USDT": -10.0})
+
+
 class VenueAvailabilityTests(unittest.TestCase):
     """One word for what the venue offers a symbol right now.
 
@@ -7004,10 +7075,15 @@ backtest mean_reversion  symbols=BTC/USDT,ETH/USDT  bars=1745  timeframe=15m
         （`refresh_daily_bars.py` 的 `--timeframe` 默认值），于是 52 个配置标的的 15m
         全部停在 10-08、1h 有 20 个停在 09-29 —— 那张「样本外」表其实在看 5 天前的世界。
         `generated_at` 挡不住这件事：测量可以是五分钟前跑的。所以输入的日期要一起报。"""
+        import datetime as dt
         import tempfile
 
         module = self._mod()
-        fresh = module.coverage_note({"15m": {"through": "2026-10-13", "at_through": 52,
+        # **日期不能写死**：这条断言原来用的是 `through: "2026-10-13"`，写下的头两天它确实
+        # 「新鲜」，到 2026-10-16 就变成「3 天前」——断言自己过期了（`max_age_days=1`）。
+        # 「新鲜」的定义是**相对今天**的，所以用例也相对今天造。
+        yesterday = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)).isoformat()
+        fresh = module.coverage_note({"15m": {"through": yesterday, "at_through": 52,
                                               "files": 52}})
         self.assertIn("行情地平线", fresh)
         self.assertNotIn("⚠️", fresh)

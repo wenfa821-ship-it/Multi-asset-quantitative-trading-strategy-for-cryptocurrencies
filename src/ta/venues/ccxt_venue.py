@@ -406,12 +406,25 @@ class CcxtVenue(Venue):
             mark = float(row.get("markPrice") or 0.0) or self._mark_for(symbol)
             side = str(row.get("side") or "").lower()
             qty = abs(contracts)
-            swap_positions[symbol] = Position(
-                symbol=symbol,
-                qty=-qty if side == "short" else qty,
-                avg_price=mark,
-                ct_val=self.contract_size(symbol),
+            # 2026-10-16：**同一个 symbol 可能返回两行** —— OKX 在双向持仓
+            # （long/short）模式下会分别报 long 与 short 两条腿。这里原来是
+            # `swap_positions[symbol] = ...`，**后一行直接盖掉前一行**，于是
+            # 「场馆仓位」只反映其中一条腿，对账就会报一条永不消失的差：
+            # 实测 CRV/USDT:USDT `local=-5,970 venue=-13,357`，差 **7,387**
+            # 正是 10-15 那笔买回——因为 `buy` 在双向模式下开的是**多腿**，
+            # 两腿相加才等于我们账本的净额。账本是净头寸，所以这里必须**累加**。
+            signed = (swap_positions[symbol].qty if symbol in swap_positions else 0.0) + (
+                -qty if side == "short" else qty
             )
+            if abs(signed) < 1e-12:
+                swap_positions.pop(symbol, None)   # 两腿抵消 = 这个标的没有净头寸
+            else:
+                swap_positions[symbol] = Position(
+                    symbol=symbol,
+                    qty=signed,
+                    avg_price=mark,
+                    ct_val=self.contract_size(symbol),
+                )
             unrealized += float(row.get("unrealizedPnl") or 0.0)
         if self.market_type == "swap":
             positions = {}
