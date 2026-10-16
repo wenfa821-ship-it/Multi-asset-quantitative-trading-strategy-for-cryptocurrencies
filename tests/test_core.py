@@ -1735,6 +1735,44 @@ class DashboardTests(unittest.TestCase):
         keys = {b["key"] for b in data.alert_breaches()}
         self.assertNotIn("runner_stale_minutes", keys)
 
+    def _stub_onchain_age(self, data, minutes: float) -> None:
+        """把「快照文件多久没动」设成给定值（stub 掉 onchain 的实时读取）。"""
+        import time as _time
+
+        data.onchain = lambda: {  # type: ignore[method-assign]
+            "zero_change": {"unchanged_fraction": 0.0},
+            "store_mtime": int((_time.time() - minutes * 60) * 1000),
+        }
+
+    def test_a_stalled_scanner_is_flagged(self) -> None:
+        """2026-10-16：扫描器静默停摆 ~2 小时，**没有任何红标** —— 那条「mtime 超过
+        10 分钟就算异常」只写在巡检指令里，不是判据。现在看门狗自己判：
+        ≥15 分钟（3× 轮间隔）warn，≥30 分钟 critical。"""
+        data = self._data()
+        self._stub_summary(data)
+        self._stub_onchain_age(data, 20)
+        breach = next((b for b in data.alert_breaches() if b["key"] == "onchain_stale_minutes"), None)
+        self.assertIsNotNone(breach, "20 分钟没落盘必须报出来")
+        self.assertEqual(breach["level"], "warn")
+
+    def test_a_long_scanner_stall_escalates_to_critical(self) -> None:
+        data = self._data()
+        self._stub_summary(data)
+        self._stub_onchain_age(data, 45)
+        breach = next((b for b in data.alert_breaches() if b["key"] == "onchain_stale_minutes"), None)
+        self.assertIsNotNone(breach)
+        self.assertEqual(breach["level"], "critical")
+
+    def test_a_fresh_or_unknown_scanner_is_not_a_breach(self) -> None:
+        data = self._data()
+        self._stub_summary(data)
+        self._stub_onchain_age(data, 1)
+        self.assertNotIn("onchain_stale_minutes", {b["key"] for b in data.alert_breaches()})
+        # 没有 store_mtime（还没跑过 / 文件不存在）→ 不报；「不知道」不等于「坏了」
+        data = self._data()
+        self._stub_summary(data)
+        self.assertNotIn("onchain_stale_minutes", {b["key"] for b in data.alert_breaches()})
+
     def test_a_breached_threshold_is_reported_and_sorted_first(self) -> None:
         """A breach must reach the page, and must outrank the informational flags."""
         data = self._data()

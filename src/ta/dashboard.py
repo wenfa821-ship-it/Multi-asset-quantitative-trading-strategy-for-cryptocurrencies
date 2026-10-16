@@ -52,6 +52,11 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "fees_pct_of_loss": 60.0,
     "unmanaged_notional_usd": 1.0,
     "onchain_zero_change_pct": 80.0,
+    # Is the scanner still writing at all? 2026-10-16: the watcher went silent for
+    # ~2 hours (round 647 finished, round 648 never started) and **nothing flagged
+    # it** - the 10-minute rule only lived in the human inspection prompt. Limits:
+    # warn at 15 minutes (3x the 300s round interval), critical at 30 (2x warn).
+    "onchain_stale_minutes": 15.0,
     # The loop's own liveness, in minutes since the newest ledger equity event
     # (the runner writes one per completed tick). Measured 2026-10-10: the local
     # proxy's upstream died, every market-data call failed for ~25 minutes, and
@@ -1579,6 +1584,19 @@ class DashboardData:
                 "onchain_zero_change_pct", "info", "链上样本零变动占比过高",
                 zero_change * 100.0, limits["onchain_zero_change_pct"], "%",
             )
+        # Is the scanner still writing? 2026-10-16: it went silent for ~2 hours and
+        # nothing said so - the only freshness rule was in the human巡检 prompt.
+        # `store_mtime` is the snapshot file's own mtime, so this catches a stalled
+        # loop, a hung request and a dead process alike (and does not care why).
+        store_mtime = float(self.onchain().get("store_mtime") or 0.0)
+        if store_mtime > 0:
+            stale_min = (time.time() * 1000.0 - store_mtime) / 60_000.0
+            if stale_min >= limits["onchain_stale_minutes"]:
+                level = "critical" if stale_min >= limits["onchain_stale_minutes"] * 2 else "warn"
+                add(
+                    "onchain_stale_minutes", level, "链上扫描器没有在落盘",
+                    stale_min, limits["onchain_stale_minutes"], " 分钟",
+                )
         # Liveness last, so it cannot outrank a real risk breach - but critical on
         # its own: a stalled loop makes no decisions at all (no entries, no exits,
         # no stop enforcement) while every other number on the page looks calm.

@@ -242,6 +242,16 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument("--mints-from", default="", help="watchlist json produced by 'scan discover'")
     watch.add_argument("--interval", type=float, default=300.0, help="seconds between scans")
     watch.add_argument("--iterations", type=int, default=0, help="0 = run until stopped")
+    watch.add_argument(
+        "--round-budget-seconds",
+        type=float,
+        default=900.0,
+        help=(
+            "一轮的墙钟预算（默认 900 秒 = 3× 默认间隔）。超了不会被掐断，但会在日志里"
+            "打一行 ⚠ —— 2026-10-16 那次静默停摆 2 小时、什么也没说，就是因为一轮里"
+            "既没有时间戳也没有耗时。"
+        ),
+    )
     watch.add_argument("--offline", action="store_true", help="use recorded fixtures (no network)")
     watch.add_argument("--store", default="data/onchain/snapshots.jsonl")
     watch.add_argument(
@@ -1426,6 +1436,15 @@ def cmd_scan_watch(args: argparse.Namespace) -> int:
             if args.iterations and iteration >= args.iterations:
                 break
             iteration += 1
+            # 2026-10-16：每轮打一行带**时刻**的头，收尾打**耗时**。此前一轮只有逐条
+            # 代币输出，于是「卡住」与「在慢慢跑」在日志里长得一样 —— 那天静默 2 小时
+            # 才被人（而不是被机制）发现。超预算不掐断，只喊一声：掐断会把半轮的
+            # 采样丢掉，而样本正是这个扫描器唯一的产品。
+            round_started = time.time()
+            print(
+                f"# 第 {iteration} 轮 开始（{time.strftime('%H:%M:%S')}，"
+                f"{len(mints)} 个代币）"
+            )
             if (
                 discover_every
                 and args.mints_from
@@ -1469,6 +1488,13 @@ def cmd_scan_watch(args: argparse.Namespace) -> int:
                     f"{iteration:>4} {(snapshot.symbol or mint[:8]):<10} {screen.score:>6.2f} "
                     f"{'PASS' if screen.passed else 'REJECT':<7} ${snapshot.price_usd}"
                 )
+            elapsed = time.time() - round_started
+            budget = float(getattr(args, "round_budget_seconds", 900.0) or 0.0)
+            over = budget and elapsed > budget
+            print(
+                f"# 第 {iteration} 轮 完成，用时 {elapsed:.0f} 秒"
+                + (f" ⚠ 超过 {budget:.0f} 秒预算" if over else "")
+            )
             if args.iterations and iteration >= args.iterations:
                 break
             time.sleep(args.interval)
