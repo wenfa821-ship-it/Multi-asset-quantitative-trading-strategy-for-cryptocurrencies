@@ -4541,6 +4541,23 @@ class ReconcileSwapUnitsTests(unittest.TestCase):
         self.assertEqual(self._positions(7.0, "short", 1.0), {"ACT/USDT:USDT": -7.0})
 
 
+class WatchRoundBudgetTests(unittest.TestCase):
+    """2026-10-18：watcher 的「一轮超预算 ⚠」阈值从 900 调到 1800 秒。
+
+    900 是照「40 个代币 × 4.5 秒 ≈ 3 分钟」的设计基准定的，但实测代理慢时单轮要
+    **985~1362 秒** —— 于是每一轮都带 ⚠，把「异常」稀释成了常态。1800 秒（6× 间隔）
+    高于最慢观测约 30%，真卡住时照样会喊。这里钉住「预算必须明显大于实测轮长」。
+    """
+
+    def test_the_round_budget_has_headroom_over_measured_rounds(self) -> None:
+        from ta.cli import build_parser
+
+        args = build_parser().parse_args(["scan", "watch", "--mints", "X"])
+        self.assertEqual(args.round_budget_seconds, 1800.0)
+        self.assertGreaterEqual(args.round_budget_seconds, args.interval * 4)
+        self.assertGreater(args.round_budget_seconds, 1362 * 1.2)   # 实测最慢一轮 1362 秒
+
+
 class TwoSidedPositionTests(unittest.TestCase):
     """2026-10-16：OKX 在**双向持仓**（long/short）下，同一个 symbol 会返回两行。
 

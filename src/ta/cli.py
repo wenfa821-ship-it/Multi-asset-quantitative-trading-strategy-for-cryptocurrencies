@@ -245,11 +245,13 @@ def build_parser() -> argparse.ArgumentParser:
     watch.add_argument(
         "--round-budget-seconds",
         type=float,
-        default=900.0,
+        default=1800.0,
         help=(
-            "一轮的墙钟预算（默认 900 秒 = 3× 默认间隔）。超了不会被掐断，但会在日志里"
+            "一轮的墙钟预算（默认 1800 秒 = 6× 默认间隔）。超了不会被掐断，但会在日志里"
             "打一行 ⚠ —— 2026-10-16 那次静默停摆 2 小时、什么也没说，就是因为一轮里"
-            "既没有时间戳也没有耗时。"
+            "既没有时间戳也没有耗时。**2026-10-18 从 900 调宽到 1800**：实测代理慢时"
+            "单轮就要 985~1362 秒，900 会让每一轮都带 ⚠，把「异常」稀释成常态；"
+            "1800 仍高于最慢观测值约 30%，真卡住时照样会喊。"
         ),
     )
     watch.add_argument("--offline", action="store_true", help="use recorded fixtures (no network)")
@@ -1489,7 +1491,7 @@ def cmd_scan_watch(args: argparse.Namespace) -> int:
                     f"{'PASS' if screen.passed else 'REJECT':<7} ${snapshot.price_usd}"
                 )
             elapsed = time.time() - round_started
-            budget = float(getattr(args, "round_budget_seconds", 900.0) or 0.0)
+            budget = float(getattr(args, "round_budget_seconds", 1800.0) or 0.0)
             over = budget and elapsed > budget
             print(
                 f"# 第 {iteration} 轮 完成，用时 {elapsed:.0f} 秒"
