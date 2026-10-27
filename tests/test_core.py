@@ -26,6 +26,7 @@ from ta.execution.sizing import (  # noqa: E402
 )
 from ta.log import setup  # noqa: E402
 from ta.marketdata import LiveFeed, SyntheticFeed  # noqa: E402
+from ta.monitoring import Metrics  # noqa: E402
 from ta.models import (  # noqa: E402
     AccountState,
     Bar,
@@ -118,6 +119,87 @@ class CcxtFeeCurrencyTests(unittest.TestCase):
         self.assertAlmostEqual(fill.qty, 4.9711, places=8)
         self.assertAlmostEqual(fill.fee, 0.598421018, places=6)
         self.assertEqual(fill.fee_ccy, "USDT")
+
+    def test_fill_preserves_strategy_tag_from_the_order_request(self) -> None:
+        """Loss attribution must survive the venue normalization.
+
+        Fills used to be stamped with the transport label ``ccxt`` regardless of
+        the order's intent. That made 43/55 closed trades unattributable to a
+        strategy and forced the loss review to infer causes from symbols alone.
+        """
+        venue = self._venue()
+        request = OrderRequest(
+            client_order_id="tagged-fill",
+            symbol="BTC/USDT",
+            side="buy",
+            qty=0.01,
+            tag="trend_pullback:entry",
+        )
+        order = venue._to_order(
+            {
+                "id": "5",
+                "clientOrderId": request.client_order_id,
+                "symbol": request.symbol,
+                "side": request.side,
+                "type": "market",
+                "amount": request.qty,
+                "filled": request.qty,
+                "average": 83_000.0,
+                "status": "closed",
+                "fee": {"cost": 0.1, "currency": "USDT"},
+            },
+            request,
+        )
+        venue._track(order)
+        fill = venue.drain_fills()[0]
+        self.assertEqual(fill.tag, "trend_pullback:entry")
+
+    def test_delayed_fill_keeps_strategy_tag_through_pending_order_sync(self) -> None:
+        """OKX usually reports `open` first and the fill arrives through sync().
+
+        That refresh path builds a new OrderRequest; omitting the known order's
+        tag made every delayed carry fill fall back to the transport label
+        `ccxt`, even though the original request was tagged `carry`.
+        """
+        venue = self._venue()
+        request = OrderRequest(
+            client_order_id="delayed-carry",
+            symbol="HBAR/USDT",
+            side="buy",
+            qty=100.0,
+            tag="carry",
+        )
+        venue._orders[request.client_order_id] = venue._to_order(
+            {
+                "id": "6",
+                "clientOrderId": request.client_order_id,
+                "symbol": request.symbol,
+                "side": request.side,
+                "type": "market",
+                "amount": request.qty,
+                "filled": 0.0,
+                "status": "open",
+            },
+            request,
+        )
+        venue._pending_orders[request.client_order_id] = (request.symbol, time.time())
+        venue.fetch_open_orders = lambda symbols: []
+        venue._fetch_order = lambda client_order_id, symbol, known: {
+            "id": "6",
+            "clientOrderId": request.client_order_id,
+            "symbol": request.symbol,
+            "side": request.side,
+            "type": "market",
+            "amount": request.qty,
+            "filled": request.qty,
+            "average": 0.08,
+            "status": "closed",
+            "fee": {"cost": 0.01, "currency": "USDT"},
+        }
+
+        venue.sync([request.symbol])
+        fill = venue.drain_fills()[0]
+        self.assertEqual(fill.tag, "carry")
 
     def test_missing_fee_falls_back_to_the_configured_estimate(self):
         fill = self._fill(
@@ -1281,8 +1363,66 @@ class IntegrationTests(unittest.TestCase):
             after = runner.venue.get_account()
             self.assertNotIn("BTC/USDT", after.positions)
             self.assertIn("stop", [fill.tag for fill in runner.ledger.fills])
+            exits = [e for e in runner.ledger.events if e.get("kind") == "trade_exit"]
+            self.assertEqual(len(exits), 1)
+            self.assertEqual(exits[0]["symbol"], "BTC/USDT")
+            self.assertAlmostEqual(exits[0]["mae_r"], -2.5)
+            self.assertEqual(exits[0]["mfe_r"], 0.0)
             self.assertGreater(runner.risk.cooldown_remaining_minutes("BTC/USDT"), 0)
             runner.close()
+
+
+class RuntimeProvenanceTests(unittest.TestCase):
+    """A release identity must bind version, source tree, and runtime config."""
+
+    def test_config_fingerprint_changes_with_config_content(self) -> None:
+        from ta.provenance import config_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / "config"
+            config_dir.mkdir()
+            path = config_dir / "app.toml"
+            path.write_text("mode = \"paper\"\n", encoding="utf-8")
+            first, first_files = config_fingerprint(config_dir)
+            second, second_files = config_fingerprint(config_dir)
+            self.assertEqual(first, second)
+            self.assertEqual(first_files, second_files)
+            path.write_text("mode = \"live\"\n", encoding="utf-8")
+            changed, _ = config_fingerprint(config_dir)
+            self.assertNotEqual(first, changed)
+
+    def test_runtime_provenance_is_atomic_and_secret_free(self) -> None:
+        from types import SimpleNamespace
+
+        from ta.provenance import collect_provenance, read_runtime_provenance
+        from ta.provenance import write_runtime_provenance
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_dir = root / "config"
+            data_dir = root / "data"
+            config_dir.mkdir()
+            (config_dir / "app.toml").write_text("mode = \"paper\"\n", encoding="utf-8")
+            config = SimpleNamespace(
+                project_dir=root,
+                config_dir=config_dir,
+                data_dir=data_dir,
+            )
+            path, payload = write_runtime_provenance(
+                config, context={"command": "run", "dry_run": True}
+            )
+            self.assertTrue(path.exists())
+            self.assertEqual(payload["schema"], 1)
+            self.assertEqual(payload["context"]["command"], "run")
+            self.assertTrue(payload["config_sha256"])
+            self.assertNotIn("api_key", json.dumps(payload).lower())
+            loaded = read_runtime_provenance(config)
+            self.assertTrue(loaded["available"])
+            self.assertEqual(loaded["build_id"], payload["build_id"])
+
+            direct = collect_provenance(config, context={"command": "run"})
+            self.assertEqual(len(direct["config_files"]), 1)
+            self.assertEqual(direct["config_files"][0]["path"], "app.toml")
 
 
 class MetricsHonestyTests(unittest.TestCase):
@@ -1346,6 +1486,41 @@ class MetricsHonestyTests(unittest.TestCase):
                 self.assertFalse(
                     runner._is_unsellable(
                         "BTC/USDT", Position(symbol="BTC/USDT", qty=0.01, avg_price=0.0)
+                    )
+                )
+                # Swap quantity is contracts. A $2,050 SHIB hedge must not be
+                # mistaken for $0.002 because its coin price has many decimals.
+                self.assertFalse(
+                    runner._is_unsellable(
+                        "SHIB/USDT:USDT",
+                        Position(
+                            symbol="SHIB/USDT:USDT",
+                            qty=-410.1,
+                            avg_price=0.000005,
+                            ct_val=1_000_000.0,
+                        ),
+                    )
+                )
+                self.assertTrue(
+                    runner._is_unsellable(
+                        "TINY/USDT:USDT",
+                        Position(
+                            symbol="TINY/USDT:USDT",
+                            qty=-1.0,
+                            avg_price=0.01,
+                            ct_val=1.0,
+                        ),
+                    )
+                )
+                self.assertTrue(
+                    runner._is_unsellable(
+                        "BTC/USDT:USDT",
+                        Position(
+                            symbol="BTC/USDT:USDT",
+                            qty=-0.001,
+                            avg_price=80_000.0,
+                            ct_val=0.01,
+                        ),
                     )
                 )
             finally:
@@ -2293,10 +2468,79 @@ class CarryRotationRuleTests(unittest.TestCase):
         spent = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 100.0}, actions_today=1)
         self.assertIsNone(spent)                               # one a day, no more
 
+    def test_a_rotation_that_merely_breaks_even_is_refused(self) -> None:
+        """A 30-day breakeven leaves no edge after paying the 44.9 bps round trip."""
+        plan = self._module()
+        report = {
+            "round_trip_bps": 44.9,
+            "rotations": [{
+                "from": "CRV/USDT", "to": "WLFI/USDT:USDT",
+                "gain_bps_per_day": 1.55, "breakeven_days": 29,
+            }],
+        }
+        out = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 2_000.0})
+        self.assertEqual(out["refused"], "insufficient_net_edge")
+        self.assertLess(out["expected_net_bps"], 20.0)
+
+    def test_a_rotation_with_real_post_cost_edge_is_allowed(self) -> None:
+        plan = self._module()
+        report = {
+            "round_trip_bps": 44.9,
+            "rotations": [{
+                "from": "CRV/USDT", "to": "WLFI/USDT:USDT",
+                "gain_bps_per_day": 4.0, "breakeven_days": 12,
+            }],
+        }
+        out = plan(report, {"CRV/USDT"}, 100_000.0, {"CRV/USDT": 2_000.0})
+        self.assertEqual(out["refused"], "")
+        self.assertAlmostEqual(out["expected_net_bps"], 75.1)
+
     def test_no_report_and_no_proposals_do_nothing(self) -> None:
         plan = self._module()
         self.assertIsNone(plan(None, {"CRV/USDT"}, 100_000.0, {}))
         self.assertIsNone(plan({"rotations": []}, {"CRV/USDT"}, 100_000.0, {}))
+
+
+class RotationRefusalAlertCooldownTests(unittest.TestCase):
+    """A standing low-edge refusal must not write one warning every tick."""
+
+    def _runner(self) -> TradingRunner:
+        runner = TradingRunner.__new__(TradingRunner)
+        runner._rotation_refusal_alerted_at = {}
+        runner.metrics = Metrics()
+        return runner
+
+    def test_insufficient_net_edge_is_deduplicated_per_symbol_for_one_hour(self) -> None:
+        runner = self._runner()
+
+        self.assertTrue(runner._rotation_refusal_alert_allowed(
+            "NEAR/USDT", "insufficient_net_edge", now_s=1_000.0
+        ))
+        self.assertFalse(runner._rotation_refusal_alert_allowed(
+            "NEAR/USDT", "insufficient_net_edge", now_s=1_001.0
+        ))
+        self.assertTrue(runner._rotation_refusal_alert_allowed(
+            "ETH/USDT", "insufficient_net_edge", now_s=1_001.0
+        ))
+        self.assertTrue(runner._rotation_refusal_alert_allowed(
+            "NEAR/USDT", "insufficient_net_edge", now_s=4_600.0
+        ))
+        self.assertEqual(
+            runner.metrics.counters["ta_rotation_refusal_suppressed_total"], 1
+        )
+
+    def test_other_rotation_refusals_remain_immediate(self) -> None:
+        runner = self._runner()
+
+        self.assertTrue(runner._rotation_refusal_alert_allowed(
+            "NEAR/USDT", "notional", now_s=1_000.0
+        ))
+        self.assertTrue(runner._rotation_refusal_alert_allowed(
+            "NEAR/USDT", "notional", now_s=1_001.0
+        ))
+        self.assertEqual(
+            runner.metrics.counters["ta_rotation_refusal_suppressed_total"], 0
+        )
 
 
 class DailyReviewGeneratorTests(unittest.TestCase):
@@ -2355,6 +2599,27 @@ class DailyReviewGeneratorTests(unittest.TestCase):
         self.assertEqual(stats["blocked_total"], 1)
         self.assertEqual(stats["legs"], (1, 1))
 
+    def test_capacity_blocks_report_expected_net_edge_opportunity(self) -> None:
+        module = self._module()
+        import datetime
+
+        base = int(datetime.datetime(2026, 10, 10, 1, 0, tzinfo=module.CST).timestamp() * 1000)
+        rows = [
+            {"kind": "blocked", "ts": base + i, "reason": "leg_positions: spot 5 >= 5",
+             "symbol": symbol, "expected_net_bps": edge}
+            for i, (symbol, edge) in enumerate([
+                ("AAA/USDT", 25.0),
+                ("BBB/USDT", 35.0),
+                ("CCC/USDT", 45.0),
+            ])
+        ]
+        stats = module.summarise(rows, *module.day_window("2026-10-10"))
+        opportunity = stats["capacity_opportunity"]
+        self.assertEqual(opportunity["events"], 3)
+        self.assertEqual(opportunity["symbols"], 3)
+        self.assertEqual(opportunity["median_bps"], 35.0)
+        self.assertEqual(opportunity["p90_bps"], 45.0)
+
     def test_a_batch_sync_is_reported_as_backfilled_not_as_todays_income(self) -> None:
         """2026-10-12：10-11 那天 09:10 一分钟内入账 6 条 CRV 账单（$233.24），
         它们是之前几次结算的欠账，却整笔算进了当日 +0.700%。
@@ -2388,6 +2653,50 @@ class DailyReviewGeneratorTests(unittest.TestCase):
         text = module.markdown("2026-10-10", stats)
         self.assertIn("补记", text)
         self.assertIn("43.0000", text)
+
+    def test_pair_conservation_flags_a_missing_hedge_leg(self) -> None:
+        module = self._module()
+        positions = {
+            "ACT/USDT": 100.0,
+            "ACT/USDT:USDT": -10.0,
+            "BNB/USDT": 2.0,
+            "BNB/USDT:USDT": -2.0,
+            "CRV/USDT": 10.0,
+            "CRV/USDT:USDT": -10.0,
+            "SHIB/USDT": 1_000_000.0,
+            "NEAR/USDT:USDT": -3.0,
+        }
+        check = module.pair_conservation(
+            positions,
+            ["ACT/USDT", "BNB/USDT", "CRV/USDT", "SHIB/USDT", "NEAR/USDT"],
+        )
+        self.assertFalse(check["ok"])
+        self.assertEqual(check["missing_spot"], ["NEAR/USDT"])
+        self.assertEqual(check["missing_perp"], ["SHIB/USDT"])
+        self.assertEqual(check["active_pairs"], 5)
+
+    def test_pair_conservation_passes_when_every_registered_pair_has_two_legs(self) -> None:
+        module = self._module()
+        positions = {
+            "ACT/USDT": 100.0,
+            "ACT/USDT:USDT": -10.0,
+            "SHIB/USDT": 1_000_000.0,
+            "SHIB/USDT:USDT": -1.0,
+        }
+        check = module.pair_conservation(positions, ["ACT/USDT", "SHIB/USDT"])
+        self.assertTrue(check["ok"])
+        self.assertEqual(check["active_pairs"], 2)
+
+    def test_pair_conservation_requires_long_spot_and_short_perp(self) -> None:
+        module = self._module()
+        positions = {
+            "ACT/USDT": -100.0,
+            "ACT/USDT:USDT": 10.0,
+        }
+        check = module.pair_conservation(positions, ["ACT/USDT"])
+        self.assertFalse(check["ok"])
+        self.assertEqual(check["wrong_spot_sign"], ["ACT/USDT"])
+        self.assertEqual(check["wrong_perp_sign"], ["ACT/USDT"])
 
     def test_live_rate_funding_uses_the_public_rate_not_the_venue_bills(self) -> None:
         """结论口径：空头永续收正费率、多头付；缺费率文件时报"拿不到"而不是猜。"""
@@ -2974,6 +3283,9 @@ class CarryFundingStrategyTests(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "buy")
         self.assertEqual(signal.tag, "carry")
+        self.assertAlmostEqual(signal.diagnostics["daily_funding_bps"], 6.0)
+        self.assertAlmostEqual(signal.diagnostics["expected_net_bps"], 135.1)
+        self.assertAlmostEqual(signal.diagnostics["min_edge_bps"], 20.0)
 
     def test_a_thin_funding_rate_proposes_nothing(self) -> None:
         # 0.00001 per 8h = 0.3 bps/day = 9 bps over 30 days, under the 44.9 cost

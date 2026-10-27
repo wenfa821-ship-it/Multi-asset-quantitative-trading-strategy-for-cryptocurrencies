@@ -631,6 +631,7 @@ class CcxtVenue(Venue):
                         status="rejected",
                         reason=f"swap order rejected: {exc}",
                         ts=now_ms(),
+                        tag=request.tag,
                     )
                     self._orders[order.client_order_id] = order
                     return order
@@ -668,6 +669,7 @@ class CcxtVenue(Venue):
                     status="rejected",
                     reason=f"swap size rejected: {exc}",
                     ts=now_ms(),
+                    tag=request.tag,
                 )
                 self._orders[order.client_order_id] = order
                 return order
@@ -696,6 +698,7 @@ class CcxtVenue(Venue):
                         status="rejected",
                         reason=f"no free {request.symbol} balance to sell",
                         ts=now_ms(),
+                        tag=request.tag,
                     )
                     self._orders[order.client_order_id] = order
                     return order
@@ -724,6 +727,7 @@ class CcxtVenue(Venue):
                         f"{floor} - not sent"
                     ),
                     ts=now_ms(),
+                    tag=request.tag,
                 )
                 self._orders[order.client_order_id] = order
                 return order
@@ -740,6 +744,7 @@ class CcxtVenue(Venue):
                 status="rejected",
                 reason=f"{type(exc).__name__}: {exc}",
                 ts=now_ms(),
+                tag=request.tag,
             )
             self._orders[order.client_order_id] = order
             return order
@@ -774,6 +779,7 @@ class CcxtVenue(Venue):
             ts=now_ms(),
             fee=float((raw_fee or {}).get("cost") or 0.0),
             fee_ccy=str((raw_fee or {}).get("currency") or ""),
+            tag=request.tag,
         )
 
     @staticmethod
@@ -840,7 +846,7 @@ class CcxtVenue(Venue):
                 fee=fee,
                 fee_ccy=fee_ccy,
                 ts=now_ms(),
-                tag="ccxt",
+                tag=order.tag or "ccxt",
             )
         )
 
@@ -868,6 +874,7 @@ class CcxtVenue(Venue):
                 qty=(known.qty if known else 0.0),
                 type=(known.type if known else "market"),
                 price=(known.price if known else None),
+                tag=(getattr(known, "tag", "") if known is not None else ""),
             )
             refreshed = self._to_order(raw, stub)
             self._orders[client_id] = refreshed
@@ -966,17 +973,24 @@ class CcxtVenue(Venue):
         orders: list[Order] = []
         for symbol in symbols or [None]:  # type: ignore[list-item]
             try:
-                raw_list = self.ex.fetch_open_orders(self._venue_symbol(symbol)) if symbol else self.ex.fetch_open_orders()
+                raw_list = (
+                    self.ex.fetch_open_orders(self._venue_symbol(symbol))
+                    if symbol
+                    else self.ex.fetch_open_orders()
+                )
             except Exception:
                 continue
             for raw in raw_list:
+                client_id = str(raw.get("clientOrderId") or raw.get("id"))
+                known = self._orders.get(client_id)
                 request = OrderRequest(
-                    client_order_id=str(raw.get("clientOrderId") or raw.get("id")),
+                    client_order_id=client_id,
                     symbol=str(raw.get("symbol")),
                     side=str(raw.get("side")),
                     qty=float(raw.get("amount") or 0.0),
                     type=str(raw.get("type") or "limit"),
                     price=float(raw.get("price") or 0.0),
+                    tag=getattr(known, "tag", "") if known is not None else "",
                 )
                 orders.append(self._to_order(raw, request))
         return orders

@@ -145,6 +145,13 @@ class CarryFunding(Strategy):
                 ),
                 tag="carry",
                 max_holding_bars=int(self.param("max_holding_bars", 0) or 0) or None,
+                diagnostics={
+                    "daily_funding_bps": round(daily, 4),
+                    "intended_hold_days": self.intended_hold_days,
+                    "round_trip_bps": self.round_trip_bps,
+                    "expected_net_bps": round(edge, 4),
+                    "min_edge_bps": self.min_edge_bps,
+                },
             )
 
         if daily <= self.exit_funding_bps:

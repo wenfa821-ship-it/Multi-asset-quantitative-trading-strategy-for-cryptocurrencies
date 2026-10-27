@@ -97,6 +97,7 @@
       <span id="nc-badge" class="badge warnb">加载中…</span></button>
   </nav>
   <span id="venue" class="muted"></span>
+  <span id="release" class="muted">release: 加载中…</span>
   <span id="updated" class="muted"></span>
   <span id="freshness" class="muted"></span>
   <span style="margin-left:auto" class="muted">只读 · 不写入状态 · 不下单</span>
@@ -646,6 +647,20 @@ function renderSummary(s) {
     : `账面数据 ${s.age_seconds == null ? '—' : Math.round(s.age_seconds) + 's'} 前（未能直读交易所：${esc(live.error || '未知')}）`;
 }
 
+function renderProvenance(p) {
+  const el = $('#release');
+  if (!p || !p.available) {
+    el.className = 'muted';
+    el.textContent = 'release: 未记录';
+    return;
+  }
+  const healthy = p.deployment_ok;
+  el.className = healthy ? 'badge ok' : 'badge warnb';
+  el.textContent = `v${p.version} · ${String(p.git_sha || '').slice(0, 8) || 'no-git'}`
+    + ` · ${p.git_dirty ? 'dirty' : 'clean'} · cfg ${String(p.config_sha256 || '').slice(0, 8)}`
+    + ` · build ${p.build_id || '-'}`;
+}
+
 function renderFlags(flags) {
   const sec = $('#flags-section');
   if (!flags || !flags.length) { sec.hidden = true; return; }
@@ -1016,6 +1031,7 @@ async function refresh() {
       .find(j => String(j.label || '').endsWith('.runner'));
     RUNNER_LOADED = runnerJob ? !!runnerJob.loaded : null;
     renderSummary(d.summary);
+    renderProvenance(d.provenance);
     renderFlags(d.redflags);
     renderChart(d.equity);
     renderRisk(d.risk);

@@ -47,6 +47,12 @@ class KillSwitchTriggered(RuntimeError):
     """Raised to unwind the loop after a kill-switch flatten."""
 
 
+# A stationary candidate can remain just below the carry rotation threshold for
+# hours. The refusal is still evaluated every tick; only the operator-facing
+# alert is deduplicated so one low-edge candidate cannot fill the alert feed.
+ROTATION_REFUSAL_ALERT_COOLDOWN_SECONDS = 3600.0
+
+
 def depth_size_fields(symbol: str, qty: float, mark: float | None, kind: str) -> dict:
     """The fields a depth refusal carries — including **which size it judged**.
 
@@ -87,6 +93,11 @@ class ExitPlan:
     risk_per_unit: float = 0.0
     partial_taken: bool = False
     breakeven_moved: bool = False
+    # Excursions in R, measured from the actual entry. These are written to the
+    # ledger on exit so exit-quality work uses observed MFE/MAE instead of
+    # guessing whether stops or profit-taking truncate winners.
+    mfe_r: float = 0.0
+    mae_r: float = 0.0
     trailing_multiple: float = 3.0
     bars_held_entry: int = 0
 
@@ -97,6 +108,9 @@ class ExitPlan:
             "target": self.target,
             "partial_taken": self.partial_taken,
             "breakeven_moved": self.breakeven_moved,
+            "mfe_r": round(self.mfe_r, 4),
+            "mae_r": round(self.mae_r, 4),
+            "risk_per_unit": round(self.risk_per_unit, 8),
         }
 
 
@@ -213,6 +227,7 @@ class TradingRunner:
         # legs behind one symbol, so the exit path needs the pair record to close
         # both (README 37).
         self._carry_pairs: dict[str, object] = {}
+        self._rotation_refusal_alerted_at: dict[tuple[str, str], float] = {}
         # Pair state is written to disk, not just kept in memory. Measured
         # 2026-10-08: every restart orphaned the open pairs - their pair record
         # vanished, so the exit path could no longer close both legs (it refuses
@@ -894,6 +909,10 @@ class TradingRunner:
         out of stop management, which is worse than keeping dust. So this only
         fires on the venue's own minimum order size, or on a notional a quarter of
         the bot's own minimum order (a bot position can never be that small).
+
+        Swap quantity is in contracts, not coins. Its notional must therefore use
+        `qty * ctVal * mark`; using `qty * mark` made a real SHIB hedge worth about
+        $2,050 look like $0.002 on 2026-10-24 and removed it from the risk book.
         """
         # Magnitude, not sign: a SHORT perp leg is a real position (see
         # PositionBook.apply_fill). Reading the signed value here would classify
@@ -901,12 +920,17 @@ class TradingRunner:
         qty = abs(position.qty)
         if qty <= 0:
             return True
-        min_qty = self.venue.min_qty(symbol)
+        venue = self.hedge_venue if ":" in symbol and self.hedge_venue is not None else self.venue
+        min_qty = venue.min_qty(symbol)
         if min_qty > 0 and qty < min_qty:
             return True
         trivial = self.config.risk.per_trade.min_order_notional_usd / 4.0
         mark = self.feed.mark(symbol) or position.avg_price or 0.0
-        if mark > 0 and trivial > 0 and qty * mark < trivial:
+        raw_ct_val = float(position.ct_val or 1.0)
+        ct_val = raw_ct_val if raw_ct_val > 0 else 1.0
+        if ":" not in symbol:
+            ct_val = 1.0
+        if mark > 0 and trivial > 0 and qty * ct_val * mark < trivial:
             return True
         # Last resort when neither a mark nor a venue minimum is available: a
         # remainder this small cannot be worth an order under any price, and
@@ -1156,10 +1180,18 @@ class TradingRunner:
             if not decision.approved:
                 self.metrics.inc("ta_orders_blocked_total")
                 self.session_blocked += 1
-                self.ledger.record_block(carry_request, decision.reason)
+                self.ledger.record_block(
+                    carry_request,
+                    decision.reason,
+                    **signal.diagnostics,
+                )
                 self.log.info(
                     "carry entry blocked by risk",
-                    extra={"extra_fields": {"symbol": signal.symbol, "reason": decision.reason}},
+                    extra={"extra_fields": {
+                        "symbol": signal.symbol,
+                        "reason": decision.reason,
+                        **signal.diagnostics,
+                    }},
                 )
                 return False
             qty = decision.qty
@@ -1465,15 +1497,28 @@ class TradingRunner:
         for symbol, pair in self._carry_pairs.items():
             mark = marks.get(symbol) or 0.0
             notionals[symbol] = float(getattr(pair, "base_qty", 0.0) or 0.0) * mark
+        params = self.config.strategy("carry_funding").params
         plan = plan_rotation(report, set(self._carry_pairs), account.equity, notionals,
-                             actions_today=self._rotations_today())
+                             actions_today=self._rotations_today(),
+                             intended_hold_days=float(params.get("intended_hold_days", 30.0)),
+                             min_net_edge_bps=float(params.get("min_edge_bps", 20.0)))
         if not plan:
             return
         symbol = plan["symbol"]
         if plan["refused"]:
-            self._alert("warning", "carry rotation refused",
-                        symbol=symbol, reason=plan["refused"],
-                        notional=round(plan["notional"], 2), cap=round(plan["cap"], 2))
+            reason = plan["refused"]
+            if not self._rotation_refusal_alert_allowed(symbol, reason):
+                return
+            fields = {
+                "symbol": symbol,
+                "reason": reason,
+                "notional": round(plan["notional"], 2),
+                "cap": round(plan["cap"], 2),
+                "expected_net_bps": plan.get("expected_net_bps"),
+            }
+            if reason == "insufficient_net_edge":
+                fields["alert_cooldown_seconds"] = ROTATION_REFUSAL_ALERT_COOLDOWN_SECONDS
+            self._alert("warning", "carry rotation refused", **fields)
             return
         pair = self._carry_pairs[symbol]
         try:
@@ -1507,6 +1552,32 @@ class TradingRunner:
             return False
         return str(params.get("rotation_enabled", "false")).lower() in ("1", "true", "yes")
 
+    def _rotation_refusal_alert_allowed(
+        self,
+        symbol: str,
+        reason: str,
+        *,
+        now_s: float | None = None,
+    ) -> bool:
+        """Whether this refusal should reach the alert feed.
+
+        `insufficient_net_edge` is a standing market condition, not a one-off
+        event: the same held symbol can fail the same threshold on every tick.
+        Keep evaluating the trading decision every tick, but alert once per
+        symbol + reason per cooldown window. Other refusal reasons are not
+        throttled because they may require immediate operator attention.
+        """
+        if reason != "insufficient_net_edge":
+            return True
+        now = time.monotonic() if now_s is None else float(now_s)
+        key = (symbol, reason)
+        last = self._rotation_refusal_alerted_at.get(key)
+        if last is not None and now - last < ROTATION_REFUSAL_ALERT_COOLDOWN_SECONDS:
+            self.metrics.inc("ta_rotation_refusal_suppressed_total")
+            return False
+        self._rotation_refusal_alerted_at[key] = now
+        return True
+
     def _rotation_state_path(self) -> Path:
         from pathlib import Path as _Path
 
@@ -1539,6 +1610,10 @@ class TradingRunner:
             plan = self.exits.get(symbol)
             if plan is None:
                 continue
+            if plan.risk_per_unit > 0:
+                excursion_r = (mark - plan.entry) / plan.risk_per_unit
+                plan.mfe_r = max(plan.mfe_r, excursion_r)
+                plan.mae_r = min(plan.mae_r, excursion_r)
             bars = self.feed.bars(symbol, self._timeframe_for(symbol))
             atr_value = atr(bars, 14) or 0.0
 
@@ -1618,6 +1693,13 @@ class TradingRunner:
                 # the exit was blocked: keep the plan so protection stays armed
                 self.metrics.inc("ta_blocked_exits_total")
                 continue
+            self.ledger.record(
+                "trade_exit",
+                symbol=symbol,
+                reason=reason,
+                exit_price=round(mark, 8),
+                **plan.dict(),
+            )
             self.exits.pop(symbol, None)
             if stop_hit:
                 self.risk.note_stop_out(symbol)

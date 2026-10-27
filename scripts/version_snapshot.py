@@ -39,6 +39,9 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
+from ta import __version__ as package_version  # noqa: E402
+from ta.provenance import config_fingerprint, source_identity  # noqa: E402
+
 
 def _equity_and_positions() -> dict:
     ledger = PROJECT / "data" / "ledger.okx_demo.jsonl"
@@ -93,6 +96,7 @@ def main() -> int:
     ap.add_argument("--version", default="")
     ap.add_argument("--notes", default="")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
 
@@ -111,6 +115,21 @@ def main() -> int:
     if not args.version:
         print("--version is required (or use --list)")
         return 2
+    requested_version = args.version.removeprefix("v")
+    if requested_version != package_version:
+        print(
+            f"refusing to freeze {args.version}: package version is {package_version}; "
+            "update VERSION/pyproject/ta.__version__/README first"
+        )
+        return 1
+
+    source = source_identity(PROJECT)
+    if source["git_dirty"] and not args.allow_dirty:
+        print(
+            "refusing to freeze a dirty worktree: commit the exact source that this "
+            "release claims to contain (use --allow-dirty only for forensic snapshots)"
+        )
+        return 1
 
     target = root / args.version
     if target.exists() and not args.force:
@@ -131,13 +150,15 @@ def main() -> int:
         if source.exists():
             shutil.copy2(source, target / Path(name).name)
 
-    from ta import __version__ as package_version
-
+    config_hash, config_files = config_fingerprint(PROJECT / "config")
     manifest = {
         "version": args.version,
         "package_version": package_version,
         "created_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "tests_passed": tests_passed,
+        "source": source,
+        "config_sha256": config_hash,
+        "config_files": config_files,
         "account": _equity_and_positions(),
         "progress": json.loads((PROJECT / "docs" / "progress.json").read_text(encoding="utf-8")),
     }
@@ -147,7 +168,9 @@ def main() -> int:
     (target / "NOTES.md").write_text(
         f"# {args.version}\n\n"
         f"Frozen {manifest['created_at']}. Package version {package_version}. "
-        f"Tests: {manifest['tests_passed']}.\n\n"
+        f"Tests: {manifest['tests_passed']}. Git: {source['git_sha'] or '-'} "
+        f"({'dirty' if source['git_dirty'] else 'clean'}). "
+        f"Config: {config_hash[:16]}.\n\n"
         f"{args.notes.strip()}\n\n"
         "Strategy changes after this point belong INSIDE this version: compare against\n"
         "its config/ and manifest.json rather than against memory.\n",

@@ -5,8 +5,8 @@ STRATEGY ?= trend_pullback
 VENUE ?= okx_demo
 
 .PHONY: help doctor smoke test backtest paper okx binance screen reconcile lint \
-	onchain-screen onchain-quote onchain-execute symbols-check symbols-scan
-	 dashboard
+	onchain-screen onchain-quote onchain-execute symbols-check symbols-scan \
+	dashboard release-check deploy-verify release-status rollback-plan
 
 MINT ?= 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
 
@@ -25,6 +25,10 @@ help:
 	@echo "make onchain-quote MINT=...          # screen + risk + Jupiter quote + simulate"
 	@echo "make onchain-execute MINT=...        # the same, plus a mock signature"
 	@echo "make dashboard                       # read-only web UI on http://127.0.0.1:9200"
+	@echo "make release-check                   # clean-tree tests + version/progress/changelog gates"
+	@echo "make deploy-verify                   # prove the running process matches this checkout"
+	@echo "make release-status                  # checkout/runtime build identity"
+	@echo "make rollback-plan                   # print tag-based rollback checklist"
 
 doctor:
 	$(PY) -m ta doctor --config-dir $(CONFIG)
@@ -73,3 +77,15 @@ reconcile:
 
 lint:
 	$(PY) -m ruff check src tests scripts
+
+release-check:
+	$(PY) scripts/lifecycle.py preflight
+
+deploy-verify:
+	$(PY) scripts/lifecycle.py verify
+
+release-status:
+	$(PY) scripts/lifecycle.py status
+
+rollback-plan:
+	$(PY) scripts/lifecycle.py rollback-plan

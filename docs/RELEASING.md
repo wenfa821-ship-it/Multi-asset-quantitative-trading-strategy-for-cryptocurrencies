@@ -51,23 +51,74 @@
 （换腿约 30 天才回本）但风险最低，适合在 1.1 等待样本时穿插做；1.3 在执行层面暂时不可得，
 保持在研究层。
 
-## 3. 发布清单（每次冻结一个版本都按这个顺序做）
+## 3. 分支与环境策略（trunk-based）
 
-1. `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q tests` —— 必须全绿；
-2. 更新 `docs/progress.json`，并 `python3 scripts/progress.py && python3 scripts/progress.py --check`
-   （`progress.py` 直接渲染，没有 `--write`；只有 `changelog_md.py` 需要显式的 `--write`）；
-3. 追加 `docs/changelog.jsonl`（每条改动/决定/研究结论）；
-4. 改 `VERSION`、`pyproject.toml`、`src/ta/__init__.py`，**并把 README 头部那句
-   「**当前版本 vX**」一起改**（`scripts/version_sync.py --check` 会把四处一起比 ——
-   2026-10-14 之前它只比代码那三处，README 那句因此停在 v1.1.7 整整 15 个版本，见 §70.10.18）；
+本项目不用三条长期 `develop/test/main` 分支。长期分支会让配置、账本口径和
+策略参数互相漂移，而生产只有一个，测试主要靠自动化与独立数据目录完成：
+
+| 阶段 | 落点 | 规则 |
+|---|---|---|
+| 开发 | `main` + `feat/*` / `fix/*` 短分支 | 小步提交；合并前全量测试与一致性检查 |
+| 候选 | `vX.Y.Z-rc.N` tag（可选） | 从 `main` 的确定 commit 构建；不得改 tag |
+| 测试 | 独立 worktree/目录、独立 `config-test/`、data、端口 | 禁止与生产 runner 共用账户、账本或端口 |
+| 生产 | 正式 `vX.Y.Z` tag 的确定 commit | 部署后 `lifecycle.py verify` 必须通过 |
+| 回滚 | 上一个正式 tag + 对应 archive | 数据/配置 migration 必须单独评估 |
+
+`main` 必须随时可部署；功能未完成时不要合入。测试环境不是长期分支，而是一个
+独立的运行副本。没有独立 OKX 子账户时，测试只能使用 paper/离线数据，不能与
+生产 runner 同时对同一账户下单。
+
+每个 runner 启动都会在 `data/runtime/provenance.json` 写入版本、Git SHA、
+dirty 状态、config 指纹、build id、PID 与启动时间；看板 `/api/snapshot` 的
+`provenance` 字段读取同一份记录。生产验收要求：
+
+```bash
+python3 scripts/lifecycle.py status
+python3 scripts/lifecycle.py verify
+```
+
+## 4. 发布清单（每次冻结一个版本都按这个顺序做）
+
+1. 完成代码/配置修改，追加 `docs/changelog.jsonl`，更新 `docs/progress.json`；
+2. 改 `VERSION`、`pyproject.toml`、`src/ta/__init__.py`，**并把 README 头部那句
+   「**当前版本 vX**」一起改**（`scripts/version_sync.py --check` 会把四处一起比）；
+3. 草稿阶段跑 `python3 scripts/lifecycle.py preflight --allow-dirty`，先消除测试和一致性红灯；
+4. 提交候选代码，使工作树干净，再跑 `python3 scripts/lifecycle.py preflight`；
 5. `python3 scripts/version_snapshot.py --version vX.Y.Z --notes "..."`；
-6. `python3 scripts/changelog_md.py --write`；
-7. git：`git add -A && git commit -m "release: vX.Y.Z" && git tag vX.Y.Z`。
+6. `python3 scripts/changelog_md.py --write && python3 scripts/changelog_md.py --check`；
+7. 提交发布快照并打 tag：`git add -A && git commit -m "release: vX.Y.Z" && git tag vX.Y.Z`。
 
 第 7 步是代码侧的同一件事：`archive/versions/` 是**可读的**发布记录，git 是**可比对的**发布记录，
 两者都要有 —— 前者让人一眼看懂当时是什么状态，后者让 `git diff v0.4.6 v0.5.0` 回答「到底改了什么」。
 
-## 4. 什么进 git，什么不进
+### 4.1 生产部署与验收
+
+1. 在干净 worktree checkout 正式 tag；
+2. 用仓库自己的 launchd 安装/重启路径部署，不手改生产目录；
+3. 等首个完整 tick；
+4. 运行 `make deploy-verify`；要求版本、Git SHA、config 指纹、launchd PID、
+   metrics 和非 kill-switch 状态全部匹配；
+5. 保存部署时间、build id、首 tick 结果与日志位置。
+
+## 5. 回滚
+
+代码回滚使用上一个正式 tag，不使用长期分支头。先看：
+
+```bash
+python3 scripts/lifecycle.py rollback-plan
+```
+
+随后在独立 worktree checkout 目标 tag，确认：
+
+- `archive/versions/<tag>/manifest.json` 存在且完整；
+- 配置格式与当前账本/数据 schema 兼容；
+- 该版本需要的 migration 可以执行或明确不需要；
+- 部署后首个 tick、对账、kill switch 和配对守恒均通过。
+
+数据 migration 不可逆时，代码回滚不等于状态回滚；必须先备份账本与配置，并保留失败
+release 的日志和 provenance，禁止只用 `git checkout` 覆盖生产目录。
+
+## 6. 什么进 git，什么不进
 
 `.gitignore` 已经写下这条边界，理由是它们要么是秘密、要么可由代码重建：
 
@@ -75,7 +126,7 @@
 |---|---|
 | `src/`、`tests/`、`scripts/`、`config*/`、`docs/`、`deploy/`、`README.md`、`CHANGELOG.md`、`VERSION`、`pyproject.toml`、`Makefile` | `.env*`（密钥）、`data/`（303MB 行情与账本）、`logs/`、`backups/`、`build/`、`*.jsonl`（除 `archive/versions/**` 的冻结快照） |
 
-## 5. 持续同步
+## 7. 持续同步
 
 「持续同步」不是靠记性：`scripts/daily_research.py` 每个交易日跑两次（09:10 / 21:10），
 其中 `progress.py --check`、`version_sync.py --check`、`changelog_md.py --check` 三个**校验**步骤

@@ -29,13 +29,18 @@ def plan_rotation(
     max_notional_pct: float = 5.0,
     max_per_day: int = 1,
     actions_today: int = 0,
+    intended_hold_days: float = 30.0,
+    min_net_edge_bps: float = 20.0,
 ) -> dict | None:
     """The one rotation to perform now, or None.
 
     Every guardrail is a refusal, never a silent adjustment:
       * only a pair the runner actually holds can be closed;
       * notional <= `max_notional_pct` of equity (`notionals` supplies the size);
-      * at most `max_per_day` rotations per calendar day.
+      * at most `max_per_day` rotations per calendar day;
+      * projected funding improvement must still clear the round trip by
+        `min_net_edge_bps` over the intended holding period. Merely breaking even
+        on the last day of the hold is not an edge and caused fee-heavy churn.
     """
     if not report or not report.get("rotations"):
         return None
@@ -52,6 +57,20 @@ def plan_rotation(
                 "symbol": symbol, "refused": "notional",
                 "notional": notional, "cap": cap, "rotation": rotation,
             }
+        round_trip = float(report.get("round_trip_bps") or 44.9)
+        gain = rotation.get("gain_bps_per_day")
+        if gain is None:
+            breakeven = float(rotation.get("breakeven_days") or 0.0)
+            gain = round_trip / breakeven if breakeven > 0 else 0.0
+        expected_net = float(gain) * max(0.0, float(intended_hold_days)) - round_trip
+        if expected_net < float(min_net_edge_bps):
+            return {
+                "symbol": symbol, "refused": "insufficient_net_edge",
+                "notional": notional, "cap": cap, "rotation": rotation,
+                "expected_net_bps": round(expected_net, 3),
+                "min_net_edge_bps": float(min_net_edge_bps),
+            }
         return {"symbol": symbol, "refused": "", "notional": notional,
-                "cap": cap, "rotation": rotation}
+                "cap": cap, "rotation": rotation,
+                "expected_net_bps": round(expected_net, 3)}
     return None

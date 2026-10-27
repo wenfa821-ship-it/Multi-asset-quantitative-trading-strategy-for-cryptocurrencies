@@ -21,6 +21,7 @@ from pathlib import Path
 from . import __version__
 from .backtest import run_backtest
 from .config import Config
+from .execution.oms import OMS
 from .log import setup
 from .marketdata import SyntheticFeed
 from .monitoring import Alerts, MetricsServer, format_header
@@ -35,6 +36,7 @@ from .onchain import (
 )
 from .onchain.rpc import PUBLIC_RPC
 from .portfolio import Ledger
+from .provenance import write_runtime_provenance
 from .risk.engine import RiskEngine
 from .runner import TradingRunner
 from .strategies import available, build_strategy
@@ -419,6 +421,27 @@ def cmd_run(args: argparse.Namespace) -> int:
     except KeyError as exc:
         print(f"\n{exc}")
         return 2
+
+    try:
+        provenance_path, provenance = write_runtime_provenance(
+            config,
+            context={
+                "command": "run",
+                "venue": args.venue,
+                "dry_run": dry_run,
+            },
+        )
+        print(
+            f"release: v{provenance['version']}  "
+            f"git={provenance['git_sha'][:12] or '-'}  "
+            f"tag={provenance['git_tag'] or '-'}  "
+            f"dirty={str(provenance['git_dirty']).lower()}  "
+            f"config={provenance['config_sha256'][:12]}  "
+            f"build={provenance['build_id']}"
+        )
+        print(f"provenance: {provenance_path}")
+    except Exception as exc:  # noqa: BLE001 - metadata must never stop trading
+        print(f"!! could not write runtime provenance: {type(exc).__name__}: {exc}")
 
     metrics_server = None
     if args.metrics_port:
@@ -853,7 +876,10 @@ def cmd_onchain_screen(args: argparse.Namespace) -> int:
     print(f"holders       {snapshot.holder_count}   top10 {snapshot.top10_holder_pct:.2f}%")
     lp = f"{snapshot.lp_locked_pct:.1f}%" if snapshot.has("lp_locked_pct") else str(snapshot.lp_locked)
     print(f"lp locked     {lp}")
-    print(f"honeypot      {snapshot.is_honeypot}   freezable={snapshot.freezable}  mintable={snapshot.mintable}")
+    print(
+        f"honeypot      {snapshot.is_honeypot}   freezable={snapshot.freezable}  "
+        f"mintable={snapshot.mintable}"
+    )
     print(f"price         ${snapshot.price_usd}")
     print("provenance:")
     for field in sorted(snapshot.sources):
@@ -898,7 +924,10 @@ def _run_onchain(args: argparse.Namespace, *, allow_signing: bool) -> int:
         args.mint,
         amount_lamports,
         allow_signing=allow_signing,
-        allow_broadcast=bool(getattr(args, "broadcast", False)) and bool(getattr(args, "i_understand", False)),
+        allow_broadcast=(
+            bool(getattr(args, "broadcast", False))
+            and bool(getattr(args, "i_understand", False))
+        ),
         equity_usd=float(args.equity_usd) or None,
     )
     for line in result.lines():

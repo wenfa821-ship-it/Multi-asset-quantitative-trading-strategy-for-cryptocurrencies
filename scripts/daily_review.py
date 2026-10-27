@@ -24,6 +24,7 @@ import argparse
 import collections
 import datetime
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -124,6 +125,58 @@ def live_rate_funding(
                                 series_by_symbol, start_ms, end_ms)}
 
 
+def read_carry_symbols(config_dir: Path) -> list[str]:
+    """Return the configured carry universe used to identify paired holdings.
+
+    A historical review cannot use today's `pairs.json`: pairs rotate after the
+    reviewed day ends. The carry tier is stable reference data, while the holdings
+    themselves come from the historical equity snapshot.
+    """
+    try:
+        from ta.config import Config
+    except ImportError:
+        sys.path.insert(0, str(PROJECT / "src"))
+        from ta.config import Config  # noqa: PLC0415
+    config = Config.load(str(config_dir))
+    return sorted(set(config.universe.symbols_by_tier.get("carry") or []))
+
+
+def pair_conservation(positions: dict, carry_symbols: list[str]) -> dict:
+    """Check that every held carry symbol has both non-zero legs.
+
+    This is deliberately limited to the configured carry universe, not "every
+    spot position": directional strategies may legitimately hold spot without a
+    perp. The check is presence-only. Size equivalence needs each contract's
+    ctVal and remains the paired executor's responsibility.
+    """
+    spot = {
+        str(symbol): float(qty or 0.0)
+        for symbol, qty in positions.items()
+        if ":" not in str(symbol) and abs(float(qty or 0.0)) > 1e-9
+    }
+    perp = {
+        str(symbol).split(":", 1)[0]: float(qty or 0.0)
+        for symbol, qty in positions.items()
+        if ":" in str(symbol) and abs(float(qty or 0.0)) > 1e-9
+    }
+    carry = {str(symbol).split(":", 1)[0] for symbol in carry_symbols if symbol}
+    held_spot = carry & set(spot)
+    held_perp = carry & set(perp)
+    missing_spot = sorted(held_perp - held_spot)
+    missing_perp = sorted(held_spot - held_perp)
+    wrong_spot_sign = sorted(symbol for symbol in held_spot if spot[symbol] <= 0)
+    wrong_perp_sign = sorted(symbol for symbol in held_perp if perp[symbol] >= 0)
+    return {
+        "available": True,
+        "ok": not (missing_spot or missing_perp or wrong_spot_sign or wrong_perp_sign),
+        "active_pairs": len(held_spot | held_perp),
+        "missing_spot": missing_spot,
+        "missing_perp": missing_perp,
+        "wrong_spot_sign": wrong_spot_sign,
+        "wrong_perp_sign": wrong_perp_sign,
+    }
+
+
 def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
     """Everything the review quotes, in one place so it cannot drift from itself."""
     day = [r for r in rows if start_ms <= int(r.get("ts") or 0) < end_ms]
@@ -141,6 +194,35 @@ def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
     if funding_by_symbol:
         top_symbol, top_amount = max(funding_by_symbol.items(), key=lambda kv: kv[1])
     blocked = collections.Counter(str(r.get("reason"))[:60] for r in day if r.get("kind") == "blocked")
+    capacity_rows = [
+        r for r in day
+        if r.get("kind") == "blocked"
+        and str(r.get("reason") or "").startswith("leg_positions: spot")
+    ]
+    capacity_edges = sorted(
+        float(r["expected_net_bps"])
+        for r in capacity_rows
+        if isinstance(r.get("expected_net_bps"), (int, float))
+    )
+    if capacity_edges:
+        p90_index = min(len(capacity_edges) - 1, int(0.9 * len(capacity_edges)))
+        capacity_opportunity = {
+            "events": len(capacity_rows),
+            "symbols": len({str(r.get("symbol") or r.get("request", {}).get("symbol"))
+                            for r in capacity_rows}),
+            "samples": len(capacity_edges),
+            "median_bps": round(statistics.median(capacity_edges), 3),
+            "p90_bps": round(capacity_edges[p90_index], 3),
+        }
+    else:
+        capacity_opportunity = {
+            "events": len(capacity_rows),
+            "symbols": len({str(r.get("symbol") or r.get("request", {}).get("symbol"))
+                            for r in capacity_rows}),
+            "samples": 0,
+            "median_bps": None,
+            "p90_bps": None,
+        }
     risk = collections.Counter(str(r.get("action"))[:60] for r in day if r.get("kind") == "risk")
     positions = dict(equity_rows[-1].get("positions") or {}) if equity_rows else {}
     spot = {s: q for s, q in positions.items() if ":" not in s and abs(q) > 1e-9}
@@ -165,6 +247,7 @@ def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
         "funding_live_rate": live_rate_funding(rows, start_ms, end_ms),
         "blocked": blocked.most_common(5),
         "blocked_total": sum(blocked.values()),
+        "capacity_opportunity": capacity_opportunity,
         "risk": risk.most_common(6),
         "positions": positions,
         "legs": (len(spot), len(perp)),
@@ -217,8 +300,35 @@ def markdown(date: str, stats: dict) -> str:
     elif live.get("reason"):
         add(f"| ↳ 实盘费率口径 | 拿不到：{live['reason']} |")
     add(f"| 期末持仓 | {stats['legs'][0]} 条现货腿 + {stats['legs'][1]} 条永续腿 |")
+    pair_check = stats.get("pair_check")
+    if pair_check is not None:
+        if not pair_check.get("available"):
+            add(f"| 配对守恒 | **无法核对**：{pair_check.get('reason', '未知原因')} |")
+        elif pair_check.get("ok"):
+            add(f"| 配对守恒 | **PASS**：{pair_check['active_pairs']} 组 carry 双腿均存在 |")
+        else:
+            problems = []
+            if pair_check["missing_spot"]:
+                problems.append("缺现货 " + "、".join(pair_check["missing_spot"]))
+            if pair_check["missing_perp"]:
+                problems.append("缺永续 " + "、".join(pair_check["missing_perp"]))
+            if pair_check["wrong_spot_sign"]:
+                problems.append("现货非多头 " + "、".join(pair_check["wrong_spot_sign"]))
+            if pair_check["wrong_perp_sign"]:
+                problems.append("永续非空头 " + "、".join(pair_check["wrong_perp_sign"]))
+            add(f"| 配对守恒 | **FAIL**：{'；'.join(problems)} |")
     add(f"| 拦下 | {stats['blocked_total']} 次"
-        + (f"，主因：{'；'.join(f'{k}×{v}' for k, v in stats['blocked'])}" if stats["blocked"] else "") + " |")
+        + (f"，主因：{'；'.join(f'{k}×{v}' for k, v in stats['blocked'])}"
+           if stats["blocked"] else "") + " |")
+    capacity = stats.get("capacity_opportunity") or {}
+    if capacity.get("events"):
+        if capacity.get("samples"):
+            add(f"| 名额机会成本 | {capacity['events']} 次 / {capacity['symbols']} 个代币；"
+                f"expected_net 中位 **{capacity['median_bps']:+.3f} bps**、"
+                f"p90 {capacity['p90_bps']:+.3f} bps（字段样本 {capacity['samples']}） |")
+        else:
+            add(f"| 名额机会成本 | {capacity['events']} 次 / {capacity['symbols']} 个代币；"
+                f"旧记录没有结构化 expected_net 字段 |")
     add(f"| 风险事件 | {sum(v for _, v in stats['risk'])} 条"
         + (f"：{'；'.join(f'{k}×{v}' for k, v in stats['risk'])}" if stats["risk"] else "") + " |")
     if stats["funding_by_symbol"]:
@@ -239,6 +349,8 @@ def main() -> int:
     ap.add_argument("--date", default="",
                     help="CST calendar day (default: yesterday)")
     ap.add_argument("--ledger", default="data/ledger.okx_demo.jsonl")
+    ap.add_argument("--config-dir", default="config",
+                    help="config directory whose carry tier identifies paired holdings")
     ap.add_argument("--write", action="store_true", help="also save docs/reviews/<date>.md")
     args = ap.parse_args()
 
@@ -252,6 +364,15 @@ def main() -> int:
         print(f"no ledger at {args.ledger}")
         return 1
     stats = summarise(rows, start_ms, end_ms)
+    try:
+        carry_symbols = read_carry_symbols(PROJECT / args.config_dir)
+        stats["pair_check"] = pair_conservation(stats["positions"], carry_symbols)
+    except (OSError, ValueError, KeyError) as exc:
+        stats["pair_check"] = {
+            "available": False,
+            "ok": False,
+            "reason": f"cannot read {args.config_dir}: {type(exc).__name__}: {exc}",
+        }
     body = markdown(date, stats)
     print(body)
     if args.write:
@@ -259,7 +380,8 @@ def main() -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(body, encoding="utf-8")
         print(f"wrote {path}")
-    return 0
+    pair_check = stats.get("pair_check") or {}
+    return 0 if pair_check.get("ok") else 2
 
 
 if __name__ == "__main__":

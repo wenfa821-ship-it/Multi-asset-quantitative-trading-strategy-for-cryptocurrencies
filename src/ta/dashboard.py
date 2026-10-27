@@ -1678,8 +1678,30 @@ class DashboardData:
             "decisions": self.decisions(),
             "readiness": self.readiness(),
             "services": self.services(),
+            "provenance": self.provenance(),
             "newcoin": self.newcoin(),
         }
+
+    def provenance(self) -> dict[str, Any]:
+        """Identity of the process that most recently started the runner."""
+        from . import __version__
+        from .provenance import config_fingerprint, read_runtime_provenance
+
+        payload = read_runtime_provenance(self.config)
+        if not payload.get("available"):
+            return payload
+        current_config_hash, _ = config_fingerprint(Path(self.config.config_dir))
+        payload["current_version"] = __version__
+        payload["current_config_sha256"] = current_config_hash
+        payload["matches_version"] = payload.get("version") == __version__
+        payload["matches_config"] = payload.get("config_sha256") == current_config_hash
+        payload["deployment_ok"] = bool(
+            payload["matches_version"]
+            and payload["matches_config"]
+            and not payload.get("git_dirty")
+            and payload.get("git_tag")
+        )
+        return payload
 
     def newcoin(self) -> dict[str, Any]:
         """第二个项目（新币主观量化策略）的面板数据。
@@ -1770,7 +1792,18 @@ class _Handler(BaseHTTPRequestHandler):
                 payload = json.dumps(self.data.newcoin(), ensure_ascii=False, default=str)
                 self._send(200, payload.encode("utf-8"), "application/json; charset=utf-8")
             elif path == "/api/health":
-                self._send(200, b'{"status":"ok"}', "application/json")
+                from . import __version__
+
+                payload = json.dumps(
+                    {
+                        "status": "ok",
+                        "version": __version__,
+                        "provenance": self.data.provenance(),
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                )
+                self._send(200, payload.encode("utf-8"), "application/json; charset=utf-8")
             else:
                 self._send(404, b'{"error":"not found"}', "application/json")
         except Exception as exc:  # noqa: BLE001 - never take the page down

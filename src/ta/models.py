@@ -40,6 +40,10 @@ class Signal:
     partial_fraction: float = 0.5
     breakeven_at_r: float | None = None
     max_holding_bars: int | None = None
+    # Structured strategy evidence for blocks that never become orders. Carry
+    # uses this to preserve the daily funding edge when a capacity gate refuses
+    # the trade; a human-readable `reason` alone cannot be aggregated.
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -83,6 +87,10 @@ class Order:
     # ("pay fees in OKB"), so a fee of 0.004979 OKB is not 0.004979 USDT.
     fee: float = 0.0
     fee_ccy: str = ""
+    # Intent carried from OrderRequest. Venue normalization must preserve this
+    # or every fill collapses to the transport label "ccxt" and strategy PnL
+    # cannot be attributed.
+    tag: str = ""
 
     @property
     def is_open(self) -> bool:

@@ -1,6 +1,6 @@
 {
  "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
- "updated": "2026-10-13",
+ "updated": "2026-10-27",
  "rows": [
   {
    "id": "path-1",
@@ -470,6 +470,13 @@
    "state": "done",
    "gate": "实测 10-12：07:00 跑出 **+$0.5617**（脚本自标「序列只到 20:00」），09:19 重算是 **+$1.0850**（序列到当日 24:00）—— **差 48%**。**2026-10-13 用户批准后已按建议改排期**：automation `tradingagent` 的 rrule 由 `BYHOUR=7` 改为 **`BYHOUR=10`**（09:30 太紧：09:19 跑完只留 11 分钟余量），prompt 同步改写并写明原因；README §16 的区块说明同时记录三次排期沿革与「历史条目按当时口径读」",
    "next": "维护：10:00 之后本节与权威文件 docs/reviews/<date>.md 用同一份收口数据；若某天每日任务 10:00 还没跑完，脚本仍会自己标「下界」"
+  },
+  {
+   "id": "release-lifecycle",
+   "item": "生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚",
+   "state": "done",
+   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。全量 500 passed",
+   "next": "当前 release candidate 为 v1.1.23。下一步提交干净候选、冻结归档并打 tag；远端仓库 URL 与 main 保护规则仍需用户提供/确认"
   }
  ]
 }
