@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
-import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -81,10 +80,16 @@ def main() -> int:
     print(f"{args.family}: {len(rows)} instruments ({len(live)} live); "
           f"strike range {min(float(r['stk']) for r in live):g}-{max(float(r['stk']) for r in live):g}")
     # The nearest expiry at or beyond the target DTE - what a 30-day structure uses.
-    expiries = sorted({r["instId"].split("-")[2] for r in live}, key=lambda s: dte(f"{args.family}-{s}-0-C", today))
+    expiries = sorted(
+        {r["instId"].split("-")[2] for r in live},
+        key=lambda s: dte(f"{args.family}-{s}-0-C", today),
+    )
     chosen_expiry = next((e for e in expiries if dte(f"{args.family}-{e}-0-C", today) >= args.target_dte),
                          expiries[-1] if expiries else "")
-    print(f"expiries: {', '.join(f'{e}({dte(f"{args.family}-{e}-0-C", today)}d)' for e in expiries[:6])}")
+    print("expiries: " + ", ".join(
+        f"{e}({dte('{}-{}-0-C'.format(args.family, e), today)}d)"
+        for e in expiries[:6]
+    ))
     print(f"chosen expiry for ~{args.target_dte}d: {chosen_expiry} "
           f"({dte(f'{args.family}-{chosen_expiry}-0-C', today)}d)")
 
@@ -110,14 +115,20 @@ def main() -> int:
     for r in same:
         if abs(float(r["stk"]) - atm) > 1e-9:
             continue
-        print(f"{r['instId']:32s}{str(r.get('ctVal')):>8s}{str(r.get('ctMult')):>8s}"
-              f"{str(r.get('minSz')):>8s}{str(r.get('lotSz')):>9s}{str(r.get('tickSz')):>9s} {r.get('settleCcy')}")
+        print(
+            f"{r['instId']:32s}{str(r.get('ctVal')):>8s}{str(r.get('ctMult')):>8s}"
+            f"{str(r.get('minSz')):>8s}{str(r.get('lotSz')):>9s}"
+            f"{str(r.get('tickSz')):>9s} {r.get('settleCcy')}"
+        )
         probe[r["instId"]] = r
 
     for inst_id, spec in probe.items():
         try:
             ticker = (get_json(op, "/api/v5/market/ticker", {"instId": inst_id}).get("data") or [{}])[0]
-            book = (get_json(op, "/api/v5/market/books", {"instId": inst_id, "sz": "5"}).get("data") or [{}])[0]
+            book = (
+                get_json(op, "/api/v5/market/books", {"instId": inst_id, "sz": "5"})
+                .get("data") or [{}]
+            )[0]
         except Exception as exc:  # noqa: BLE001 - an unreadable book is a finding
             print(f"  {inst_id}: quote failed {type(exc).__name__}")
             continue

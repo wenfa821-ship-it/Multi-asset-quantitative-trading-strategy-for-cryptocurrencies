@@ -18,6 +18,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .baseline import VenueBaseline, load_or_create
@@ -31,7 +32,7 @@ from .execution.sizing import (
 )
 from .indicators import atr, atr_pct
 from .marketdata import LiveFeed, SyntheticFeed
-from .models import AccountState, Bar, OrderRequest, Position, Signal
+from .models import AccountState, OrderRequest, Position, Signal
 from .monitoring import Alerts, Metrics
 from .portfolio import Ledger
 from .resilience import ResilientVenue, VenueDegraded
