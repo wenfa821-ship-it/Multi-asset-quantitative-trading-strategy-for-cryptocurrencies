@@ -4,9 +4,10 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T23:01 起，1 条留痕）
+## Unreleased（自 2026-10-27T23:01 起，2 条留痕）
 
 - `2026-10-27T23:23` **ops** v1.1.28 发布并完成模拟盘生产切换：首 tick 后 deploy-verify PASS
+- `2026-10-28T00:08` **ops** v1.1.28 后首个真实 Demo canary：下单→成交→临时账本→对账→平仓全链路 PASS
 
 ## v1.1.28 — 2026-10-27T23:01
 

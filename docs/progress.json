@@ -484,6 +484,13 @@
    "state": "in_progress",
    "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修在 v1.1.28；全量 513 passed。仍待用户吊销旧 Demo key、配置外部告警、固定出口 IP 并解决 live key 当前 50110；实盘门槛仍 0/5",
    "next": "用户于 2026-10-27 决定暂缓 Demo key 轮换，先发布并部署 v1.1.28；部署后仍须轮换 Demo key、固定代理出口、确认 live key 无 withdraw、配置 TA_ALERT_WEBHOOK_URL，再重估 live readiness"
+  },
+  {
+   "id": "demo-canary",
+   "item": "v1.1.28 部署后的 OKX Demo 实际订单往返、临时账本与对账闭环",
+   "state": "done",
+   "gate": "2026-10-28 00:08 CST 受控 canary：DOGE/USDT 买入约 $23（293.929712 DOGE），随后只卖出本次到账的 293.929712 DOGE；买卖各一笔 filled，临时 ledger 2 笔成交，book position=0，fees=$0.04595591，现金净损耗 $0.09004537（含双边费与约 19bps 价差），OMS reconcile ok=true。场馆最终 DOGE free=0、open orders=0、canary closed orders=2；生产 ledger 无 canary ID/tag；runner 全程继续 tick，deploy-verify 仍 PASS",
+   "next": "维护：发布或交易所适配变更后重跑同规模 canary；真实资金仍受 live readiness 0/5 与 live key IP 白名单阻断"
   }
  ]
 }
