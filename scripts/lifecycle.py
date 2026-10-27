@@ -14,12 +14,14 @@ production identity recorded by the process itself.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
@@ -98,10 +100,10 @@ def _metrics(url: str, timeout: float) -> dict[str, float]:
     return values
 
 
-def _launchd_runner() -> tuple[str, int]:
+def _launchd_service(name: str) -> tuple[str, int]:
     if sys.platform != "darwin":
         return "", 0
-    label = f"gui/{os.getuid()}/com.tradingagent.runner"
+    label = f"gui/{os.getuid()}/com.tradingagent.{name}"
     try:
         proc = subprocess.run(
             ["launchctl", "print", label],
@@ -115,6 +117,14 @@ def _launchd_runner() -> tuple[str, int]:
     state = "running" if re.search(r"^\s*state = running$", proc.stdout, re.M) else ""
     match = re.search(r"^\s*pid = (\d+)$", proc.stdout, re.M)
     return state, int(match.group(1)) if match else 0
+
+
+def _json_url(url: str, timeout: float) -> dict[str, Any]:
+    with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - loopback
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("response is not a JSON object")
+    return payload
 
 
 def verify(args: argparse.Namespace) -> int:
@@ -140,9 +150,12 @@ def verify(args: argparse.Namespace) -> int:
         if not provenance.get("git_tag") and not args.allow_untagged:
             problems.append("running process is not on an exact release tag")
 
-    state, pid = _launchd_runner()
-    if state != "running" or pid <= 0:
-        problems.append("launchd runner is not running")
+    service_state: dict[str, tuple[str, int]] = {}
+    for name in ("runner", "watcher", "dashboard"):
+        state, pid = _launchd_service(name)
+        service_state[name] = (state, pid)
+        if state != "running" or pid <= 0:
+            problems.append(f"launchd {name} is not running")
     try:
         metrics = _metrics(args.metrics_url, args.timeout)
     except Exception as exc:  # noqa: BLE001 - report one concise lifecycle verdict
@@ -153,6 +166,19 @@ def verify(args: argparse.Namespace) -> int:
             problems.append("runner has not completed a tick")
         if metrics.get("ta_kill_switch", 1) != 0:
             problems.append("runner kill switch is active")
+    try:
+        health = _json_url(args.dashboard_url.rstrip("/") + "/api/health", args.timeout)
+    except Exception as exc:  # noqa: BLE001
+        health = {}
+        problems.append(f"dashboard health unavailable: {type(exc).__name__}: {exc}")
+    if health:
+        if health.get("status") != "ok":
+            problems.append(f"dashboard health status is {health.get('status')!r}")
+        if health.get("version") != __version__:
+            problems.append("dashboard version differs from checkout")
+        dashboard_provenance = health.get("provenance") or {}
+        if not dashboard_provenance.get("deployment_ok"):
+            problems.append("dashboard reports deployment provenance mismatch")
 
     print(f"version        {__version__}")
     if provenance.get("available"):
@@ -161,7 +187,10 @@ def verify(args: argparse.Namespace) -> int:
               f"tag={provenance.get('git_tag') or '-'}  "
               f"dirty={str(provenance.get('git_dirty')).lower()}  "
               f"build={provenance.get('build_id')}")
-    print(f"launchd        state={state or '-'} pid={pid or '-'}")
+    print("launchd        " + "  ".join(
+        f"{name}={state or '-'}:{pid or '-'}"
+        for name, (state, pid) in service_state.items()
+    ))
     if metrics:
         print(f"metrics        ticks={metrics.get('ta_ticks_total', 0):g} "
               f"kill={metrics.get('ta_kill_switch', 0):g} "
@@ -223,6 +252,7 @@ def main() -> int:
     ver = sub.add_parser("verify", help="verify the running deployment")
     ver.add_argument("--config-dir", default="config")
     ver.add_argument("--metrics-url", default="http://127.0.0.1:9101/metrics")
+    ver.add_argument("--dashboard-url", default="http://127.0.0.1:9200")
     ver.add_argument("--timeout", type=float, default=20.0)
     ver.add_argument("--allow-dirty-source", action="store_true")
     ver.add_argument("--allow-untagged", action="store_true")
