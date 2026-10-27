@@ -69,6 +69,7 @@ venue degraded `0`。runner 刚在 22:23 CST 重启，因此 ticks / fills 计�
 - AWS/GitHub/Slack/OpenAI/Google token、JWT、PEM 私钥：当前与历史对象扫描均为 0。
 - `.env`、`.env.live`、GitHub SSH 私钥权限均为 `600`；`.env*` 已被 `.gitignore` 排除。
 - 仓库 Public、fork 数 0；`main` protected，必需 `verify` 生效。
+- 本机 `/tmp/ta-*.json` 还留有 8 个旧快照含同一个 Demo key ID；已原位脱敏。
 
 ### 当前 key 权限
 
@@ -77,6 +78,16 @@ venue degraded `0`。runner 刚在 22:23 CST 重启，因此 ticks / fills 计�
 - 当前代理出口：`209.9.202.79`；用户已加入白名单的是 `42.200.231.241`，两者不一致。
 - 结论：动态出口 IP 与 IP 白名单天然冲突。实盘前必须固定专用出口，再只把该 IP
   加入 live key 白名单；不要让 live 交易继续依赖轮换代理。
+
+### 主机面
+
+- 交易服务的 9101 / 9200 都只监听 `127.0.0.1`，没有直接暴露到局域网/公网。
+- macOS 应用防火墙当前**关闭**，stealth mode 也关闭；另有系统自带 AirPlay/Handoff
+  监听 `*:5000`、`*:7000`、`*:60033`、`*:63056`。它们不是交易服务，但实盘生产机
+  应评估开启防火墙并限制这些共享端口。
+- SIP 已启用、Gatekeeper assessments 已启用。
+- FileVault 状态在当前受限审计会话中无法读取（`fdesetup`/`diskutil` 被系统框架拒绝）；
+  实盘前必须在系统设置中人工确认磁盘加密已开启。
 
 ## 4. 已在 v1.1.28 补上的代码闸门
 
@@ -98,6 +109,7 @@ venue degraded `0`。runner 刚在 22:23 CST 重启，因此 ticks / fills 计�
 | P0 | 固定代理出口并只给 live key 白名单该 IP | live `/account/config` 成功，perm 只含 read+trade |
 | P0 | live key 禁用 withdraw，使用独立低资金子账户 | 审计返回 `read_only,trade`，无 `withdraw` |
 | P1 | 配置 `TA_ALERT_WEBHOOK_URL` | 端口/告警故障可推送到手机或外部系统 |
+| P1 | 确认 FileVault；评估开启 macOS 防火墙/关闭不必要共享端口 | 磁盘加密开启，交易服务仍只监听 loopback |
 | P1 | 收口 live readiness 0/5 | 至少策略边缘、样本、执行和管道达到脚本门槛 |
 | P1 | 部署 v1.1.28 并验收 | `lifecycle.py verify` PASS，provenance 显示 demo/sandbox |
 
