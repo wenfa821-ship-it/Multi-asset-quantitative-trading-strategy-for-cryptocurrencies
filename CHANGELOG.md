@@ -4,9 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T11:18 起，1 条留痕）
+## v1.1.24 — 2026-10-27T11:22
 
-- `2026-10-27T11:19` **bug** v1.1.24 补齐生产验收覆盖面：runner/watcher/dashboard 与 dashboard health 同时检查
+- 测试 **501** 绿 · 权益 $103,709.79 · 记录时的包版本 1.1.24
+
+Patch release completing production lifecycle verification across runner, watcher, dashboard and dashboard health/provenance.
 
 ## v1.1.23 — 2026-10-27T11:18
 
