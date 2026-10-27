@@ -4,9 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T14:39 起，1 条留痕）
+## v1.1.26 — 2026-10-27T14:49
 
-- `2026-10-27T14:46` **bug** 生产验收改用 source_sha256 文件指纹：允许 docs-only commit，严格拦截源码/配置漂移
+- 测试 **503** 绿 · 权益 $103,841.17 · 记录时的包版本 1.1.26
+
+Patch release using deterministic source/config fingerprints for production verification while allowing runtime documentation to advance.
 
 ## v1.1.25 — 2026-10-27T14:39
 
