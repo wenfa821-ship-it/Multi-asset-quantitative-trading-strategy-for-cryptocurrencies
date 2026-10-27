@@ -4,6 +4,10 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
+## Unreleased（自 2026-10-27T21:51 起，1 条留痕）
+
+- `2026-10-27T22:02` **ops** v1.1.27 发布完成：main verify 与 tag release-artifact 均绿，公开仓库 CI 闭环
+
 ## v1.1.27 — 2026-10-27T21:51
 
 - 测试 **504** 绿 · 权益 $104,124.04 · 记录时的包版本 1.1.27
