@@ -72,6 +72,12 @@
 dirty 状态、config 指纹、build id、PID 与启动时间；看板 `/api/snapshot` 的
 `provenance` 字段读取同一份记录。生产验收要求：
 
+运行中会持续追加 `README.md`、`docs/changelog.jsonl` 和每日复盘；这些**运行态文档**
+不会算作代码漂移。provenance 同时记录 `git_dirty` 与更严格的 `source_dirty`：
+后者只看 `src/ scripts/ config/ deploy/ .github/ VERSION pyproject.toml Makefile`。
+若 HEAD 在最近的 release tag 之后只有文档提交，生产验收仍可通过；任何
+代码/配置提交都会使 `source_changed_since_tag=true` 并阻止验收。
+
 ```bash
 python3 scripts/lifecycle.py status
 python3 scripts/lifecycle.py verify

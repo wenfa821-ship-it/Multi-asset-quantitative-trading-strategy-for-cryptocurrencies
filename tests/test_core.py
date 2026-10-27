@@ -1391,6 +1391,17 @@ class RuntimeProvenanceTests(unittest.TestCase):
             changed, _ = config_fingerprint(config_dir)
             self.assertNotEqual(first, changed)
 
+    def test_runtime_docs_do_not_count_as_source_drift(self) -> None:
+        from ta.provenance import is_source_path
+
+        for path in ("src/ta/runner.py", "scripts/lifecycle.py", "config/risk.toml",
+                     "deploy/com.tradingagent.runner.plist.template", ".github/workflows/ci.yml",
+                     "VERSION", "pyproject.toml", "Makefile"):
+            self.assertTrue(is_source_path(path), path)
+        for path in ("README.md", "CHANGELOG.md", "docs/changelog.jsonl",
+                     "docs/reviews/2026-10-26.md", "reports/live-readiness.md"):
+            self.assertFalse(is_source_path(path), path)
+
     def test_runtime_provenance_is_atomic_and_secret_free(self) -> None:
         from types import SimpleNamespace
 

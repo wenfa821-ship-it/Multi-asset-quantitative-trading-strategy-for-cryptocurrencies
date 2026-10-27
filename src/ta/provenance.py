@@ -27,6 +27,14 @@ from typing import Any
 
 from . import __version__
 
+SOURCE_PREFIXES = ("src/", "scripts/", "config/", "deploy/", ".github/")
+SOURCE_FILES = {"VERSION", "pyproject.toml", "Makefile"}
+
+
+def is_source_path(path: str) -> bool:
+    """Whether a changed path affects executable/configurable production code."""
+    return path in SOURCE_FILES or path.startswith(SOURCE_PREFIXES)
+
 
 def _git(project: Path, *args: str) -> str | None:
     try:
@@ -66,11 +74,29 @@ def config_fingerprint(config_dir: Path) -> tuple[str, list[dict[str, str]]]:
 
 def source_identity(project: Path) -> dict[str, Any]:
     status = _git(project, "status", "--porcelain", "--untracked-files=normal")
+    status_paths = [line[3:] for line in (status or "").splitlines() if len(line) > 3]
+    exact_tag = _git(project, "describe", "--tags", "--exact-match", "HEAD") or ""
+    nearest_tag = exact_tag or _git(project, "describe", "--tags", "--abbrev=0", "HEAD") or ""
+    commits_since_tag = 0
+    changed_since_tag: list[str] = []
+    if nearest_tag and not exact_tag:
+        raw_count = _git(project, "rev-list", "--count", f"{nearest_tag}..HEAD") or "0"
+        try:
+            commits_since_tag = int(raw_count)
+        except ValueError:
+            commits_since_tag = 0
+        raw_paths = _git(project, "diff", "--name-only", f"{nearest_tag}..HEAD") or ""
+        changed_since_tag = [path for path in raw_paths.splitlines() if path]
     return {
         "git_sha": _git(project, "rev-parse", "HEAD") or "",
         "git_branch": _git(project, "branch", "--show-current") or "",
-        "git_tag": _git(project, "describe", "--tags", "--exact-match", "HEAD") or "",
+        "git_tag": exact_tag,
+        "nearest_tag": nearest_tag,
+        "commits_since_tag": commits_since_tag,
+        "changed_since_tag": changed_since_tag,
+        "source_changed_since_tag": any(is_source_path(path) for path in changed_since_tag),
         "git_dirty": bool(status),
+        "source_dirty": any(is_source_path(path) for path in status_paths),
         "git_status_entries": len(status.splitlines()) if status else 0,
     }
 

@@ -1698,8 +1698,14 @@ class DashboardData:
         payload["deployment_ok"] = bool(
             payload["matches_version"]
             and payload["matches_config"]
-            and not payload.get("git_dirty")
-            and payload.get("git_tag")
+            and not payload.get("source_dirty")
+            and (
+                payload.get("git_tag")
+                or (
+                    payload.get("nearest_tag")
+                    and not payload.get("source_changed_since_tag")
+                )
+            )
         )
         return payload
 

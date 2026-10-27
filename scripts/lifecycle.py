@@ -142,13 +142,23 @@ def verify(args: argparse.Namespace) -> int:
         config_hash, _ = config_fingerprint(Path(config.config_dir))
         if provenance.get("config_sha256") != config_hash:
             problems.append("running config fingerprint differs from checkout config")
-        if provenance.get("git_dirty") and not args.allow_dirty_source:
-            problems.append("running process was started from a dirty source tree")
+        if provenance.get("source_dirty") and not args.allow_dirty_source:
+            problems.append("running process was started from dirty source/config files")
         checkout_sha = _git("rev-parse", "HEAD")
         if provenance.get("git_sha") and provenance.get("git_sha") != checkout_sha:
             problems.append("running Git SHA differs from checkout HEAD")
-        if not provenance.get("git_tag") and not args.allow_untagged:
-            problems.append("running process is not on an exact release tag")
+        release_tag = provenance.get("git_tag") or provenance.get("nearest_tag")
+        if not release_tag and not args.allow_untagged:
+            problems.append("running process has no release tag ancestry")
+        if (
+            not provenance.get("git_tag")
+            and provenance.get("source_changed_since_tag")
+            and not args.allow_untagged
+        ):
+            problems.append("source/config changed after the nearest release tag")
+        archive = PROJECT / "archive" / "versions" / str(release_tag or "")
+        if release_tag and not (archive / "manifest.json").exists():
+            problems.append(f"release archive missing for {release_tag}")
 
     service_state: dict[str, tuple[str, int]] = {}
     for name in ("runner", "watcher", "dashboard"):
@@ -184,8 +194,8 @@ def verify(args: argparse.Namespace) -> int:
     if provenance.get("available"):
         print(f"deployed       v{provenance.get('version')}  "
               f"git={str(provenance.get('git_sha') or '')[:12]}  "
-              f"tag={provenance.get('git_tag') or '-'}  "
-              f"dirty={str(provenance.get('git_dirty')).lower()}  "
+              f"tag={provenance.get('git_tag') or provenance.get('nearest_tag') or '-'}  "
+              f"source_dirty={str(provenance.get('source_dirty')).lower()}  "
               f"build={provenance.get('build_id')}")
     print("launchd        " + "  ".join(
         f"{name}={state or '-'}:{pid or '-'}"
@@ -214,8 +224,8 @@ def status(_: argparse.Namespace) -> int:
     if provenance.get("available"):
         print(f"runtime        v{provenance.get('version')}  "
               f"git={str(provenance.get('git_sha') or '')[:12]}  "
-              f"tag={provenance.get('git_tag') or '-'}  "
-              f"dirty={str(provenance.get('git_dirty')).lower()}  "
+              f"tag={provenance.get('git_tag') or provenance.get('nearest_tag') or '-'}  "
+              f"source_dirty={str(provenance.get('source_dirty')).lower()}  "
               f"build={provenance.get('build_id')}")
         print(f"started        {provenance.get('started_at')}  pid={provenance.get('pid')}")
     else:

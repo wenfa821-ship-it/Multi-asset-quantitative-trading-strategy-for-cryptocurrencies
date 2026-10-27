@@ -1,13 +1,14 @@
 # Changelog
 
-当前版本：**v1.1.24**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.1.25**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T11:22 起，2 条留痕）
+## Unreleased（自 2026-10-27T11:22 起，3 条留痕）
 
 - `2026-10-27T14:24` **ops** 代理出口再次漂移：209.9.202.79 未加白，runner 自 11:09 CST 起无有效 tick
 - `2026-10-27T14:33` **ops** 209.9.202.79 加白已生效：OKX 私有读取恢复，runner 到 130 ticks
+- `2026-10-27T14:36` **bug** 生产 provenance 区分代码漂移与运行态文档漂移，避免每日留痕把发布验收打红
 
 ## v1.1.24 — 2026-10-27T11:22
 
