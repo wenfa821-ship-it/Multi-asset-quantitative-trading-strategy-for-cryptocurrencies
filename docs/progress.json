@@ -483,7 +483,7 @@
    "item": "实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限",
    "state": "in_progress",
    "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修在 v1.1.28；全量 513 passed。仍待用户吊销旧 Demo key、配置外部告警、固定出口 IP 并解决 live key 当前 50110；实盘门槛仍 0/5",
-   "next": "用户先轮换 Demo key；固定代理出口并更新 live key 白名单/确认无 withdraw；配置 TA_ALERT_WEBHOOK_URL；然后发布并部署 v1.1.28，跑 security_audit/lifecycle verify/live_readiness"
+   "next": "用户于 2026-10-27 决定暂缓 Demo key 轮换，先发布并部署 v1.1.28；部署后仍须轮换 Demo key、固定代理出口、确认 live key 无 withdraw、配置 TA_ALERT_WEBHOOK_URL，再重估 live readiness"
   }
  ]
 }
