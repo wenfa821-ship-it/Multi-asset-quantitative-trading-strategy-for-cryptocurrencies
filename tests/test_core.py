@@ -6587,6 +6587,45 @@ class VersionSnapshotGateTests(unittest.TestCase):
             self._count("1 failed, 399 passed in 49.21s\n", 1)
         self.assertIn("拒绝冻结", str(ctx.exception))
 
+    def test_a_snapshot_manifest_records_source_and_config_without_shadowing_paths(self) -> None:
+        """The first source-aware snapshot crashed by reusing `source` as a Path."""
+        import sys
+        from unittest import mock
+
+        from scripts import version_snapshot as v
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "config").mkdir()
+            (root / "docs").mkdir()
+            (root / "config" / "app.toml").write_text("mode = \"paper\"\n", encoding="utf-8")
+            (root / "docs" / "progress.json").write_text('{"rows": []}', encoding="utf-8")
+            (root / "docs" / "changelog.jsonl").write_text("", encoding="utf-8")
+            source = {
+                "git_sha": "abc123",
+                "git_branch": "main",
+                "git_tag": "v1.1.23",
+                "git_dirty": False,
+                "git_status_entries": 0,
+            }
+            with (
+                mock.patch.object(v, "PROJECT", root),
+                mock.patch.object(v, "package_version", "1.1.23"),
+                mock.patch.object(v, "source_identity", return_value=source),
+                mock.patch.object(v, "_test_count", return_value=500),
+                mock.patch.object(v, "_equity_and_positions", return_value={}),
+                mock.patch.object(sys, "argv", ["version_snapshot.py", "--version", "v1.1.23"]),
+            ):
+                self.assertEqual(v.main(), 0)
+            manifest = json.loads(
+                (root / "archive" / "versions" / "v1.1.23" / "manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["source"], source)
+            self.assertTrue(manifest["config_sha256"])
+            self.assertEqual(manifest["config_files"][0]["path"], "app.toml")
+
 
 class VersionSyncReadmeTests(unittest.TestCase):
     """2026-10-14：版本号有**第四处** —— README 头部那句「当前版本 vX」。

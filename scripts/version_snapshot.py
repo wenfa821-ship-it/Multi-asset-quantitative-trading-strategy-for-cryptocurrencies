@@ -146,9 +146,9 @@ def main() -> int:
     for path in sorted(config_dir.glob("*.toml")):
         shutil.copy2(path, target / "config" / path.name)
     for name in ("docs/progress.json", "docs/changelog.jsonl"):
-        source = PROJECT / name
-        if source.exists():
-            shutil.copy2(source, target / Path(name).name)
+        source_path = PROJECT / name
+        if source_path.exists():
+            shutil.copy2(source_path, target / Path(name).name)
 
     config_hash, config_files = config_fingerprint(PROJECT / "config")
     manifest = {
