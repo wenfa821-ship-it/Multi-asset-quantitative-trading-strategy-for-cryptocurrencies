@@ -4,7 +4,7 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T14:49 起，8 条留痕）
+## Unreleased（自 2026-10-27T14:49 起，9 条留痕）
 
 - `2026-10-27T15:01` **ops** v1.1.26 生产部署通过 lifecycle verify：三服务、tag、源码/config 指纹与首 tick 全部一致
 - `2026-10-27T20:17` **ops** GitHub 远端已接通：SSH over 443/代理认证成功，main 与 35 个版本 tag 已推送
@@ -14,6 +14,7 @@
 - `2026-10-27T21:36` **bug** CI 在所有短分支触发，避免必需 verify 检查只能在 main push 后运行
 - `2026-10-27T21:39` **bug** GitHub 测试失败日志改为 check-run 注解，public 仓库无需管理员 API 也能定位失败
 - `2026-10-27T21:43` **bug** CI 注解改为单条汇总，绕过 GitHub 每次最多展示 10 条注解的限制
+- `2026-10-27T21:47` **bug** 公开仓库 CI 不再要求本机运行数据：外部快照测试明确 skip，措辞测试改用合成 payload
 
 ## v1.1.26 — 2026-10-27T14:49
 
