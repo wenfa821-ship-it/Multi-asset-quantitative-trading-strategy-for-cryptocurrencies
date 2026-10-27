@@ -76,7 +76,8 @@ dirty 状态、config 指纹、build id、PID 与启动时间；看板 `/api/sna
 不会算作代码漂移。provenance 同时记录 `git_dirty` 与更严格的 `source_dirty`：
 后者只看 `src/ scripts/ config/ deploy/ .github/ VERSION pyproject.toml Makefile`。
 若 HEAD 在最近的 release tag 之后只有文档提交，生产验收仍可通过；任何
-代码/配置提交都会使 `source_changed_since_tag=true` 并阻止验收。
+代码/配置提交都会使 `source_changed_since_tag=true` 并阻止验收。运行态与当前 checkout
+最终用 `source_sha256` 文件指纹对齐，因此部署后的运维文档 commit 不会制造假失败。
 
 ```bash
 python3 scripts/lifecycle.py status

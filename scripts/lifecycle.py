@@ -28,7 +28,7 @@ sys.path.insert(0, str(PROJECT / "src"))
 
 from ta import __version__  # noqa: E402
 from ta.config import Config  # noqa: E402
-from ta.provenance import config_fingerprint, read_runtime_provenance  # noqa: E402
+from ta.provenance import config_fingerprint, read_runtime_provenance, source_fingerprint  # noqa: E402
 
 
 def _run(name: str, cmd: list[str], *, timeout: int = 900) -> bool:
@@ -142,11 +142,11 @@ def verify(args: argparse.Namespace) -> int:
         config_hash, _ = config_fingerprint(Path(config.config_dir))
         if provenance.get("config_sha256") != config_hash:
             problems.append("running config fingerprint differs from checkout config")
+        source_hash, _ = source_fingerprint(PROJECT)
+        if provenance.get("source_sha256") != source_hash:
+            problems.append("running source fingerprint differs from checkout source")
         if provenance.get("source_dirty") and not args.allow_dirty_source:
             problems.append("running process was started from dirty source/config files")
-        checkout_sha = _git("rev-parse", "HEAD")
-        if provenance.get("git_sha") and provenance.get("git_sha") != checkout_sha:
-            problems.append("running Git SHA differs from checkout HEAD")
         release_tag = provenance.get("git_tag") or provenance.get("nearest_tag")
         if not release_tag and not args.allow_untagged:
             problems.append("running process has no release tag ancestry")
@@ -218,8 +218,10 @@ def status(_: argparse.Namespace) -> int:
     config = Config.load(str(PROJECT / "config"))
     provenance = read_runtime_provenance(config)
     config_hash, _ = config_fingerprint(Path(config.config_dir))
+    source_hash, _ = source_fingerprint(PROJECT)
     print(f"checkout       v{__version__}  git={_git('rev-parse', 'HEAD')[:12] or '-'}  "
           f"dirty={str(_dirty()).lower()}")
+    print(f"source         {source_hash[:16]}")
     print(f"config         {config_hash[:16]}")
     if provenance.get("available"):
         print(f"runtime        v{provenance.get('version')}  "

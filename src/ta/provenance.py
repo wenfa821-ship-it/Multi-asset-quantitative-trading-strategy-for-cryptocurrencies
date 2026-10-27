@@ -72,6 +72,34 @@ def config_fingerprint(config_dir: Path) -> tuple[str, list[dict[str, str]]]:
     return digest.hexdigest(), rows
 
 
+def source_fingerprint(project: Path) -> tuple[str, list[dict[str, str]]]:
+    """Hash production source/config files, excluding generated runtime docs."""
+    project = Path(project)
+    paths: set[Path] = set()
+    for prefix in SOURCE_PREFIXES:
+        root = project / prefix.rstrip("/")
+        if root.is_file():
+            paths.add(root)
+        elif root.exists():
+            paths.update(path for path in root.rglob("*") if path.is_file())
+    paths.update(project / name for name in SOURCE_FILES if (project / name).is_file())
+
+    rows: list[dict[str, str]] = []
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        if "__pycache__" in path.parts or path.name == ".DS_Store" or path.suffix == ".pyc":
+            continue
+        relative = path.relative_to(project).as_posix()
+        content = path.read_bytes()
+        file_hash = hashlib.sha256(content).hexdigest()
+        rows.append({"path": relative, "sha256": file_hash})
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(content)
+        digest.update(b"\0")
+    return digest.hexdigest(), rows
+
+
 def source_identity(project: Path) -> dict[str, Any]:
     status = _git(project, "status", "--porcelain", "--untracked-files=normal")
     status_paths = [line[3:] for line in (status or "").splitlines() if len(line) > 3]
@@ -110,12 +138,14 @@ def collect_provenance(
     """Build a secret-free provenance record for one runner process."""
     project = Path(config.project_dir)
     config_hash, files = config_fingerprint(Path(config.config_dir))
+    source_hash, source_files = source_fingerprint(project)
     source = source_identity(project)
     stamp = started_at or datetime.now().astimezone().isoformat(timespec="seconds")
     identity = "|".join([
         __version__,
         str(source["git_sha"]),
         "dirty" if source["git_dirty"] else "clean",
+        source_hash,
         config_hash,
     ])
     return {
@@ -126,6 +156,8 @@ def collect_provenance(
         "config_dir": str(Path(config.config_dir)),
         "config_sha256": config_hash,
         "config_files": files,
+        "source_sha256": source_hash,
+        "source_files": source_files,
         "started_at": stamp,
         "pid": os.getpid(),
         "python": sys.version.split()[0],

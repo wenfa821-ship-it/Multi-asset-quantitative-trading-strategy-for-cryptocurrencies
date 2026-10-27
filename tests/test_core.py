@@ -1402,6 +1402,24 @@ class RuntimeProvenanceTests(unittest.TestCase):
                      "docs/reviews/2026-10-26.md", "reports/live-readiness.md"):
             self.assertFalse(is_source_path(path), path)
 
+    def test_source_fingerprint_ignores_runtime_docs_but_tracks_code(self) -> None:
+        from ta.provenance import source_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src" / "engine.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (root / "README.md").write_text("release notes\n", encoding="utf-8")
+            (root / "VERSION").write_text("1.1.26\n", encoding="utf-8")
+            first, files = source_fingerprint(root)
+            self.assertEqual({row["path"] for row in files}, {"src/engine.py", "VERSION"})
+            (root / "README.md").write_text("updated runtime notes\n", encoding="utf-8")
+            docs_changed, _ = source_fingerprint(root)
+            self.assertEqual(first, docs_changed)
+            (root / "src" / "engine.py").write_text("VALUE = 2\n", encoding="utf-8")
+            code_changed, _ = source_fingerprint(root)
+            self.assertNotEqual(first, code_changed)
+
     def test_runtime_provenance_is_atomic_and_secret_free(self) -> None:
         from types import SimpleNamespace
 

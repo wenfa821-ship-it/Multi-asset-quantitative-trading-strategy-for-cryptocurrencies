@@ -40,7 +40,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
 from ta import __version__ as package_version  # noqa: E402
-from ta.provenance import config_fingerprint, source_identity  # noqa: E402
+from ta.provenance import config_fingerprint, source_fingerprint, source_identity  # noqa: E402
 
 
 def _equity_and_positions() -> dict:
@@ -151,12 +151,15 @@ def main() -> int:
             shutil.copy2(source_path, target / Path(name).name)
 
     config_hash, config_files = config_fingerprint(PROJECT / "config")
+    source_hash, source_files = source_fingerprint(PROJECT)
     manifest = {
         "version": args.version,
         "package_version": package_version,
         "created_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "tests_passed": tests_passed,
         "source": source,
+        "source_sha256": source_hash,
+        "source_files": source_files,
         "config_sha256": config_hash,
         "config_files": config_files,
         "account": _equity_and_positions(),

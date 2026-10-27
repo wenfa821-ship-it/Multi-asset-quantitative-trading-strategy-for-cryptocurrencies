@@ -1685,19 +1685,23 @@ class DashboardData:
     def provenance(self) -> dict[str, Any]:
         """Identity of the process that most recently started the runner."""
         from . import __version__
-        from .provenance import config_fingerprint, read_runtime_provenance
+        from .provenance import config_fingerprint, read_runtime_provenance, source_fingerprint
 
         payload = read_runtime_provenance(self.config)
         if not payload.get("available"):
             return payload
         current_config_hash, _ = config_fingerprint(Path(self.config.config_dir))
+        current_source_hash, _ = source_fingerprint(Path(self.config.project_dir))
         payload["current_version"] = __version__
         payload["current_config_sha256"] = current_config_hash
+        payload["current_source_sha256"] = current_source_hash
         payload["matches_version"] = payload.get("version") == __version__
         payload["matches_config"] = payload.get("config_sha256") == current_config_hash
+        payload["matches_source"] = payload.get("source_sha256") == current_source_hash
         payload["deployment_ok"] = bool(
             payload["matches_version"]
             and payload["matches_config"]
+            and payload["matches_source"]
             and not payload.get("source_dirty")
             and (
                 payload.get("git_tag")
