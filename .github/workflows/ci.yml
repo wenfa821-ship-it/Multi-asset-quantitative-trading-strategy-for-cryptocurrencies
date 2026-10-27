@@ -38,9 +38,7 @@ jobs:
           python -m pytest -q tests 2>&1 | tee /tmp/pytest.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
-            tail -n 120 /tmp/pytest.log | while IFS= read -r line; do
-              printf '::error::%s\n' "$line"
-            done
+            python scripts/ci_annotate_pytest.py /tmp/pytest.log
           fi
           exit "$rc"
       - name: Version consistency

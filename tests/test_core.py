@@ -6656,6 +6656,23 @@ class VersionSnapshotGateTests(unittest.TestCase):
             self.assertEqual(manifest["config_files"][0]["path"], "app.toml")
 
 
+class CiAnnotationTests(unittest.TestCase):
+    def test_pytest_failures_are_combined_into_one_escaped_annotation(self) -> None:
+        from scripts.ci_annotate_pytest import annotation_for
+
+        text = (
+            "....\n"
+            "FAILED tests/test_core.py::test_a - ValueError: 100%\n"
+            "FAILED tests/test_funding.py::test_b - AssertionError\n"
+        )
+        annotation = annotation_for(text)
+        self.assertTrue(annotation.startswith("::error title=Pytest failures::"))
+        self.assertIn("test_core.py::test_a", annotation)
+        self.assertIn("test_funding.py::test_b", annotation)
+        self.assertIn("100%25", annotation)
+        self.assertNotIn("\n", annotation)
+
+
 class VersionSyncReadmeTests(unittest.TestCase):
     """2026-10-14：版本号有**第四处** —— README 头部那句「当前版本 vX」。
 
