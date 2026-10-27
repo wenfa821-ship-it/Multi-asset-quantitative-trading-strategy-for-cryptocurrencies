@@ -53,7 +53,7 @@ def build_venue(config: Config, name: str, *, dry_run: bool = True, clock=None) 
         # Reserved for a "live credentials, no orders" mode. Currently the runner
         # enforces dry-run above the venue layer, so we still build the client.
         pass
-    return CcxtVenue(
+    venue = CcxtVenue(
         exchange_id=section.exchange_id,
         api_key=_secret(section.api_key_env, "API key"),
         secret=_secret(section.secret_env, "API secret"),
@@ -65,3 +65,6 @@ def build_venue(config: Config, name: str, *, dry_run: bool = True, clock=None) 
         fee_bps=section.fee_bps,
         slippage_bps=section.slippage_bps,
     )
+    if not section.sandbox and not dry_run:
+        venue.assert_trade_only_scope()
+    return venue

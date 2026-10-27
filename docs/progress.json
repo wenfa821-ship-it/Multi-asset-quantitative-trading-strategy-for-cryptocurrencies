@@ -475,8 +475,15 @@
    "id": "release-lifecycle",
    "item": "生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚",
    "state": "done",
-   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。全量 504 passed。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
-   "next": "v1.1.27 的代码与远端 CI 已完成；当前生产 runner 仍为 v1.1.26，待用户授权重启 runner/dashboard 后运行 `make deploy-verify` 完成生产切换"
+   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.27 已部署并通过 `lifecycle.py verify`。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
+   "next": "发布并部署 v1.1.28 安全补丁；部署后 provenance 应同时显示 app_mode=demo、venue_sandbox=true、live_confirmed=false"
+  },
+  {
+   "id": "production-security-hardening",
+   "item": "实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限",
+   "state": "in_progress",
+   "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修在 v1.1.28；全量 513 passed。仍待用户吊销旧 Demo key、配置外部告警、固定出口 IP 并解决 live key 当前 50110；实盘门槛仍 0/5",
+   "next": "用户先轮换 Demo key；固定代理出口并更新 live key 白名单/确认无 withdraw；配置 TA_ALERT_WEBHOOK_URL；然后发布并部署 v1.1.28，跑 security_audit/lifecycle verify/live_readiness"
   }
  ]
 }

@@ -7908,3 +7908,163 @@ class Gate34WordingTests(unittest.TestCase):
         req = lr.edge_requirement(None)
         self.assertIn("fee-multiplier", req)
         self.assertNotIn("10 bps", req)
+
+
+class TradingSafetyGuardTests(unittest.TestCase):
+    """Real-money order submission needs independent consent at every layer."""
+
+    def _config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            config = Config.load(work / "config")
+        return config
+
+    def test_demo_submission_is_allowed_with_matching_mode(self) -> None:
+        from ta.trading_guard import trading_safety_problems
+
+        config = self._config()
+        config.app.mode = "demo"
+        self.assertEqual(
+            trading_safety_problems(
+                config,
+                "okx_demo",
+                enable_trading=True,
+                allow_live=False,
+                metrics_port=9101,
+                env={},
+            ),
+            [],
+        )
+
+    def test_sandbox_and_live_mode_mismatch_is_refused(self) -> None:
+        from ta.trading_guard import trading_safety_problems
+
+        config = self._config()
+        config.app.mode = "live"
+        problems = trading_safety_problems(
+            config,
+            "okx_demo",
+            enable_trading=True,
+            allow_live=True,
+            metrics_port=9101,
+            env={"TA_ALERT_WEBHOOK_URL": "https://example.invalid/hook"},
+        )
+        self.assertTrue(any("sandboxed" in item for item in problems))
+
+    def test_non_sandbox_requires_mode_consent_metrics_and_webhook(self) -> None:
+        from ta.trading_guard import trading_safety_problems
+
+        config = self._config()
+        config.app.mode = "demo"
+        config.venues["okx_live"] = config.venue("okx_demo")
+        config.venues["okx_live"].sandbox = False
+        problems = trading_safety_problems(
+            config,
+            "okx_live",
+            enable_trading=True,
+            allow_live=False,
+            metrics_port=0,
+            env={},
+        )
+        text = "\n".join(problems)
+        self.assertIn("app.mode='demo'", text)
+        self.assertIn("--allow-live", text)
+        self.assertIn("--metrics-port", text)
+        self.assertIn("TA_ALERT_WEBHOOK_URL", text)
+
+    def test_live_mode_with_all_guardrails_is_accepted(self) -> None:
+        from ta.trading_guard import trading_safety_problems
+
+        config = self._config()
+        config.app.mode = "live"
+        config.venues["okx_live"] = config.venue("okx_demo")
+        config.venues["okx_live"].sandbox = False
+        self.assertEqual(
+            trading_safety_problems(
+                config,
+                "okx_live",
+                enable_trading=True,
+                allow_live=True,
+                metrics_port=9101,
+                env={"TA_ALERT_WEBHOOK_URL": "https://example.invalid/hook"},
+            ),
+            [],
+        )
+
+    def test_live_okx_scope_rejects_withdraw_and_requires_trade(self) -> None:
+        from types import SimpleNamespace
+
+        from ta.venues.base import VenueError
+        from ta.venues.ccxt_venue import CcxtVenue
+
+        def venue(perms: str, sandbox: bool = False):
+            obj = object.__new__(CcxtVenue)
+            obj.sandbox = sandbox
+            obj.ex = SimpleNamespace(
+                id="okx",
+                privateGetAccountConfig=lambda: {"data": [{"perm": perms}]},
+            )
+            return obj
+
+        venue("read_only,trade").assert_trade_only_scope()
+        venue("read_only", sandbox=True).assert_trade_only_scope()
+        with self.assertRaises(VenueError):
+            venue("read_only,trade,withdraw").assert_trade_only_scope()
+        with self.assertRaises(VenueError):
+            venue("read_only").assert_trade_only_scope()
+
+
+class DashboardSecurityTests(unittest.TestCase):
+    def test_cors_rejects_null_and_untrusted_origins(self) -> None:
+        from ta.dashboard import _cors_origin_allowed, _Handler
+
+        self.assertTrue(_cors_origin_allowed("http://127.0.0.1:9200", 9200))
+        self.assertTrue(_cors_origin_allowed("http://localhost:9200", 9200))
+        self.assertFalse(_cors_origin_allowed("null", 9200))
+        self.assertFalse(_cors_origin_allowed("http://127.0.0.1:8000", 9200))
+        self.assertFalse(_cors_origin_allowed("https://evil.example", 9200))
+        self.assertEqual(_Handler.sys_version, "")
+
+    def test_mode_header_distinguishes_demo_from_real_money(self) -> None:
+        from ta.monitoring import format_header
+
+        self.assertIn("DEMO ORDER", format_header("okx_demo", False, sandbox=True))
+        self.assertIn("REAL MONEY", format_header("okx_live", False, sandbox=False))
+        self.assertIn("DRY-RUN", format_header("okx_live", True, sandbox=False))
+
+
+class CredentialAuditTests(unittest.TestCase):
+    def test_exact_credential_and_standard_token_are_detected_without_echo(self) -> None:
+        import scripts.security_audit as audit
+
+        exact = {"temporary.env:DEMO_KEY": "local-super-secret-value"}
+        findings = audit.scan_text(
+            "notes.md",
+            "api key local-super-secret-value\n"
+            "-----BEGIN " + "OPENSSH PRIVATE KEY-----\n",
+            exact,
+        )
+        self.assertEqual(
+            {(item.source, item.line) for item in findings},
+            {
+                ("temporary.env:DEMO_KEY", 1),
+                ("private-key-block", 2),
+            },
+        )
+
+    def test_env_loader_ignores_blank_and_template_values(self) -> None:
+        import scripts.security_audit as audit
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".env"
+            path.write_text(
+                "OKX_API_KEY=\n"
+                "OKX_SECRET=your_secret\n"
+                "TA_ALERT_WEBHOOK_URL=https://hooks.example.invalid/abc\n",
+                encoding="utf-8",
+            )
+            values = audit.load_secret_values([path])
+        self.assertEqual(list(values), [".env:TA_ALERT_WEBHOOK_URL"])

@@ -246,8 +246,9 @@ const $ = (s) => document.querySelector(s);
 // This file lives in src/ta/web/ where it is very easy to double-click. Opened as
 // file://, a relative fetch('/api/...') resolves to file:///api/... and fails -
 // which looked like a broken dashboard rather than a page opened the wrong way.
-// The service now answers CORS for `Origin: null`, so a file:// page can talk to
-// it directly; we just have to address it absolutely.
+// The service deliberately does not grant CORS to `Origin: null`. A disk page is
+// shown the service URL instead of exposing the local portfolio API to arbitrary
+// sandboxed web pages.
 const SERVED = location.protocol === 'http:' || location.protocol === 'https:';
 const DASHBOARD_URL = 'http://127.0.0.1:9200';
 const API_BASE = SERVED ? '' : DASHBOARD_URL;
@@ -1070,7 +1071,11 @@ async function poll() {
   try { await refresh(); } finally { refreshing = false; }
   setTimeout(poll, 15000);
 }
-poll();
+if (SERVED) {
+  poll();
+} else {
+  showNotServed();
+}
 // Browsers throttle timers in background tabs, so a tab left alone can show a
 // stale snapshot when you come back to it. Refresh the moment it becomes visible.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

@@ -78,6 +78,7 @@ def preflight(args: argparse.Namespace) -> int:
         ("version", [sys.executable, "scripts/version_sync.py", "--check"]),
         ("progress", [sys.executable, "scripts/progress.py", "--check"]),
         ("changelog", [sys.executable, "scripts/changelog_md.py", "--check"]),
+        ("security", [sys.executable, "scripts/security_audit.py", "--history"]),
         ("diff", ["git", "diff", "--check"]),
     ]
     for name, cmd in commands:

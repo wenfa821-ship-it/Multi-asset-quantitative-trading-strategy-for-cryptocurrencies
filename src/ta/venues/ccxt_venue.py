@@ -58,6 +58,7 @@ class CcxtVenue(Venue):
             ) from exc
 
         self.name = name or exchange_id
+        self.sandbox = bool(sandbox)
         self.base_ccy = base_ccy
         self.market_type = market_type
         self.fee_bps = fee_bps
@@ -98,6 +99,7 @@ class CcxtVenue(Venue):
         # Cumulative fee already accounted for, per client_order_id. Mirrors
         # _filled_tracker so partial fills do not double-count the fee.
         self._fee_tracker: dict[str, float] = {}
+        self.api_permissions: tuple[str, ...] = ()
         # client_order_id -> (symbol, submitted_at). OKX spot market orders often
         # return `status=open, filled=0` and fill asynchronously; once such an
         # order leaves the open-orders list we would never look at it again and
@@ -143,6 +145,31 @@ class CcxtVenue(Venue):
         self.td_mode_resolved = True
         self.last_td_mode_error = ""
         return self.spot_td_mode
+
+    def assert_trade_only_scope(self) -> None:
+        """Fail a real-money start when the key can withdraw or cannot trade."""
+        if self.sandbox or self.ex.id != "okx":
+            return
+        try:
+            payload = self.ex.privateGetAccountConfig()
+        except Exception as exc:  # noqa: BLE001 - live startup must fail closed
+            raise VenueError(
+                "live OKX key preflight failed; check IP whitelist and credentials: "
+                f"{type(exc).__name__}"
+            ) from exc
+        row = ((payload.get("data") or [{}])[0]) if isinstance(payload, dict) else {}
+        permissions = {
+            part.strip().lower()
+            for part in str(row.get("perm") or "").split(",")
+            if part.strip()
+        }
+        self.api_permissions = tuple(sorted(permissions))
+        if "withdraw" in permissions:
+            raise VenueError(
+                "live OKX key has WITHDRAW permission; create a trade-only key and retry"
+            )
+        if "trade" not in permissions:
+            raise VenueError("live OKX key lacks TRADE permission")
 
     # ---- lifecycle ---------------------------------------------------------
     def connect(self) -> None:

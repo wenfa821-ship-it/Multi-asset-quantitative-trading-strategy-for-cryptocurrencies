@@ -1751,9 +1751,14 @@ class _Server(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
+def _cors_origin_allowed(origin: str, port: int) -> bool:
+    return origin in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+
+
 class _Handler(BaseHTTPRequestHandler):
     data: DashboardData | None = None
     server_version = "ta-dashboard"
+    sys_version = ""
 
     def log_message(self, *args: Any) -> None:  # noqa: D102 - quiet by default
         pass
@@ -1764,15 +1769,15 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
-            # Allow the HTML file to be opened straight from disk (file:// pages
-            # send `Origin: null`) and fetched from the running service, which is
-            # how this page kept getting opened. Narrow on purpose: only null and
-            # loopback origins, never "*" - the payload contains positions and P&L
-            # and should not be readable by an arbitrary web page.
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            # Same-origin requests do not need CORS. Only the dashboard's own
+            # canonical loopback origins are accepted; `Origin: null` would let a
+            # malicious sandboxed iframe read positions and P&L from localhost.
             origin = self.headers.get("Origin", "")
-            if origin == "null" or origin.startswith(
-                ("http://127.0.0.1", "http://localhost")
-            ):
+            port = int(getattr(self.server, "server_port", 9200))
+            if _cors_origin_allowed(origin, port):
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
             # Headers AND body inside the guard: HTTP writes its header block in

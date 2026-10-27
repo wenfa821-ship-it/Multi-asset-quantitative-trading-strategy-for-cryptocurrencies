@@ -124,8 +124,13 @@ class Alerts:
         return payload
 
 
-def format_header(venue: str, dry_run: bool) -> str:
-    mode = "DRY-RUN (no orders leave the process)" if dry_run else "LIVE ORDER SUBMISSION"
+def format_header(venue: str, dry_run: bool, *, sandbox: bool = False) -> str:
+    if dry_run:
+        mode = "DRY-RUN (no orders leave the process)"
+    elif sandbox:
+        mode = "DEMO ORDER SUBMISSION (venue sandbox)"
+    else:
+        mode = "LIVE ORDER SUBMISSION (REAL MONEY)"
     return f"venue={venue}  mode={mode}"
 
 

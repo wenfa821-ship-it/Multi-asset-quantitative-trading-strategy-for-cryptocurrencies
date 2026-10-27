@@ -227,7 +227,7 @@
 - 告警增量：warning +0 / critical +0（alerts.jsonl 43 行无变化）；本窗口（上巡 23:55 后）四个 service.log 无新 Traceback/Exception/ERROR（run-service 最后 ERROR 为 20:20 CST 50110 波段尾部，此后 get_account 正常）
 - 进度：config|src|scripts|README 无变更；refit 仍 1 条无新增；README §13 待办 1-5 无进展（maker 未上线）；链上 snapshots 43072 行（+121，最新写入 00:53），evaluate 未跑 → 样本不足以判定
 - 异常：①**F4 复发确认（WARNING）**——10-07 当日 0 order/0 fill/0 blocked，但 `ta_entries_today=1`：10-06 23:01 AVAX 拒单被计入 entries 计数且未在 CST 日边界重置，靠 20:11 重启清零=未修复；②F7 维持：newlisting 第二次退出同根因（plist 指向 `scripts/daily_research.sh` 不存在）；③F1 根因未修：IP 白名单（50110）20:20 CST 后未再触发，但出口 IP 会轮换随时复发；④F2 未修：TradFi 免责声明仍未人工确认，new/alts 信号无法落地
-- 建议（人决定）：①核对 `src/` 风控 entries_today 的 CST 日边界重置逻辑并修复（代码动作）；②修 newlisting plist 指向 `scripts/daily_research.py` 后 `scripts/install_newlisting_service.sh` 重装；③OKX 控制台将出口 IP 加入密钥 73c760da-3e61-462d-bd0a-5cdfa60b602e 白名单或固定 TA_PROXY 出口；④OKX demo 网页/App 完成 TradFi 免责声明；⑤人工跑 `python3 -m ta reconcile --venue okx_demo --config-dir config` 确认 mismatch 归零。不自动重启 runner、不删 KILL_SWITCH、不改 config/src
+- 建议（人决定）：①核对 `src/` 风控 entries_today 的 CST 日边界重置逻辑并修复（代码动作）；②修 newlisting plist 指向 `scripts/daily_research.py` 后 `scripts/install_newlisting_service.sh` 重装；③OKX 控制台将出口 IP 加入密钥 [REDACTED_OKX_DEMO_API_KEY] 白名单或固定 TA_PROXY 出口；④OKX demo 网页/App 完成 TradFi 免责声明；⑤人工跑 `python3 -m ta reconcile --venue okx_demo --config-dir config` 确认 mismatch 归零。不自动重启 runner、不删 KILL_SWITCH、不改 config/src
 
 ## 2026-10-06 21:28 (CST) · CRITICAL（维持）
 
@@ -239,7 +239,7 @@
 - 告警增量：warning +0 / critical +1（alerts.jsonl 41→42：20:18:53 CST "venue degraded - new entries suspended"，degraded_ticks=5，IP 42.200.166.221 白名单；该告警 ts 早于上次巡检 20:20 但此后落盘）；增量窗口 service.log 无新 Traceback/Exception
 - 进度：`src/ta/venues/swap_math.py`(21:13)、`README.md`(21:24) mtime 变更，config|scripts 无变更；refit 仍 1 条无新增；README §13 待办 1-5 均无进展（strategies.toml 无 entry_style=maker；app.toml timeframe 仍 15m）；链上 onchain_cache 2869 文件（最新 21:27），evaluate 未跑 → 样本不足以判定
 - 变化：20:13/20:18 CST 因 OKX IP 白名单（code 50110，IP 42.200.166.221）degraded 后已自恢复，metrics 由 2 项恢复到 16 项（equity/cash/drawdown 等 gauge 有数据），`ta_venue_degraded=0` → degraded_streak 5→0，WARNING 解除（但根因 IP 白名单未修，出口 IP 会轮换，随时可再次降级）
-- 异常：①对账 ❌ 维持（CRITICAL）— mismatch_total=3（PYTH/USDT + INJ/USDT 灰尘）；新进程（20:11:59 重启）已加载 `oms.py` 步长截断修复，但本次增量窗口未见 periodic reconciliation 日志/mismatch 事件，`ta_` 指标亦无 reconcile 计数器暴露，无法确认是否归零，待下次巡检核对。②当日拒单累计 1（AVAX/USDT sCode=54092，11:01 CST，TradFi 免责声明未确认，<3 未达 CRITICAL）。建议（人决定）：①在 OKX 账户控制台将出口 IP（42.200.166.221 或当前实际 IP）加入密钥 73c760da-3e61-462d-bd0a-5cdfa60b602e 白名单，或固定 TA_PROXY 出口 IP；②核对下一次 periodic reconcile 是否使 mismatch_total 归零，仍为 3 则清理 PYTH/INJ 灰尘残仓；③在 OKX demo 网页/App 完成 TradFi 免责声明确认；④确认 20:11 CST 重启是本人操作。不自动重启、不删 KILL_SWITCH、不改 config/src。
+- 异常：①对账 ❌ 维持（CRITICAL）— mismatch_total=3（PYTH/USDT + INJ/USDT 灰尘）；新进程（20:11:59 重启）已加载 `oms.py` 步长截断修复，但本次增量窗口未见 periodic reconciliation 日志/mismatch 事件，`ta_` 指标亦无 reconcile 计数器暴露，无法确认是否归零，待下次巡检核对。②当日拒单累计 1（AVAX/USDT sCode=54092，11:01 CST，TradFi 免责声明未确认，<3 未达 CRITICAL）。建议（人决定）：①在 OKX 账户控制台将出口 IP（42.200.166.221 或当前实际 IP）加入密钥 [REDACTED_OKX_DEMO_API_KEY] 白名单，或固定 TA_PROXY 出口 IP；②核对下一次 periodic reconcile 是否使 mismatch_total 归零，仍为 3 则清理 PYTH/INJ 灰尘残仓；③在 OKX demo 网页/App 完成 TradFi 免责声明确认；④确认 20:11 CST 重启是本人操作。不自动重启、不删 KILL_SWITCH、不改 config/src。
 
 ## 2026-10-06 20:20 (CST) · CRITICAL（维持）
 
@@ -252,7 +252,7 @@
 - 进度：config|src|scripts|README 无变更；refit 仍 1 条无新增；链上 snapshots 42529 行（+180，最新 20:20），evaluate 未跑 → 样本不足以判定
 - 🔴 重大变化：交易进程被重启（非崩溃）。旧 pid=1477（run_id acc8f3c0e08c）最后日志 16:28:15 CST；新 pid=750 于 20:11:59 CST 启动、20:13:37 CST runner start（新 run_id=e59c93c52c0e）；launchd `runs=1 / last exit=(never exited)` = 重新 bootstrap（人工/脚本重启），16:28–20:13 CST 约 3h45m 空窗。重启后出口 IP 变更（209.9.201.229 → 42.200.166.221），但 OKX code 50110 IP 白名单错误依旧 → 新进程首个 tick 即 degraded，只停新开仓、不平仓
 - ⚠️ WARNING（degraded_streak 5，≥3）：venue degraded 跨进程持续 >8h（12:18 CST 起），根因 OKX API 密钥 IP 白名单（code 50110）；metrics 因 get_account 失败只剩 ta_venue_degraded 2 项（equity/cash/drawdown 等无数据）
-- 异常：①对账 ❌ 维持 — mismatch_total=3（PYTH/USDT + INJ/USDT 灰尘差异）；注意：本次重启使早已写好的 `src/ta/execution/oms.py` 步长截断修复随新进程加载（src 无新变更，代码本来就在），待 get_account 恢复后由 periodic reconciliation 验证 mismatch 是否归零。②venue degraded 持续且 IP 白名单未修。建议（人决定）：①在 OKX 账户控制台将新出口 IP 42.200.166.221 加入密钥 73c760da-3e61-462d-bd0a-5cdfa60b602e 白名单，或固定 TA_PROXY 出口 IP —— 这是当前 degraded + metrics 饥饿的唯一根因；②确认 20:11 重启是本人操作（若非本人操作请检查机器访问）；③白名单恢复后核对下一次 reconcile 是否消除 mismatch_total=3；不自动重启、不删 KILL_SWITCH
+- 异常：①对账 ❌ 维持 — mismatch_total=3（PYTH/USDT + INJ/USDT 灰尘差异）；注意：本次重启使早已写好的 `src/ta/execution/oms.py` 步长截断修复随新进程加载（src 无新变更，代码本来就在），待 get_account 恢复后由 periodic reconciliation 验证 mismatch 是否归零。②venue degraded 持续且 IP 白名单未修。建议（人决定）：①在 OKX 账户控制台将新出口 IP 42.200.166.221 加入密钥 [REDACTED_OKX_DEMO_API_KEY] 白名单，或固定 TA_PROXY 出口 IP —— 这是当前 degraded + metrics 饥饿的唯一根因；②确认 20:11 重启是本人操作（若非本人操作请检查机器访问）；③白名单恢复后核对下一次 reconcile 是否消除 mismatch_total=3；不自动重启、不删 KILL_SWITCH
 
 ## 2026-10-06 15:40 (CST) · CRITICAL（维持）
 
@@ -264,7 +264,7 @@
 - 告警增量：warning +0 / critical +1（alerts.jsonl 38→39：15:14:57 CST "venue degraded - new entries suspended"，degraded_ticks=200 里程碑）；增量窗口 service.log 显示降级原因已由 ADA fetch_bars 转为 get_account IP 白名单错误（code 50110，自 15:28 CST 起），无新 Traceback/Exception
 - 进度：config|src|scripts|README 无变更；refit 仍 1 条无新增；链上 snapshots 42349 行（+248，最新 15:40），evaluate 未跑 → 样本不足以判定
 - ⚠️ WARNING（degraded_streak 4，≥3）：venue degraded 自 12:18 CST 起已持续 >3h，且 15:28 CST 起降级原因切换为 OKX API get_account IP 白名单错误（code 50110，当前 IP 209.9.201.229 不在密钥 73c760da-... 的白名单内），只停新开仓、不平仓；当前空仓（持仓 0、热手 0.00%）无实际敞口；periodic reconciliation 持续被跳过
-- 异常：①对账 ❌ 维持 — `ta_reconcile_mismatch_total=3`（PYTH/USDT + INJ/USDT 灰尘差异，`oms.py` 修复未部署，进程自 10-01 21:08 未重启）。②venue degraded 持续且原因恶化（IP 白名单错误导致 get_account 连续失败）。③当日拒单累计 1（AVAX sCode=54092，OKX demo TradFi 免责声明未确认）。建议（人决定）：①当前空仓是部署 `src/ta/execution/oms.py` 修复 + 重启的好时机（一次重启同时解决对账 CRITICAL 与降级恢复后的对账跳过）；②在 OKX 账户控制台将当前出口 IP 209.9.201.229 加入 API 密钥 73c760da-3e61-462d-bd0a-5cdfa60b602e 的白名单，或调整 TA_PROXY 使出口 IP 固定到白名单 IP；③在 OKX demo 网页/App 完成 TradFi 免责声明以解除 AVAX 交易限制；不自动重启、不删 KILL_SWITCH
+- 异常：①对账 ❌ 维持 — `ta_reconcile_mismatch_total=3`（PYTH/USDT + INJ/USDT 灰尘差异，`oms.py` 修复未部署，进程自 10-01 21:08 未重启）。②venue degraded 持续且原因恶化（IP 白名单错误导致 get_account 连续失败）。③当日拒单累计 1（AVAX sCode=54092，OKX demo TradFi 免责声明未确认）。建议（人决定）：①当前空仓是部署 `src/ta/execution/oms.py` 修复 + 重启的好时机（一次重启同时解决对账 CRITICAL 与降级恢复后的对账跳过）；②在 OKX 账户控制台将当前出口 IP 209.9.201.229 加入 API 密钥 [REDACTED_OKX_DEMO_API_KEY] 的白名单，或调整 TA_PROXY 使出口 IP 固定到白名单 IP；③在 OKX demo 网页/App 完成 TradFi 免责声明以解除 AVAX 交易限制；不自动重启、不删 KILL_SWITCH
 
 ## 2026-10-06 14:33 (CST) · CRITICAL（维持）
 

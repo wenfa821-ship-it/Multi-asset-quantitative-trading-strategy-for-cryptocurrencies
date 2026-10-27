@@ -4,7 +4,7 @@ CONFIG ?= config
 STRATEGY ?= trend_pullback
 VENUE ?= okx_demo
 
-.PHONY: help doctor smoke test backtest paper okx binance screen reconcile lint \
+.PHONY: help doctor smoke test backtest paper okx binance screen reconcile lint security-check \
 	onchain-screen onchain-quote onchain-execute symbols-check symbols-scan \
 	dashboard release-check deploy-verify release-status rollback-plan
 
@@ -25,6 +25,7 @@ help:
 	@echo "make onchain-quote MINT=...          # screen + risk + Jupiter quote + simulate"
 	@echo "make onchain-execute MINT=...        # the same, plus a mock signature"
 	@echo "make dashboard                       # read-only web UI on http://127.0.0.1:9200"
+	@echo "make security-check                  # credential leak audit (tree + reachable history)"
 	@echo "make release-check                   # clean-tree tests + version/progress/changelog gates"
 	@echo "make deploy-verify                   # prove the running process matches this checkout"
 	@echo "make release-status                  # checkout/runtime build identity"
@@ -77,6 +78,9 @@ reconcile:
 
 lint:
 	$(PY) -m ruff check src tests scripts
+
+security-check:
+	$(PY) scripts/security_audit.py --history
 
 release-check:
 	$(PY) scripts/lifecycle.py preflight

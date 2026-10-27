@@ -15,8 +15,8 @@ import os
 import platform
 import sys
 import time
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .backtest import run_backtest
@@ -40,6 +40,7 @@ from .provenance import write_runtime_provenance
 from .risk.engine import RiskEngine
 from .runner import TradingRunner
 from .strategies import available, build_strategy
+from .trading_guard import trading_safety_problems
 from .venues import credential_status
 from .venues.base import VenueError
 
@@ -92,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--enable-trading",
         action="store_true",
         help="required for a non-paper venue to actually send orders",
+    )
+    run.add_argument(
+        "--allow-live",
+        action="store_true",
+        help="second explicit consent required for a non-sandbox venue with real money",
     )
     run.add_argument(
         "--env-file",
@@ -253,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
             "打一行 ⚠ —— 2026-10-16 那次静默停摆 2 小时、什么也没说，就是因为一轮里"
             "既没有时间戳也没有耗时。**2026-10-18 从 900 调宽到 1800**：实测代理慢时"
             "单轮就要 985~1362 秒，900 会让每一轮都带 ⚠，把「异常」稀释成常态；"
-            "1800 仍高于最慢观测值约 30%，真卡住时照样会喊。"
+            "1800 仍高于最慢观测值约 30%%，真卡住时照样会喊。"
         ),
     )
     watch.add_argument("--offline", action="store_true", help="use recorded fixtures (no network)")
@@ -390,6 +396,19 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("fix config/*.toml before running")
         return 2
 
+    safety = trading_safety_problems(
+        config,
+        args.venue,
+        enable_trading=args.enable_trading,
+        allow_live=args.allow_live,
+        metrics_port=args.metrics_port,
+    )
+    if safety:
+        print("trading safety gate refused order submission:")
+        for problem in safety:
+            print(f"  - {problem}")
+        return 2
+
     logger = setup(config.log_dir, level=args.log_level)
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
 
@@ -429,6 +448,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "command": "run",
                 "venue": args.venue,
                 "dry_run": dry_run,
+                "app_mode": config.app.mode,
+                "venue_sandbox": config.venue(args.venue).sandbox,
+                "live_confirmed": bool(
+                    args.allow_live and not config.venue(args.venue).sandbox
+                ),
             },
         )
         print(
@@ -449,7 +473,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         metrics_server.start()
         print(f"metrics: {metrics_server.url()}")
 
-    print(format_header(runner.venue.name, runner.dry_run))
+    print(
+        format_header(
+            runner.venue.name,
+            runner.dry_run,
+            sandbox=config.venue(args.venue).sandbox,
+        )
+    )
     try:
         report = runner.run()
     finally:
