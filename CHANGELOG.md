@@ -4,15 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-27T21:51 起，7 条留痕）
+## v1.1.28 — 2026-10-27T23:01
 
-- `2026-10-27T22:02` **ops** v1.1.27 发布完成：main verify 与 tag release-artifact 均绿，公开仓库 CI 闭环
-- `2026-10-27T22:14` **ops** main Ruleset 验收完成：同一 SHA 短分支 verify 后可无 PR、无 bypass 快进
-- `2026-10-27T22:30` **bug** 公开仓库历史暴露 OKX Demo API key ID：已脱敏当前树，密钥轮换仍待用户执行
-- `2026-10-27T22:31` **bug** v1.1.28 增加真实资金多重闸门、OKX 提现权限拒绝、看板 CORS 防泄漏与密钥 CI 扫描
-- `2026-10-27T22:31` **ops** 实盘审计结论：模拟盘生产链健康，但 live readiness 仍 0/5，live key 当前被 50110 挡住
-- `2026-10-27T22:36` **ops** 主机面审计：交易端口均仅 loopback，但 macOS 防火墙关闭且有系统共享端口对外开放
-- `2026-10-27T22:59` **decision** 用户决定暂缓 Demo key 轮换，先发布并部署 v1.1.28
+- 测试 **513** 绿 · 权益 $104,190.47 · 记录时的包版本 1.1.28
+
+Security hardening: fail-closed live trading consent, OKX withdraw-scope rejection, dashboard CORS/frame/referrer hardening, credential leak audit in preflight/CI, provenance mode fields. User accepted deferred Demo key rotation before simulated production deployment. Python 3.11: 513 passed.
 
 ## v1.1.27 — 2026-10-27T21:51
 
