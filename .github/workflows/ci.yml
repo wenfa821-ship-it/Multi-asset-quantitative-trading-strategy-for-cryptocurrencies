@@ -32,7 +32,17 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[dev,live]"
       - name: Tests
-        run: python -m pytest -q tests
+        shell: bash
+        run: |
+          set +e
+          python -m pytest -q tests 2>&1 | tee /tmp/pytest.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            tail -n 120 /tmp/pytest.log | while IFS= read -r line; do
+              printf '::error::%s\n' "$line"
+            done
+          fi
+          exit "$rc"
       - name: Version consistency
         run: python scripts/version_sync.py --check
       - name: Progress table
