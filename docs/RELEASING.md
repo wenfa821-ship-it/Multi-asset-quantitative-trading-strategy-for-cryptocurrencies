@@ -68,6 +68,26 @@
 独立的运行副本。没有独立 OKX 子账户时，测试只能使用 paper/离线数据，不能与
 生产 runner 同时对同一账户下单。
 
+### 3.1 `main` Ruleset 与单人日常提交
+
+`main` 当前启用三项规则：禁止删除、禁止 force push、要求名为 `verify` 的状态检查。
+单人开发不强制 PR，但 GitHub 不会接受一个**从未运行过 `verify` 的新 commit** 直接
+写入 `main`。已验证可行的路径是让同一 SHA 先在短分支跑检查，再快进 `main`：
+
+```bash
+sha=$(git rev-parse --short=12 HEAD)
+branch="ci/$sha"
+git push origin "HEAD:refs/heads/$branch"
+# 等 GitHub 上该 commit 的 verify 变为 success
+git push origin HEAD:refs/heads/main
+git push origin --delete "$branch"
+```
+
+这里的 `main` 推送仍是普通 fast-forward，不是管理员 bypass；临时分支只负责给同一个
+不可变 SHA 产生检查结果。若检查失败，保留短分支用于定位，不推 `main`。代码版本仍须
+先完成第 4 节的 preflight、冻结快照和 tag；这套短分支流程只解决 Ruleset 的检查
+依赖，不替代发布门禁。
+
 每个 runner 启动都会在 `data/runtime/provenance.json` 写入版本、Git SHA、
 dirty 状态、config 指纹、build id、PID 与启动时间；看板 `/api/snapshot` 的
 `provenance` 字段读取同一份记录。生产验收要求：
@@ -93,7 +113,9 @@ python3 scripts/lifecycle.py verify
 4. 提交候选代码，使工作树干净，再跑 `python3 scripts/lifecycle.py preflight`；
 5. `python3 scripts/version_snapshot.py --version vX.Y.Z --notes "..."`；
 6. `python3 scripts/changelog_md.py --write && python3 scripts/changelog_md.py --check`；
-7. 提交发布快照并打 tag：`git add -A && git commit -m "release: vX.Y.Z" && git tag vX.Y.Z`。
+7. 提交发布快照并打 tag：`git add -A && git commit -m "release: vX.Y.Z" && git tag vX.Y.Z`；
+8. 按 3.1 让该 release commit 先在短分支通过 `verify`，再快进 `main`；最后推送
+   `vX.Y.Z` tag，并确认 tag run 的 `verify` 与 `release-artifact` 都为 success。
 
 第 7 步是代码侧的同一件事：`archive/versions/` 是**可读的**发布记录，git 是**可比对的**发布记录，
 两者都要有 —— 前者让人一眼看懂当时是什么状态，后者让 `git diff v0.4.6 v0.5.0` 回答「到底改了什么」。

@@ -475,8 +475,8 @@
    "id": "release-lifecycle",
    "item": "生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚",
    "state": "done",
-   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。全量 504 passed",
-   "next": "v1.1.27 修复 GitHub CI 的 Python 3.11/live 依赖环境；远端与公开仓库已接通，下一步确认 verify 检查转绿并完成 main Ruleset 验收"
+   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。全量 504 passed。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
+   "next": "v1.1.27 的代码与远端 CI 已完成；当前生产 runner 仍为 v1.1.26，待用户授权重启 runner/dashboard 后运行 `make deploy-verify` 完成生产切换"
   }
  ]
 }
