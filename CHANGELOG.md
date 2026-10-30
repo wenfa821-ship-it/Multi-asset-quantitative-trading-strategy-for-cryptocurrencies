@@ -4,9 +4,10 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-30T11:19 起，1 条留痕）
+## Unreleased（自 2026-10-30T11:19 起，2 条留痕）
 
 - `2026-10-30T11:26` **ops** v1.1.29 发布并部署 PASS；资金费任务全绿，现金对账告警恢复 info
+- `2026-10-30T11:37` **decision** 用户决定不固定 Clash 静态节点，接受代理 IP 漂移并在漂移时更新白名单
 
 ## v1.1.29 — 2026-10-30T11:19
 

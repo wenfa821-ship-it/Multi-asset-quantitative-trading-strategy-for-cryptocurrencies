@@ -482,8 +482,8 @@
    "id": "production-security-hardening",
    "item": "实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限",
    "state": "in_progress",
-   "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修。v1.1.29 已部署并把 50110/IP whitelist 归类为 external；当前出口 209.9.203.250 已加入白名单，账户/tick/日任务均已恢复。仍待用户吊销旧 Demo key、把动态住宅节点换为固定 egress、配置 TA_ALERT_WEBHOOK_URL；实盘门槛仍 0/5",
-   "next": "安全闭环剩余动作：轮换 Demo key；在 Clash Verge 将“昆仑 Cloud”从动态住宅04固定到静态节点并更新 live whitelist；配置外部 webhook；随后重估 live readiness"
+   "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修。v1.1.29 已部署并把 50110/IP whitelist 归类为 external；当前出口 209.9.203.250 已加入 Demo 白名单，账户/tick/日任务均已恢复。用户 2026-10-30 决定暂不固定 Clash 节点，接受代理 IP 漂移并在漂移时更新白名单。仍待用户吊销旧 Demo key、为当前出口更新 Live key 白名单、配置 TA_ALERT_WEBHOOK_URL；实盘门槛仍 0/5",
+   "next": "安全闭环剩余动作：按用户决定保留动态出口并在漂移时更新白名单；轮换 Demo key；配置 Live key 与外部 webhook；随后重估 live readiness"
   },
   {
    "id": "demo-canary",
