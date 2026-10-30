@@ -25,6 +25,7 @@ EXTERNAL_MARKERS = (
     "HTTP Error 429", "HTTP Error 500", "HTTP Error 502", "HTTP Error 503",
     "HTTP Error 504", "ExchangeNotAvailable", "RequestTimeout",
     "temporarily unavailable", "venue call failed", "重试", "拿不到",
+    "IP whitelist", "50110", "Host is down",
 )
 
 # 这些**看着像外部，其实是我们自己的问题**：先判它们，避免被上面的宽模式吃掉。

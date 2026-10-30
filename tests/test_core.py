@@ -2662,11 +2662,16 @@ class DailyReviewGeneratorTests(unittest.TestCase):
         start, end = module.day_window("2026-10-10")
         written_today = int(datetime.datetime(2026, 10, 10, 9, 10,
                                              tzinfo=module.CST).timestamp() * 1000)
+        written_tomorrow = int(datetime.datetime(2026, 10, 11, 9, 10,
+                                                tzinfo=module.CST).timestamp() * 1000)
         settled_yesterday = written_today - 26 * 3600 * 1000
         rows = [
-            # written today, settled two days ago -> backfilled
-            {"kind": "funding", "ts": written_today, "bill_ts": settled_yesterday,
+            # written tomorrow, settled today -> belongs to the reviewed day
+            {"kind": "funding", "ts": written_tomorrow, "bill_ts": written_today,
              "amount": 43.0, "symbol": "CRV/USDT:USDT"},
+            # written today, settled yesterday -> does not belong to this day
+            {"kind": "funding", "ts": written_today, "bill_ts": settled_yesterday,
+             "amount": 100.0, "symbol": "CRV/USDT:USDT"},
             # written today, settled today -> today's income
             {"kind": "funding", "ts": written_today, "bill_ts": written_today,
              "amount": 5.0, "symbol": "CRV/USDT:USDT"},
@@ -2675,7 +2680,7 @@ class DailyReviewGeneratorTests(unittest.TestCase):
              "symbol": "ACT/USDT:USDT"},
         ]
         stats = module.summarise(rows, start, end)
-        self.assertAlmostEqual(stats["funding_total"], 49.0)      # bill-based fact
+        self.assertAlmostEqual(stats["funding_total"], 49.0)      # 43 late + 5 + 1 legacy
         self.assertEqual(stats["funding_backfilled"]["count"], 1)
         self.assertAlmostEqual(stats["funding_backfilled"]["total"], 43.0)
         self.assertEqual(stats["funding_backfilled"]["unknown_bill_ts"], 1)
@@ -7627,6 +7632,15 @@ class JobFailureClassTests(unittest.TestCase):
         self.assertEqual(classify_failure("API key is not set. Export OKX_DEMO_API_KEY")[0], "own")
         self.assertEqual(classify_failure("changelog_md.py rc=1 attempts=3")[0], "own")
         self.assertEqual(classify_failure("KeyError: 'depth_notional_usd'")[0], "own")
+
+    def test_okx_ip_whitelist_is_an_external_condition(self) -> None:
+        from ta.jobfail import classify_failure
+
+        text = (
+            'PermissionDenied: okx {"msg":"Your IP 203.0.113.7 is not included '
+            'in your API key\'s IP whitelist","code":"50110"}'
+        )
+        self.assertEqual(classify_failure(text)[0], "external")
 
     def test_unknown_is_not_an_exemption(self) -> None:
         from ta.jobfail import classify_failure, classify_run

@@ -476,7 +476,7 @@
    "item": "生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚",
    "state": "done",
    "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.28 已发布（tag/verify/artifact 绿）并部署；三个新 PID 65386/65392/65389，首 tick 后 `make deploy-verify` PASS，provenance 为 app_mode=demo、venue_sandbox=true、live_confirmed=false。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
-   "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；当前版本 v1.1.28"
+   "next": "发布并部署 v1.1.29：日报按 bill_ts 归日、50110 归为 external；完成后继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify"
   },
   {
    "id": "production-security-hardening",

@@ -56,27 +56,37 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def backfilled_funding(rows: list[dict], start_ms: int, end_ms: int) -> dict:
-    """今日**写入**、但账单时刻在今日之外的结算 = 补记（2026-10-12）。
+def _event_time_ms(row: dict) -> int:
+    """Return the economic time of a ledger event.
 
-    为什么要有这一栏：10-11 那天 09:10 一分钟内入账 6 条 CRV 账单（$233.24），
-    它们是之前几次结算的欠账（`funding-sync` 改成每小时之前的批量同步），
-    却整笔算进了当日 +0.700%。`bill_ts` 是账单自己的时刻，`ts` 是写入时刻 ——
-    只有前者能回答「这笔钱是哪天挣的」。旧行没有 `bill_ts`，报 unknown，不猜。
+    Funding is settled by the venue three times a day and may be written to the
+    ledger much later. Its ``bill_ts`` is therefore the settlement date; ``ts``
+    is only the local write date. Legacy funding rows predate ``bill_ts``, so
+    they fall back to ``ts`` and are surfaced as unknown by the backfill check.
     """
+    if row.get("kind") == "funding" and row.get("bill_ts"):
+        try:
+            return int(row["bill_ts"])
+        except (TypeError, ValueError):
+            pass
+    return int(row.get("ts") or 0)
+
+
+def backfilled_funding(rows: list[dict], start_ms: int, end_ms: int) -> dict:
+    """Funding settled in this day but written after that day = late backfill."""
     total = 0.0
     count = 0
     unknown = 0
     for row in rows:
         if row.get("kind") != "funding":
             continue
-        if not (start_ms <= int(row.get("ts") or 0) < end_ms):
+        if not (start_ms <= _event_time_ms(row) < end_ms):
             continue
         bill_ts = row.get("bill_ts")
         if not bill_ts:
             unknown += 1
             continue
-        if not (start_ms <= int(bill_ts) < end_ms):
+        if not (start_ms <= int(row.get("ts") or 0) < end_ms):
             total += float(row.get("amount") or 0.0)
             count += 1
     return {"total": total, "count": count, "unknown_bill_ts": unknown}
@@ -179,7 +189,7 @@ def pair_conservation(positions: dict, carry_symbols: list[str]) -> dict:
 
 def summarise(rows: list[dict], start_ms: int, end_ms: int) -> dict:
     """Everything the review quotes, in one place so it cannot drift from itself."""
-    day = [r for r in rows if start_ms <= int(r.get("ts") or 0) < end_ms]
+    day = [r for r in rows if start_ms <= _event_time_ms(r) < end_ms]
     kinds = collections.Counter(r.get("kind") for r in day)
     equity_rows = [r for r in day if r.get("kind") == "equity"]
     equities = [float(r.get("equity") or 0.0) for r in equity_rows]
