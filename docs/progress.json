@@ -475,15 +475,15 @@
    "id": "release-lifecycle",
    "item": "生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚",
    "state": "done",
-   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.28 已发布（tag/verify/artifact 绿）并部署；三个新 PID 65386/65392/65389，首 tick 后 `make deploy-verify` PASS，provenance 为 app_mode=demo、venue_sandbox=true、live_confirmed=false。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
-   "next": "发布并部署 v1.1.29：日报按 bill_ts 归日、50110 归为 external；完成后继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify"
+   "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.29 已发布（tag/verify/artifact 绿）、部署并 PASS：runner/watch/dashboard PID 37455/37465/37462，首 tick 完成，source/config 指纹一致，kill=0、degraded=0。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
+   "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；当前生产版本 v1.1.29"
   },
   {
    "id": "production-security-hardening",
    "item": "实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限",
    "state": "in_progress",
-   "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修在 v1.1.28；全量 513 passed。仍待用户吊销旧 Demo key、配置外部告警、固定出口 IP 并解决 live key 当前 50110；实盘门槛仍 0/5",
-   "next": "用户于 2026-10-27 决定暂缓 Demo key 轮换，先发布并部署 v1.1.28；部署后仍须轮换 Demo key、固定代理出口、确认 live key 无 withdraw、配置 TA_ALERT_WEBHOOK_URL，再重估 live readiness"
+   "gate": "2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修。v1.1.29 已部署并把 50110/IP whitelist 归类为 external；当前出口 209.9.203.250 已加入白名单，账户/tick/日任务均已恢复。仍待用户吊销旧 Demo key、把动态住宅节点换为固定 egress、配置 TA_ALERT_WEBHOOK_URL；实盘门槛仍 0/5",
+   "next": "安全闭环剩余动作：轮换 Demo key；在 Clash Verge 将“昆仑 Cloud”从动态住宅04固定到静态节点并更新 live whitelist；配置外部 webhook；随后重估 live readiness"
   },
   {
    "id": "demo-canary",
