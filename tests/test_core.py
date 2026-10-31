@@ -2223,7 +2223,7 @@ class StrategyAdmissionPolicyTests(unittest.TestCase):
 class RiskBudgetReportTests(unittest.TestCase):
     """Risk budgets must expose occupancy and release conditions without guessing."""
 
-    def _report(self, *, include_pair: bool = True):
+    def _report(self, *, include_pair: bool = True, include_stops: bool = True):
         import datetime
 
         from ta.risk_budget import build_risk_budget
@@ -2233,19 +2233,22 @@ class RiskBudgetReportTests(unittest.TestCase):
             2026, 10, 31, 12, 0,
             tzinfo=datetime.timezone(datetime.timedelta(hours=8)),
         ).timestamp() * 1000)
-        rows = [
-            {
-                "kind": "equity",
-                "ts": now_ms,
-                "equity": 100_000.0,
-                "positions": {
-                    "AAA/USDT": 10.0,
-                    "AAA/USDT:USDT": -10.0,
-                    "XMU/USDT": 2.0,
-                    "BTC-USD-261127-80000-C": 1.0,
-                },
-                "marks": {"AAA/USDT": 2.0, "XMU/USDT": 100.0},
+        equity = {
+            "kind": "equity",
+            "ts": now_ms,
+            "equity": 100_000.0,
+            "positions": {
+                "AAA/USDT": 10.0,
+                "AAA/USDT:USDT": -10.0,
+                "XMU/USDT": 2.0,
+                "BTC-USD-261127-80000-C": 1.0,
             },
+            "marks": {"AAA/USDT": 2.0, "XMU/USDT": 100.0},
+        }
+        if include_stops:
+            equity["stops"] = {"AAA/USDT": 1.5, "XMU/USDT": 90.0}
+        rows = [
+            equity,
             {
                 "kind": "blocked", "ts": now_ms - 1000,
                 "request": {"symbol": "AAA/USDT"},
@@ -2273,6 +2276,9 @@ class RiskBudgetReportTests(unittest.TestCase):
         self.assertFalse(by_name["options"]["gross_known"])
         self.assertEqual(by_name["spot"]["blocked_24h"], 1)
         self.assertEqual(by_name["derivatives"]["blocked_24h"], 1)
+        self.assertTrue(by_name["spot"]["heat_known"])
+        self.assertAlmostEqual(by_name["spot"]["heat_usd"], 5.0)
+        self.assertAlmostEqual(by_name["tradfi"]["heat_usd"], 20.0)
 
     def test_an_unmatched_derivative_is_unknown_not_zero(self) -> None:
         report = self._report(include_pair=False)
@@ -2284,9 +2290,15 @@ class RiskBudgetReportTests(unittest.TestCase):
         from ta.risk_budget import markdown
 
         text = markdown(self._report())
-        self.assertIn("腿级 heat 不做猜测", text)
+        self.assertIn("per-leg from persisted protective stops", text)
         self.assertIn("最近 24h 阻塞原因", text)
         self.assertIn("未知", text)
+
+    def test_legacy_snapshot_reports_heat_unknown_instead_of_zero(self) -> None:
+        report = self._report(include_stops=False)
+        spot = next(row for row in report["legs"] if row["leg"] == "spot")
+        self.assertFalse(spot["heat_known"])
+        self.assertIsNone(spot["heat_usd"])
 
 
 class PairedExecutionTests(unittest.TestCase):
@@ -3135,6 +3147,19 @@ class CashAttributionTests(unittest.TestCase):
             row = [e for e in ledger.events if e.get("kind") == "equity"][0]
         self.assertEqual(row["cash"], 100.0)
         self.assertEqual(row["cash_bal"], 97.5)
+
+    def test_the_equity_row_persists_protective_stops_for_leg_heat(self) -> None:
+        from ta.portfolio import Ledger
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Ledger(Path(tmp) / "ledger.jsonl", run_id="t", venue="paper")
+            ledger.record_equity(
+                AccountState(venue="paper", cash=100.0, equity=100.0),
+                {"AAA/USDT": 2.0, "BBB/USDT": 3.0},
+                {"AAA/USDT": 1.5, "IGNORED/USDT": 0.0},
+            )
+            row = [e for e in ledger.events if e.get("kind") == "equity"][0]
+        self.assertEqual(row["stops"], {"AAA/USDT": 1.5})
 
 
 class OptionsRoundTripSelectionTests(unittest.TestCase):

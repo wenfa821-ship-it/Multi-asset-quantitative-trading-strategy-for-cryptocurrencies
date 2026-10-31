@@ -438,7 +438,12 @@ class Ledger:
     def record_risk(self, action: str, **payload: Any) -> None:
         self.record("risk", action=action, **payload)
 
-    def record_equity(self, account: AccountState, marks: dict[str, float] | None = None) -> None:
+    def record_equity(
+        self,
+        account: AccountState,
+        marks: dict[str, float] | None = None,
+        stops: dict[str, float] | None = None,
+    ) -> None:
         self.record(
             "equity",
             equity=round(account.equity, 6),
@@ -453,6 +458,13 @@ class Ledger:
             drawdown_pct=round(account.drawdown_pct, 4),
             positions={s: round(p.qty, 10) for s, p in account.positions.items()},
             marks={k: round(v, 8) for k, v in (marks or {}).items()},
+            # Persist the same protective stops the risk engine used for heat.
+            # Without this, a leg-level budget can show notional but not open risk.
+            stops={
+                symbol: round(float(stop), 8)
+                for symbol, stop in (stops or {}).items()
+                if float(stop or 0.0) > 0
+            },
         )
 
     # ---- reading -----------------------------------------------------------

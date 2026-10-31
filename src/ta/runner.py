@@ -713,7 +713,7 @@ class TradingRunner:
                 self.flatten_all(account, marks, reason="daily loss limit")
             else:
                 self.metrics.inc("ta_flatten_skipped_total")
-            self.ledger.record_equity(account, marks)
+            self.ledger.record_equity(account, marks, self._exit_stops())
             return
         if "pause" in actions:
             self._alert("warning", "trading paused", reason=self.risk.pause_reason)
@@ -769,7 +769,7 @@ class TradingRunner:
         if fills:
             account = self._managed_account(self.venue.get_account())
 
-        self.ledger.record_equity(account, marks)
+        self.ledger.record_equity(account, marks, self._exit_stops())
 
     # ---- helpers -----------------------------------------------------------
     def _now_ms(self) -> int:
@@ -1832,7 +1832,7 @@ class TradingRunner:
         self.metrics.set(
             "ta_heat_pct",
             self.risk.portfolio_heat_pct(
-                account, self._marks_for_heat(account), {s: p.stop for s, p in self.exits.items()}
+                account, self._marks_for_heat(account), self._exit_stops()
             ),
         )
         self.metrics.set("ta_entries_today", self.risk.stats()["entries_today"])
@@ -1840,6 +1840,9 @@ class TradingRunner:
 
     def _marks_for_heat(self, account: AccountState) -> dict[str, float]:
         return {s: self.feed.mark(s) for s in account.positions}
+
+    def _exit_stops(self) -> dict[str, float]:
+        return {symbol: plan.stop for symbol, plan in self.exits.items() if plan.stop > 0}
 
     def _alert(self, level: str, title: str, **fields: Any) -> None:
         if self.alerts:
@@ -1922,7 +1925,7 @@ class TradingRunner:
 
         marks = {s: self.feed.mark(s) for s in self.symbols}
         try:
-            self.ledger.record_equity(account, marks)
+            self.ledger.record_equity(account, marks, self._exit_stops())
         except Exception:  # noqa: BLE001
             pass
 

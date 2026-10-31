@@ -83,6 +83,12 @@ def build_risk_budget(
         for symbol, price in (snapshot.get("marks") or {}).items()
         if float(price or 0.0) > 0
     }
+    stops = {
+        str(symbol): float(price or 0.0)
+        for symbol, price in (snapshot.get("stops") or {}).items()
+        if float(price or 0.0) > 0
+    }
+    heat_known = "stops" in snapshot
     pairs = pairs or {}
     equity = float(snapshot.get("equity") or 0.0)
     members = {
@@ -109,6 +115,8 @@ def build_risk_budget(
         ]
         gross = 0.0
         missing: list[str] = []
+        heat_usd = 0.0
+        heat_symbols: list[str] = []
         for symbol in leg_symbols:
             if name == "derivatives":
                 base = symbol.split(":", 1)[0]
@@ -126,6 +134,10 @@ def build_risk_budget(
                 gross += qty * mark
             else:
                 missing.append(symbol)
+            stop = stops.get(symbol)
+            if positions[symbol] > 0 and stop and mark > 0:
+                heat_usd += abs(mark - stop) * positions[symbol]
+                heat_symbols.append(symbol)
 
         blocked = []
         for row in recent_blocks:
@@ -138,6 +150,11 @@ def build_risk_budget(
         max_gross_usd = round(equity * limit.max_gross_exposure_pct / 100.0, 2)
         gross_used_pct = (
             round(100.0 * gross / max_gross_usd, 2) if max_gross_usd > 0 else None
+        )
+        max_heat_usd = round(equity * limit.max_heat_pct / 100.0, 2)
+        heat_used_pct = (
+            round(100.0 * heat_usd / max_heat_usd, 2)
+            if heat_known and max_heat_usd > 0 else None
         )
         positions_used = len(leg_symbols)
         if positions_used >= limit.max_open_positions:
@@ -164,7 +181,14 @@ def build_risk_budget(
             "gross_used_pct": gross_used_pct,
             "gross_headroom_usd": round(max(0.0, max_gross_usd - gross), 2),
             "max_heat_pct": limit.max_heat_pct,
-            "max_heat_usd": round(equity * limit.max_heat_pct / 100.0, 2),
+            "heat_usd": round(heat_usd, 2) if heat_known else None,
+            "max_heat_usd": max_heat_usd,
+            "heat_used_pct": heat_used_pct,
+            "heat_headroom_usd": (
+                round(max(0.0, max_heat_usd - heat_usd), 2) if heat_known else None
+            ),
+            "heat_known": heat_known,
+            "heat_stop_symbols": sorted(heat_symbols),
             "blocked_24h": len(blocked),
             "blocked_reasons": [
                 {"reason": reason, "count": count}
@@ -184,7 +208,11 @@ def build_risk_budget(
         "positions": len(positions),
         "max_positions": config.risk.account.max_open_positions,
         "total_heat_pct": total_heat_pct,
-        "heat_scope": "account only; per-leg heat is not persisted in the ledger",
+        "heat_scope": (
+            "per-leg from persisted protective stops"
+            if heat_known
+            else "legacy snapshot has no stops; per-leg heat unavailable"
+        ),
         "legs": out_legs,
     }
 
@@ -210,9 +238,9 @@ def markdown(report: dict[str, Any]) -> str:
         f"数据时点 **{as_of}** · 权益 ${report['equity']:,.2f} · "
         f"账户 heat **{heat_text}**",
         "",
-        "> heat 只有账户级读数；账本尚未逐腿持久化止损距离，所以腿级 heat 不做猜测。",
+        f"> heat 口径：{report.get('heat_scope', 'unknown')}。",
         "",
-        "| 腿 | 仓位 | 名义/上限 | 已用 | 24h 阻塞 | 当前约束 | 释放条件 |",
+        "| 腿 | 仓位 | 名义/上限 | heat/上限 | 24h 阻塞 | 当前约束 | 释放条件 |",
         "|---|---:|---:|---:|---:|---|---|",
     ]
     for leg in report["legs"]:
@@ -221,10 +249,18 @@ def markdown(report: dict[str, Any]) -> str:
             if leg["gross_known"]
             else f"未知 / ${leg['max_gross_usd']:,.0f}"
         )
-        used = "未知" if leg["gross_used_pct"] is None else f"{leg['gross_used_pct']:.1f}%"
+        heat_cell = (
+            f"${leg['heat_usd']:,.0f} / ${leg['max_heat_usd']:,.0f}"
+            if leg.get("heat_known")
+            else f"未知 / ${leg['max_heat_usd']:,.0f}"
+        )
+        heat_used = (
+            f"{leg['heat_used_pct']:.1f}%"
+            if leg.get("heat_used_pct") is not None else "未知"
+        )
         out.append(
             f"| {leg['leg']} | {leg['positions']}/{leg['max_positions']} | {gross} | "
-            f"{used} | {leg['blocked_24h']} | {leg['binding']} | "
+            f"{heat_cell}（{heat_used}） | {leg['blocked_24h']} | {leg['binding']} | "
             f"{leg['release_condition']} |"
         )
     out += ["", "## 最近 24h 阻塞原因", ""]

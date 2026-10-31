@@ -504,7 +504,14 @@
    "item": "第二轮 · 风险预算占用审计：每条腿的仓位、heat、容量和阻塞原因形成统一预算表",
    "state": "done",
    "gate": "新增 `ta.risk_budget` + `scripts/risk_budget.py` + `reports/risk-budget.md`，看板新增四腿风险预算表。2026-10-31 11:49 CST：spot 5/5、名义 $9,496/$31,918（29.8%），derivatives 5/5、$9,496/$21,279（44.6%），TradFi 0/4、options 0/3；最近 24h 有 91 次 spot 容量阻塞。账户 heat 0%，但账本没有逐腿止损距离，因此腿级 heat 明确标未知、不猜测",
-   "next": "随 v1.2.0 发布并重启看板后显示；若后续要精确腿级 heat，需要在 equity 快照中持久化每个持仓的止损距离，单独另立任务"
+   "next": "基础面板已随 v1.2.0 生效；精确腿级 heat 已拆到 `r2-leg-heat`，等待下一补丁写入 stops 后验收"
+  },
+  {
+   "id": "r2-leg-heat",
+   "item": "第二轮 · 逐笔记持久化止损距离，计算真实腿级 heat",
+   "state": "in_progress",
+   "gate": "代码与测试已完成：runner 每次 equity 快照写入当前保护止损；risk-budget 按同一 `leg_of()` 分类和 `|mark-stop|×qty/equity` 计算腿级 heat，旧快照无 stops 时明确显示未知。当前生产账本仍是 v1.2.0 写入的旧 schema，因此必须随下一补丁重启后才会产生首条带 stops 的数据",
+   "next": "正在发布 v1.2.1 并获准重启 runner/dashboard；验收首条 equity 含 stops、spot/TradFi heat 非未知，且账户 `ta_heat_pct` 与腿级合计一致"
   },
   {
    "id": "r2-release",

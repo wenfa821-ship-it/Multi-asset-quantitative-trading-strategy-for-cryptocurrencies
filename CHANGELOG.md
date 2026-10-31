@@ -1,12 +1,14 @@
 # Changelog
 
-当前版本：**v1.2.0**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.2.1**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-31T11:59 起，1 条留痕）
+## Unreleased（自 2026-10-31T11:59 起，3 条留痕）
 
 - `2026-10-31T12:09` **ops** v1.2.0 发布与部署 PASS：策略准入在生产生效，三服务与首 tick 正常
+- `2026-10-31T12:18` **strategy** 逐持仓止损写入 equity 快照：腿级 heat 已有实现，待 v1.2.1 重启生效
+- `2026-10-31T12:20` **decision** 用户批准发布 v1.2.1：逐持仓止损与腿级 heat 进入生产验收
 
 ## v1.2.0 — 2026-10-31T11:59
 

@@ -35,7 +35,7 @@
 runner 每次成功构建后会把版本、Git commit/tag、dirty 状态、config 指纹和 build id 写到
 `data/runtime/provenance.json`；看板与 `lifecycle.py verify` 读取同一份身份，避免“版本号一样但运行的不是同一份代码/配置”。
 
-**当前版本 v1.2.0**（2026-10-31；**这行现在被 `scripts/version_sync.py --check` 每轮核对**）。版本线：1.0.0 = 四腿封板；1.1.x = 期权适配、修复、观测与工具；**1.2.0 = 第二代资金治理**（负期望策略准入隔离、策略级成交归因、四腿风险预算与数据完整性），逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
+**当前版本 v1.2.1**（2026-10-31；**这行现在被 `scripts/version_sync.py --check` 每轮核对**）。版本线：1.0.0 = 四腿封板；1.1.x = 期权适配、修复、观测与工具；**1.2.0 = 第二代资金治理**（负策略准入、成交归因、风险预算、数据完整性）；**1.2.1 = 逐持仓止损持久化与真实腿级 heat**，逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
 接入实盘配置并运行 + 风控四道闸门 + 对账 + funding 入账 + 数据管道 + 上文这套发布管理**。
 
 2026-10-10 范围调整（用户决定）：原五步路径的第 5 步**期权策略移入 1.1**（它等的是 5–7 天
@@ -122,12 +122,13 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `r2-strategy-admission` | 第二轮 · 策略实盘准入闸门：足够样本外证据为负的策略不再获得生产资金 | **✅ 完成** | 2026-10-31：`data/readiness/edge.json` 中三条方向性策略样本外均为负（trend_breakout -1.28% / 86 笔、trend_pullback -1.01% / 99 笔、mean_reversion -1.83% / 192 笔）。新增 `ta.strategy_policy`：≥30 笔样本外且收益 ≤0 即隔离；样本不足保留为小仓收集中；carry 走实盘 gate 5；研究命令显式指定策略时仍可运行。runner 启动时自动执行，报告写入 `data/readiness/strategy-admission.json` 并接入每日任务 | 随下一版本发布并重启生效；生效后生产策略应为 carry_funding、trend_breakout_daily、new_listing_breakout，三条负期望方向性策略隔离 |
 | `r2-strategy-attribution` | 第二轮 · 策略级成交归因：每个持仓按入场策略聚合，而不是只看账户总权益 | **✅ 完成** | 平仓配对现在同时保留入场与出场 tag，并把 `trend_pullback + trend_pullback:exit` 归一为同一策略；看板输出 `by_strategy` 笔数、净额、胜率、手续费。历史 `ccxt` / `manual-reconcile` 标签保留原名，不冒充策略 | 随 dashboard 重启后显示；后续成交可直接按策略比较净收益与费用 |
 | `r2-review-integrity` | 第二轮 · 日报符号完整性：负资金费不得显示成 `+$-N` | **✅ 完成** | 新增 `signed_usd()` 并覆盖资金费总额、补记、最大项与逐标的分布；2026-10-30 的 CRV `+$-57.97` 回归已加测试 | — |
-| `r2-risk-budget` | 第二轮 · 风险预算占用审计：每条腿的仓位、heat、容量和阻塞原因形成统一预算表 | **✅ 完成** | 新增 `ta.risk_budget` + `scripts/risk_budget.py` + `reports/risk-budget.md`，看板新增四腿风险预算表。2026-10-31 11:49 CST：spot 5/5、名义 $9,496/$31,918（29.8%），derivatives 5/5、$9,496/$21,279（44.6%），TradFi 0/4、options 0/3；最近 24h 有 91 次 spot 容量阻塞。账户 heat 0%，但账本没有逐腿止损距离，因此腿级 heat 明确标未知、不猜测 | 随 v1.2.0 发布并重启看板后显示；若后续要精确腿级 heat，需要在 equity 快照中持久化每个持仓的止损距离，单独另立任务 |
+| `r2-risk-budget` | 第二轮 · 风险预算占用审计：每条腿的仓位、heat、容量和阻塞原因形成统一预算表 | **✅ 完成** | 新增 `ta.risk_budget` + `scripts/risk_budget.py` + `reports/risk-budget.md`，看板新增四腿风险预算表。2026-10-31 11:49 CST：spot 5/5、名义 $9,496/$31,918（29.8%），derivatives 5/5、$9,496/$21,279（44.6%），TradFi 0/4、options 0/3；最近 24h 有 91 次 spot 容量阻塞。账户 heat 0%，但账本没有逐腿止损距离，因此腿级 heat 明确标未知、不猜测 | 基础面板已随 v1.2.0 生效；精确腿级 heat 已拆到 `r2-leg-heat`，等待下一补丁写入 stops 后验收 |
+| `r2-leg-heat` | 第二轮 · 逐笔记持久化止损距离，计算真实腿级 heat | **🔧 进行中** | 代码与测试已完成：runner 每次 equity 快照写入当前保护止损；risk-budget 按同一 `leg_of()` 分类和 `|mark-stop|×qty/equity` 计算腿级 heat，旧快照无 stops 时明确显示未知。当前生产账本仍是 v1.2.0 写入的旧 schema，因此必须随下一补丁重启后才会产生首条带 stops 的数据 | 正在发布 v1.2.1 并获准重启 runner/dashboard；验收首条 equity 含 stops、spot/TradFi heat 非未知，且账户 `ta_heat_pct` 与腿级合计一致 |
 | `r2-release` | 第二轮 · v1.2.0 发布与部署验收 | **✅ 完成** | 2026-10-31 发布完成：release commit `a5530f5a55eb`、annotated tag `v1.2.0`；候选/main/tag CI 全绿，tag 的 verify 与 release-artifact 均 success。重启后 runner/watch/dashboard=19787/19789/19790，build=`ecca1f2f631c144b`；首 tick 完成、deploy-verify PASS、kill=0、degraded=0、watchdog 无 breach。日志确认三条负期望策略被隔离，实际策略为 carry_funding / trend_breakout_daily / new_listing_breakout。已知旧 Demo key ID 历史例外不阻断本次模拟盘发布，实盘 readiness 仍 0/5 | 维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；旧 Demo key 轮换、Live key 白名单与 webhook 仍是实盘前 P0 |
 | `production-security-hardening` | 实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限 | **🔧 进行中** | 2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修。v1.1.29 已部署并把 50110/IP whitelist 归类为 external；当前出口 209.9.203.250 已加入 Demo 白名单，账户/tick/日任务均已恢复。用户 2026-10-30 决定暂不固定 Clash 节点，接受代理 IP 漂移并在漂移时更新白名单。仍待用户吊销旧 Demo key、为当前出口更新 Live key 白名单、配置 TA_ALERT_WEBHOOK_URL；实盘门槛仍 0/5 | 安全闭环剩余动作：按用户决定保留动态出口并在漂移时更新白名单；轮换 Demo key；配置 Live key 与外部 webhook；随后重估 live readiness |
 | `demo-canary` | v1.1.28 部署后的 OKX Demo 实际订单往返、临时账本与对账闭环 | **✅ 完成** | 2026-10-28 00:08 CST 受控 canary：DOGE/USDT 买入约 $23（293.929712 DOGE），随后只卖出本次到账的 293.929712 DOGE；买卖各一笔 filled，临时 ledger 2 笔成交，book position=0，fees=$0.04595591，现金净损耗 $0.09004537（含双边费与约 19bps 价差），OMS reconcile ok=true。场馆最终 DOGE free=0、open orders=0、canary closed orders=2；生产 ledger 无 canary ID/tag；runner 全程继续 tick，deploy-verify 仍 PASS | 维护：发布或交易所适配变更后重跑同规模 canary；真实资金仍受 live readiness 0/5 与 live key IP 白名单阻断 |
 
-**合计**：✅ 完成 66 · 🔧 进行中 1 · ⏳ 等数据 8。
+**合计**：✅ 完成 66 · 🔧 进行中 2 · ⏳ 等数据 8。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。
