@@ -120,6 +120,15 @@
     border-radius:6px;font-size:11px;cursor:pointer;transition:.16s ease}
   .segmented button:hover{color:var(--fg)}
   .segmented button.active{background:#183047;color:var(--accent);box-shadow:inset 0 0 0 1px #28516f}
+  #equity-range{gap:5px;padding:4px}
+  #equity-range button{display:grid;grid-template-columns:auto auto;align-items:baseline;
+    column-gap:6px;min-width:76px;padding:6px 9px;text-align:left;line-height:1.2}
+  #equity-range button span{font-weight:700;letter-spacing:.4px}
+  #equity-range button strong{font-size:11px;font-variant-numeric:tabular-nums}
+  #equity-range button small{grid-column:1/-1;margin-top:3px;font-size:9.5px;
+    color:var(--dim);font-variant-numeric:tabular-nums}
+  #equity-range button.up strong,#equity-range button.up small{color:var(--up)}
+  #equity-range button.down strong,#equity-range button.down small{color:var(--down)}
   .equity-stats{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:2px 0 10px}
   .equity-value{font-size:24px;font-weight:760;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
   .equity-delta{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
@@ -142,6 +151,7 @@
     .navtabs{order:3;width:100%;overflow:auto}.navtabs button{white-space:nowrap}
     section{padding:14px;border-radius:12px}
     .equity-value{font-size:21px}.equity-grid{grid-template-columns:1fr}
+    .segmented{max-width:100%;overflow:auto}
   }
 </style>
 </head>
@@ -748,8 +758,36 @@ function renderFlags(flags) {
 }
 
 let EQUITY_DATA = {points: [], count: 0};
-let EQUITY_RANGE = '7d';
 const EQUITY_WINDOWS = { '1d': 1, '7d': 7, '30d': 30, '90d': 90 };
+const EQUITY_LABELS = {'1d':'1D','7d':'7D','30d':'30D','90d':'90D','all':'ALL'};
+let EQUITY_RANGE = (() => {
+  try {
+    const saved = localStorage.getItem('ta.equityRange');
+    return Object.prototype.hasOwnProperty.call(EQUITY_LABELS, saved) ? saved : '7d';
+  } catch (_) { return '7d'; }
+})();
+
+function equitySlice(all, range) {
+  const latest = all[all.length - 1].ts;
+  const days = EQUITY_WINDOWS[range];
+  let pts = days ? all.filter(p => p.ts >= latest - days * 86400000) : all;
+  let fallback = false;
+  if (pts.length < 2) { pts = all.slice(-2); fallback = true; }
+  const start = Number(pts[0].equity || 0);
+  const end = Number(pts[pts.length - 1].equity || 0);
+  const values = pts.map(p => Number(p.equity || 0));
+  let runningPeak = values[0], maxDrawdown = 0;
+  for (const value of values) {
+    runningPeak = Math.max(runningPeak, value);
+    if (runningPeak > 0) maxDrawdown = Math.max(maxDrawdown, (runningPeak - value) / runningPeak * 100);
+  }
+  return {
+    pts, fallback, start, end,
+    delta: end - start,
+    pct: start ? (end - start) / start * 100 : 0,
+    peak: Math.max(...values), trough: Math.min(...values), maxDrawdown,
+  };
+}
 
 function renderChart(eq) {
   EQUITY_DATA = eq || {points: [], count: 0};
@@ -763,24 +801,22 @@ function renderEquityChart() {
     $('#chart').innerHTML = '<div class="muted">还没有足够的权益记录</div>';
     return;
   }
-  const latest = all[all.length - 1].ts;
-  const days = EQUITY_WINDOWS[EQUITY_RANGE];
-  let pts = days ? all.filter(p => p.ts >= latest - days * 86400000) : all;
-  let fallback = false;
-  if (pts.length < 2) { pts = all.slice(-2); fallback = true; }
-
-  const start = Number(pts[0].equity || 0);
-  const end = Number(pts[pts.length - 1].equity || 0);
-  const delta = end - start;
-  const pct = start ? (delta / start * 100) : 0;
-  const values = pts.map(p => Number(p.equity || 0));
-  const peak = Math.max(...values);
-  const trough = Math.min(...values);
-  let runningPeak = values[0], maxDrawdown = 0;
-  for (const value of values) {
-    runningPeak = Math.max(runningPeak, value);
-    if (runningPeak > 0) maxDrawdown = Math.max(maxDrawdown, (runningPeak - value) / runningPeak * 100);
-  }
+  const summaries = {};
+  Object.keys(EQUITY_LABELS).forEach(range => { summaries[range] = equitySlice(all, range); });
+  document.querySelectorAll('#equity-range button').forEach(button => {
+    const range = button.dataset.range;
+    const summary = summaries[range];
+    const tone = summary.delta >= 0 ? 'up' : 'down';
+    button.classList.toggle(tone, true);
+    button.classList.toggle(tone === 'up' ? 'down' : 'up', false);
+    button.innerHTML = `<span>${EQUITY_LABELS[range]}</span><strong>${money(summary.delta)}</strong>
+      <small>${summary.pct >= 0 ? '+' : ''}${n(summary.pct,2)}%</small>`;
+    button.setAttribute('aria-label',
+      `${EQUITY_LABELS[range]} 区间损益 ${money(summary.delta)}，收益率 ${n(summary.pct,3)}%`);
+  });
+  const current = summaries[EQUITY_RANGE];
+  const pts = current.pts;
+  const {start, end, delta, pct, peak, trough, maxDrawdown, fallback} = current;
   const tone = delta >= 0 ? 'up' : 'down';
   const drawdownText = maxDrawdown > 0 ? `-${n(maxDrawdown,3)}%` : '0.000%';
   const rangeName = ({'1d':'1 天','7d':'7 天','30d':'30 天','90d':'90 天','all':'全部'})[EQUITY_RANGE];
@@ -1245,8 +1281,10 @@ async function poll() {
   setTimeout(poll, 15000);
 }
 document.querySelectorAll('#equity-range button').forEach(button => {
+  button.classList.toggle('active', button.dataset.range === EQUITY_RANGE);
   button.addEventListener('click', () => {
     EQUITY_RANGE = button.dataset.range || '7d';
+    try { localStorage.setItem('ta.equityRange', EQUITY_RANGE); } catch (_) {}
     document.querySelectorAll('#equity-range button').forEach(item => {
       item.classList.toggle('active', item === button);
     });
