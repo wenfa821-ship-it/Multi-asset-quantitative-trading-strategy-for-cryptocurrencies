@@ -4,11 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## v1.2.4 — 2026-10-31T22:30
+## v1.2.4 — 2026-10-31T22:53
 
-- 测试 **531** 绿 · 权益 $106,601.94 · 记录时的包版本 1.2.4
+- 测试 **531** 绿 · 权益 $106,621.34 · 记录时的包版本 1.2.4
 
-Dual strategy workspaces preserved; streamlined secondary navigation; unified order center; 531 tests passed; accepted old Demo key history exception remains.
+Dual strategy workspaces preserved; streamlined secondary navigation; unified order center; selectable intraday/day/week/month/year equity curves with custom date range; 531 tests passed.
 
 ## v1.2.3 — 2026-10-31T21:21
 
