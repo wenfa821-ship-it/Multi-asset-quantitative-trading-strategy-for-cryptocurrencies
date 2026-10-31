@@ -22,10 +22,12 @@
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
   a{color:var(--accent)}
   button{font:inherit}
-  header{position:sticky;top:0;z-index:20;background:rgba(8,13,19,.88);
+  header{position:sticky;top:0;z-index:20;background:rgba(8,13,19,.9);
     backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid rgba(83,112,137,.34);
-    padding:12px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
     box-shadow:0 8px 30px rgba(0,0,0,.2)}
+  .header-shell{width:100%;max-width:1480px;margin:0 auto;padding:10px 24px 0}
+  .header-primary{display:grid;grid-template-columns:minmax(190px,.72fr) minmax(460px,1.5fr) auto;
+    align-items:center;gap:20px;min-height:46px}
   .brand{display:flex;align-items:center;gap:10px;min-width:190px}
   .brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
     background:linear-gradient(145deg,var(--accent),var(--accent2));color:#07111a;
@@ -37,8 +39,18 @@
   .bad{color:var(--crit);border-color:#7a2621;background:#2a1312}
   .warnb{color:var(--warn);border-color:#6b5216;background:#241d0c}
   .muted{color:var(--dim);font-size:12px}
-  .header-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
-  .header-meta .muted{font-size:11px}
+  .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap}
+  .header-actions .muted{font-size:11px}
+  .header-status{display:flex;align-items:center;min-width:0;margin-top:8px;padding:7px 0 9px;
+    border-top:1px solid rgba(83,112,137,.22);overflow-x:auto;white-space:nowrap;
+    scrollbar-width:none}
+  .header-status::-webkit-scrollbar{display:none}
+  .header-status>span{color:var(--dim);font-size:11px}
+  .header-status>.badge{padding:0;border:0;background:transparent;font-size:11px}
+  .header-status>.badge.ok{color:var(--up)}
+  .header-status>.badge.warnb{color:var(--warn)}
+  .header-status>span+span::before{content:"";display:inline-block;width:1px;height:11px;
+    margin:0 10px;background:var(--line);vertical-align:-1px}
   main{max-width:1480px;margin:0 auto;padding:22px 24px 34px;display:grid;
     grid-template-columns:repeat(12,1fr);gap:18px}
   section{position:relative;overflow:hidden;background:var(--panel);
@@ -53,12 +65,15 @@
   .span8{grid-column:span 8} .span6{grid-column:span 6}
   .span4{grid-column:span 4} .span3{grid-column:span 3}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(164px,1fr));gap:12px}
-  .kpi{padding:13px 14px;border:1px solid rgba(48,68,88,.72);border-radius:11px;
+  .kpis-balanced{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #nc-bars{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .kpi{display:flex;flex-direction:column;min-width:0;min-height:128px;padding:13px 14px;
+    border:1px solid rgba(48,68,88,.72);border-radius:11px;
     background:linear-gradient(145deg,rgba(22,34,47,.94),rgba(13,22,32,.88))}
   .kpi .v{font-size:22px;font-weight:740;font-variant-numeric:tabular-nums;line-height:1.25;
     margin:4px 0 2px;letter-spacing:-.3px}
   .kpi .k{font-size:10px;color:#9eb1c1;text-transform:uppercase;letter-spacing:.8px}
-  .kpi .s{font-size:10.5px;color:var(--dim)}
+  .kpi .s{font-size:10.5px;color:var(--dim);margin-top:auto;padding-top:4px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{position:sticky;top:0;z-index:1;text-align:left;color:#9eb1c1;font-weight:650;font-size:10px;
     text-transform:uppercase;letter-spacing:.7px;padding:8px 7px;background:var(--panel);
@@ -96,11 +111,14 @@
   .strat p{margin:0 0 8px;color:var(--dim);font-size:12.5px}
   .kv{display:grid;grid-template-columns:minmax(92px,auto) 1fr;gap:6px 12px;font-size:12.5px}
   .kv div:nth-child(odd){color:var(--dim)}
-  .navtabs{display:flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#0c141d}
-  .navtabs button{display:flex;gap:8px;align-items:center;background:transparent;
-    border:0;color:var(--dim);padding:6px 11px;border-radius:7px;
-    font-size:12px;cursor:pointer}
+  .navtabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%;
+    max-width:640px;justify-self:center;padding:3px;border:1px solid var(--line);
+    border-radius:10px;background:#0c141d}
+  .navtabs button{display:flex;min-width:0;gap:8px;align-items:center;justify-content:space-between;
+    background:transparent;border:0;color:var(--dim);padding:7px 10px;border-radius:7px;
+    font-size:12px;cursor:pointer;text-align:left;white-space:nowrap}
   .navtabs button.active{color:var(--fg);background:#172534;box-shadow:inset 0 0 0 1px #2f485e}
+  .navtabs .badge{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .navtabs button:hover{color:var(--fg)}
   .viewgrid{display:contents}
   [hidden]{display:none !important}
@@ -108,8 +126,13 @@
     border:1px solid var(--line);background:var(--panel2);color:var(--dim);margin-right:4px}
   .pill.ok{color:var(--up);border-color:#1f6f36}
   .pill.no{color:var(--crit);border-color:#7a2621}
-  .step{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:3px 0}
+  .step{display:grid;grid-template-columns:16px minmax(220px,300px) minmax(0,1fr);
+    gap:8px;align-items:center;font-size:12.5px;padding:3px 0}
   .step .dot{flex:0 0 16px;text-align:center}
+  .step .detail{min-width:0;color:var(--dim)}
+  #nc-candidates,#nc-awaiting,#nc-decision,#nc-chains,#nc-sample,#nc-funnel,
+  #nc-raw,#nc-scores,#nc-ledger,#nc-progress,#nc-changelog,
+  #risk-budget,#services,#thresholds,#carry,#options,#monitor{max-width:100%;overflow-x:auto}
   .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
     margin-bottom:10px;flex-wrap:wrap}
   .panel-head h2{margin:0}
@@ -140,44 +163,64 @@
   .chart-wrap{border:1px solid rgba(42,58,75,.62);border-radius:10px;padding:8px 6px 4px;
     background:linear-gradient(180deg,rgba(15,26,38,.62),rgba(8,14,21,.35))}
   footer{max-width:1480px;margin:0 auto;padding:4px 24px 40px;color:var(--dim);font-size:11px}
+  @media(max-width:1180px){
+    .kpis-balanced,#nc-bars{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
   @media(max-width:1000px){
-    header{padding:11px 16px}.brand{min-width:0}.header-meta{margin-left:0}
+    .header-shell{padding:10px 16px 0}.brand{min-width:0}
+    .header-primary{grid-template-columns:minmax(0,1fr) auto;gap:9px 14px}
+    .navtabs{grid-column:1/-1;grid-row:2;max-width:none}
+    .header-status{flex-wrap:wrap;gap:5px 12px;white-space:normal}
+    .header-status>span+span::before{display:none}
     main{padding:18px 16px 28px;gap:14px}
     .span8,.span6,.span4,.span3{grid-column:span 12}
     .equity-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
   @media(max-width:620px){
-    .header-meta{gap:6px}.header-meta .muted{display:none}
-    .navtabs{order:3;width:100%;overflow:auto}.navtabs button{white-space:nowrap}
+    .header-shell{padding:9px 14px 0}.brand-mark{width:30px;height:30px}
+    .brand-sub{display:none}.header-actions .readonly{display:none}
+    .navtabs button{padding:7px 8px;font-size:11px}.navtabs .badge{font-size:9.5px}
     section{padding:14px;border-radius:12px}
     .equity-value{font-size:21px}.equity-grid{grid-template-columns:1fr}
     .segmented{max-width:100%;overflow:auto}
+    .step{grid-template-columns:16px minmax(0,1fr)}
+    .step .detail{grid-column:2}
+  }
+  @media(max-width:480px){
+    .kpis-balanced,#nc-bars{grid-template-columns:1fr}
   }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="brand-mark">TA</span><div><h1>运营看板</h1>
-    <span class="brand-sub">Multi-asset control plane</span></div></div>
-  <nav class="navtabs">
-    <button data-view="portfolio" class="active">多资产组合策略
-      <span id="health" class="badge ok">加载中…</span></button>
-    <button data-view="newcoin">新币主观量化策略
-      <span id="nc-badge" class="badge warnb">加载中…</span></button>
-  </nav>
-  <div class="header-meta">
-    <span id="venue" class="muted"></span>
-    <span id="release" class="muted">release: 加载中…</span>
-    <span id="updated" class="muted"></span>
-    <span id="freshness" class="muted"></span>
-    <span class="muted">只读 · 不下单</span>
-    <button id="refresh" class="chip">立即刷新</button>
+  <div class="header-shell">
+    <div class="header-primary">
+      <div class="brand"><span class="brand-mark">TA</span><div><h1>运营看板</h1>
+        <span class="brand-sub">Multi-asset control plane</span></div></div>
+      <nav class="navtabs" aria-label="运营看板页面">
+        <button data-view="portfolio" class="active">多资产组合策略
+          <span id="health" class="badge ok">加载中…</span></button>
+        <button data-view="newcoin">新币主观量化策略
+          <span id="nc-badge" class="badge warnb">加载中…</span></button>
+      </nav>
+      <div class="header-actions">
+        <span class="muted readonly">只读 · 不下单</span>
+        <button id="refresh" class="chip">立即刷新</button>
+      </div>
+    </div>
+    <div class="header-status" aria-label="系统状态">
+      <span id="venue"></span>
+      <span id="release">release: 加载中…</span>
+      <span id="updated"></span>
+      <span id="freshness"></span>
+      <span id="collection"></span>
+    </div>
   </div>
 </header>
 
 <main>
 <div id="view-portfolio" class="viewgrid">
-  <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis"></div></section>
+  <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis kpis-balanced"></div></section>
   <section class="span12" id="decisions-section" hidden><h2>待你决定（两个项目）</h2>
     <div id="decisions"></div>
     <div class="muted" style="margin-top:6px">来源：本项目的 <code>docs/progress.json</code> 与兄弟项目发布的进度表 ——
@@ -262,7 +305,7 @@
 
 <div id="view-newcoin" class="viewgrid" hidden>
   <section class="span12"><h2>新币主观量化策略 · 证据标准进度（现阶段唯一诚实的"进展"）</h2>
-    <div id="nc-bars" class="kpis"></div>
+    <div id="nc-bars" class="kpis kpis-balanced"></div>
     <div id="nc-gates" style="margin-top:12px"></div>
     <div class="muted" style="margin-top:8px">这个项目与左边那个<b>不共用闸门</b>：
       它按"决策过程是否可回看"判，不按统计显著性判（低频主观决策 30 笔也构不成分布）。</div>
@@ -389,15 +432,18 @@ function ncKpi(k, v, s) {
 }
 function ncBar(label, ok, detail) {
   return `<div class="step"><span class="dot">${ok ? '✅' : '⬜'}</span>
-    <span style="flex:0 0 300px">${esc(label)}</span>
-    <span class="muted">${esc(detail || '')}</span></div>`;
+    <span>${esc(label)}</span>
+    <span class="detail">${esc(detail || '')}</span></div>`;
 }
 
 function renderNewcoin(nc) {
   const ids = ['nc-gates','nc-candidates','nc-raw','nc-scores','nc-progress','nc-sources','nc-changelog'];
   const badge = $('#nc-badge');
+  const collection = $('#collection');
   if (!nc || !nc.available) {
     badge.className = 'badge warnb'; badge.textContent = '无报告';
+    badge.title = (nc && nc.reason) || '没有数据';
+    collection.textContent = '新币：无报告';
     $('#nc-bars').innerHTML = `<div class="muted">${esc((nc && nc.reason) || '没有数据')}</div>`;
     ids.forEach(id => { $('#' + id).innerHTML = '<div class="muted">—</div>'; });
     return;
@@ -417,7 +463,9 @@ function renderNewcoin(nc) {
         : Math.round(fr.oldest_age_seconds / 3600) + ' 小时前'))
     : '各块时刻未知';
   badge.className = 'badge ' + (nc.stale ? 'warnb' : 'ok');
-  badge.textContent = (nc.stale ? '采集过期' : '采集正常') + '（' + frText + '）';
+  badge.textContent = nc.stale ? '采集过期' : '采集正常';
+  badge.title = frText;
+  collection.textContent = '新币：' + (nc.stale ? '采集过期' : '采集正常') + ' · ' + frText;
 
   const counts = (nc.progress && nc.progress.counts) || {};
   const total = Object.values(counts).reduce((a, c) => a + c, 0);

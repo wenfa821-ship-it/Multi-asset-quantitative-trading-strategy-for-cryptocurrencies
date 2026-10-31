@@ -2153,6 +2153,15 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("最大回撤", html)
         self.assertIn("renderEquityChart()", html)
 
+    def test_dashboard_header_and_kpi_grids_share_stable_alignment(self) -> None:
+        html = (PROJECT / "src" / "ta" / "web" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="header-shell"', html)
+        self.assertIn('class="header-primary"', html)
+        self.assertIn('class="header-status"', html)
+        self.assertIn('id="collection"', html)
+        self.assertIn("#nc-bars{grid-template-columns:repeat(5", html)
+        self.assertIn('class="kpis kpis-balanced"', html)
+
     def test_audit_changelog_is_append_only_and_valid(self) -> None:
         from ta.dashboard import read_jsonl
 

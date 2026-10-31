@@ -1,12 +1,13 @@
 # Changelog
 
-当前版本：**v1.2.2**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.2.3**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-31T20:38 起，1 条留痕）
+## Unreleased（自 2026-10-31T20:38 起，2 条留痕）
 
 - `2026-10-31T20:53` **ops** v1.2.2 发布部署 PASS：看板视觉重构与分区间损益已上线
+- `2026-10-31T21:08` **ops** 看板导航与页面网格对齐修复：桌面 4×2/5×2、平板与手机响应式重排
 
 ## v1.2.2 — 2026-10-31T20:38
 
