@@ -39,6 +39,8 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from .config import Config
+from .risk_budget import build_risk_budget
+from .strategy_policy import strategy_admission
 
 MAX_TIMELINE = 400
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -162,6 +164,8 @@ def round_trips(fills: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if pos["qty"] <= 0:
                 pos.update(_blank_position())
                 pos["opened_ts"] = fill.get("ts")
+            if fill.get("tag"):
+                pos["tags"].append(str(fill["tag"]))
             pos["qty"] += qty
             pos["entry_qty"] += qty
             pos["cost"] += qty * price
@@ -198,6 +202,26 @@ def round_trips(fills: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 open_pos[symbol] = _blank_position()
     trades.sort(key=lambda t: t.get("closed_ts") or 0)
     return trades
+
+
+def strategy_bucket(tag: str) -> str:
+    """Collapse entry/exit labels to the strategy that owned the position.
+
+    New fills carry labels such as ``trend_pullback`` on entry and
+    ``trend_pullback:exit`` on exit. Historical rows use transport/account
+    labels such as ``ccxt`` or ``manual-reconcile``; those are kept explicitly
+    instead of being silently attributed to a strategy.
+    """
+    names = {
+        part.strip().split(":", 1)[0]
+        for part in str(tag or "").split(",")
+        if part.strip()
+    }
+    if not names:
+        return "untagged"
+    if len(names) == 1:
+        return next(iter(names))
+    return "mixed:" + "+".join(sorted(names))
 
 
 def _blank_position() -> dict[str, Any]:
@@ -652,6 +676,26 @@ class DashboardData:
         fills = [e for e in self._ledger() if e.get("kind") == "fill"]
         closed = round_trips(fills)
         wins = [t for t in closed if t["net"] > 0]
+        grouped: dict[str, dict[str, Any]] = {}
+        for trade in closed:
+            name = strategy_bucket(str(trade.get("tag") or ""))
+            row = grouped.setdefault(
+                name, {"strategy": name, "count": 0, "wins": 0, "net": 0.0, "fees": 0.0}
+            )
+            row["count"] += 1
+            row["wins"] += 1 if trade["net"] > 0 else 0
+            row["net"] += float(trade["net"])
+            row["fees"] += float(trade["fees"])
+        by_strategy = []
+        for row in grouped.values():
+            count = row["count"]
+            by_strategy.append({
+                **row,
+                "net": round(row["net"], 2),
+                "fees": round(row["fees"], 2),
+                "win_rate": round(100.0 * row["wins"] / count, 1) if count else 0.0,
+            })
+        by_strategy.sort(key=lambda row: (-row["net"], row["strategy"]))
         return {
             "closed": closed[::-1],  # newest first
             "count": len(closed),
@@ -662,6 +706,7 @@ class DashboardData:
             "fees_total": round(sum(t["fees"] for t in closed), 2),
             "best": max((t["net"] for t in closed), default=0.0),
             "worst": min((t["net"] for t in closed), default=0.0),
+            "by_strategy": by_strategy,
         }
 
     def timeline(self) -> list[dict[str, Any]]:
@@ -680,13 +725,27 @@ class DashboardData:
                 ) or {}
             except (tomllib.TOMLDecodeError, OSError):
                 raw_all = {}
+        policy = strategy_admission(self.config)
+        admission = {
+            row["strategy"]: row for row in policy["decisions"]
+        }
         out: list[dict[str, Any]] = []
         for name, spec in self.config.strategies.items():
             raw = dict(raw_all.get(name) or {})
+            configured_enabled = bool(
+                raw.get("enabled", getattr(spec, "enabled", False))
+            )
+            decision = admission.get(name) or {
+                "admitted": False,
+                "state": "disabled",
+                "reason": "strategy is disabled in config",
+            }
             out.append(
                 {
                     "name": name,
-                    "enabled": bool(raw.get("enabled", getattr(spec, "enabled", False))),
+                    "enabled": configured_enabled,
+                    "runtime_enabled": configured_enabled and bool(decision["admitted"]),
+                    "admission": decision,
                     "timeframe": raw.get("timeframe") or getattr(spec, "timeframe", None),
                     "confirm": raw.get("confirm_timeframe"),
                     "description": raw.get("description", ""),
@@ -763,6 +822,20 @@ class DashboardData:
                 "kill_switch": usd(circuit.max_drawdown_kill_pct),
             },
         }
+
+    def risk_budget(self) -> dict[str, Any]:
+        pairs_path = self.config.data_dir / "carry" / "pairs.json"
+        try:
+            pairs = json.loads(pairs_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pairs = {}
+        metrics = self.live_metrics()
+        return build_risk_budget(
+            self.config,
+            self._ledger(),
+            pairs=pairs,
+            total_heat_pct=metrics.get("ta_heat_pct"),
+        )
 
     def audit(self) -> list[dict[str, Any]]:
         rows = read_jsonl(self.root / "docs" / "changelog.jsonl")
@@ -1667,6 +1740,7 @@ class DashboardData:
             "timeline": self.timeline(),
             "strategies": self.strategies(),
             "risk": self.risk_limits(),
+            "risk_budget": self.risk_budget(),
             "audit": self.audit(),
             "artifacts": self.artifacts(),
             "refit": self.refit_history(),

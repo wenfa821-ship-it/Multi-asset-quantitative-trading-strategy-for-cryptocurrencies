@@ -39,6 +39,7 @@ from .resilience import ResilientVenue, VenueDegraded
 from .risk.engine import RiskEngine
 from .strategies import build_strategy
 from .strategies.base import MarketView, Strategy
+from .strategy_policy import strategy_admission
 from .util import VirtualClock, now_ms, tf_to_ms
 from .venues import build_venue
 from .venues.base import Venue
@@ -86,6 +87,7 @@ class ExitPlan:
     symbol: str
     entry: float
     stop: float
+    strategy: str = ""
     target: float | None = None
     partial_target: float | None = None
     partial_fraction: float = 0.5
@@ -104,6 +106,7 @@ class ExitPlan:
 
     def dict(self) -> dict[str, Any]:
         return {
+            "strategy": self.strategy,
             "entry": round(self.entry, 8),
             "stop": round(self.stop, 8),
             "target": self.target,
@@ -300,9 +303,40 @@ class TradingRunner:
         import uuid
         from pathlib import Path
 
+        explicitly_requested = strategy_names is not None
         names = strategy_names or [n for n, s in config.strategies.items() if s.enabled]
+        policy: dict[str, Any] | None = None
+        if not explicitly_requested and venue_name != "paper":
+            # Do not allocate production capital to a strategy whose sufficient
+            # out-of-sample evidence is non-positive. Thin/no-result strategies
+            # still collect evidence at their tight configured size; carry is
+            # governed by live-readiness gate 5 instead of OHLCV backtest.
+            policy = strategy_admission(config)
+            if not policy["evidence_available"] or policy["evidence_stale"]:
+                logger.warning(
+                    "strategy evidence unavailable or stale",
+                    extra={"extra_fields": {
+                        "path": policy["evidence_path"],
+                        "generated_at": policy["evidence_generated_at"],
+                        "age_hours": policy["evidence_age_hours"],
+                        "error": policy["error"],
+                    }},
+                )
+            admitted = set(policy["admitted"])
+            names = [name for name in names if name in admitted]
+            for decision in policy["decisions"]:
+                if not decision["admitted"]:
+                    logger.warning(
+                        "strategy quarantined by evidence",
+                        extra={"extra_fields": {
+                            "strategy": decision["strategy"],
+                            "reason": decision["reason"],
+                            "policy": policy["policy"],
+                        }},
+                    )
         if not names:
-            raise ValueError("no strategy selected")
+            detail = f"; quarantined={policy['quarantined']}" if policy else ""
+            raise ValueError(f"no strategy selected{detail}")
 
         section = config.venue(venue_name)
         costs = {
@@ -1236,6 +1270,7 @@ class TradingRunner:
             symbol=signal.symbol,
             entry=entry,
             stop=stop,
+            strategy=strategy.name,
             target=signal.take_profit,
             partial_target=signal.partial_target,
             partial_fraction=signal.partial_fraction,
@@ -1649,7 +1684,7 @@ class TradingRunner:
                     qty=qty,
                     type="market",
                     reduce_only=True,
-                    tag="partial",
+                    tag=f"{plan.strategy}:partial" if plan.strategy else "partial",
                 )
                 if self._submit(request, account, mark, marks) is not None:
                     plan.partial_taken = True
@@ -1687,7 +1722,10 @@ class TradingRunner:
                 qty=position.qty,
                 type="market",
                 reduce_only=True,
-                tag="stop" if stop_hit else "exit",
+                tag=(
+                    f"{plan.strategy}:{'stop' if stop_hit else 'exit'}"
+                    if plan.strategy else ("stop" if stop_hit else "exit")
+                ),
             )
             order = self._submit(request, account, mark, marks)
             if order is None:

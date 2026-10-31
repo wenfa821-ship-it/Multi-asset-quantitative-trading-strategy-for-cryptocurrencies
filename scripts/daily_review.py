@@ -92,6 +92,12 @@ def backfilled_funding(rows: list[dict], start_ms: int, end_ms: int) -> dict:
     return {"total": total, "count": count, "unknown_bill_ts": unknown}
 
 
+def signed_usd(amount: float, places: int = 2) -> str:
+    """Format a signed USD amount without producing the invalid ``+$-1`` form."""
+    sign = "+" if amount >= 0 else "-"
+    return f"{sign}${abs(amount):,.{places}f}"
+
+
 def _funding_series(directory: Path) -> dict:
     """费率序列（`ta.funding`）；从 scripts/ 直接跑时 src 不在 sys.path 上。"""
     try:
@@ -277,13 +283,14 @@ def markdown(date: str, stats: dict) -> str:
         add(f"| 权益 | {start:,.2f} → **{end:,.2f} = {delta:+,.2f}（{pct:+.3f}%）** |")
         add(f"| 峰 / 谷 | {stats['equity_peak']:,.2f} / {stats['equity_trough']:,.2f} |")
     add(f"| 成交 | **{len(stats['fills'])} 笔**，手续费 **${stats['fill_fees']:,.4f}** |")
-    add(f"| 资金费 | **+${stats['funding_total']:,.4f} / {stats['funding_rows']} 次结算**"
-        f"（最大 {stats['funding_top'][0]} +${stats['funding_top'][1]:,.2f}） |")
+    add(f"| 资金费 | **{signed_usd(stats['funding_total'], 4)} / "
+        f"{stats['funding_rows']} 次结算**"
+        f"（最大 {stats['funding_top'][0]} {signed_usd(stats['funding_top'][1])}） |")
     back = stats.get("funding_backfilled") or {}
     if back.get("count"):
         unknown = (f"；另有 {back['unknown_bill_ts']} 条没有账单时刻（旧行，按未知处理）"
                    if back.get("unknown_bill_ts") else "")
-        add(f"| ↳ 其中**补记** | **+${back['total']:,.4f} / {back['count']} 次**"
+        add(f"| ↳ 其中**补记** | **{signed_usd(back['total'], 4)} / {back['count']} 次**"
             f"（账单时刻不在当日，是之前几次结算的欠账）{unknown} |")
     elif back.get("unknown_bill_ts"):
         add(f"| ↳ 补记 | **无法判定**：{back['unknown_bill_ts']} 条结算没有账单时刻"
@@ -343,8 +350,9 @@ def markdown(date: str, stats: dict) -> str:
         + (f"：{'；'.join(f'{k}×{v}' for k, v in stats['risk'])}" if stats["risk"] else "") + " |")
     if stats["funding_by_symbol"]:
         add("\n资金费分布：" + "、".join(
-            f"{s} +${a:,.2f}" for s, a in sorted(stats["funding_by_symbol"].items(),
-                                                 key=lambda kv: -kv[1])))
+            f"{s} {signed_usd(a)}" for s, a in sorted(
+                stats["funding_by_symbol"].items(), key=lambda kv: -kv[1]
+            )))
     if stats["fills"]:
         add("\n成交明细：")
         for row in stats["fills"]:

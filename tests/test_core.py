@@ -2061,6 +2061,22 @@ class DashboardTests(unittest.TestCase):
         self.assertAlmostEqual(sum(t["fees"] for t in trades), 0.4, places=9)
         self.assertAlmostEqual(sum(t["net"] for t in trades), (10.0 - 0.21) + (-10.0 - 0.19), places=6)
 
+    def test_trade_attribution_keeps_entry_strategy_and_normalizes_exit(self) -> None:
+        from ta.dashboard import round_trips, strategy_bucket
+
+        fills = [
+            {"ts": 1, "symbol": "AAA/USDT", "side": "buy", "qty": 1.0,
+             "price": 100.0, "fee": 0.1, "tag": "trend_pullback"},
+            {"ts": 2, "symbol": "AAA/USDT", "side": "sell", "qty": 1.0,
+             "price": 103.0, "fee": 0.103, "tag": "trend_pullback:exit"},
+        ]
+        trades = round_trips(fills)
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(trades[0]["tag"], "trend_pullback,trend_pullback:exit")
+        self.assertEqual(strategy_bucket(trades[0]["tag"]), "trend_pullback")
+        self.assertEqual(strategy_bucket("ccxt"), "ccxt")
+        self.assertEqual(strategy_bucket(""), "untagged")
+
     def test_a_sell_without_a_local_entry_is_ignored(self) -> None:
         """A manual sale must not be scored as a -100% or +inf bot trade."""
         from ta.dashboard import round_trips
@@ -2113,12 +2129,20 @@ class DashboardTests(unittest.TestCase):
         data = DashboardData(CONFIG_DIR)
         snapshot = data.snapshot()
         for key in ("summary", "equity", "trades", "timeline", "strategies", "risk",
+                    "risk_budget",
                     "audit", "artifacts", "refit", "onchain", "redflags"):
             self.assertIn(key, snapshot)
         self.assertEqual(snapshot["venue"] if "venue" in snapshot else "okx_demo", "okx_demo")
         self.assertTrue(snapshot["strategies"], "strategies.toml must render")
         # the page must never claim a limit it cannot express in dollars
         self.assertIn("max_order_majors", snapshot["risk"]["in_usd"])
+
+    def test_strategy_panel_shows_evidence_admission(self) -> None:
+        data = self._data()
+        rows = {row["name"]: row for row in data.strategies()}
+        self.assertIn("admission", rows["trend_breakout"])
+        self.assertIn("runtime_enabled", rows["trend_breakout"])
+        self.assertIn("admitted", rows["trend_breakout"]["admission"])
 
     def test_audit_changelog_is_append_only_and_valid(self) -> None:
         from ta.dashboard import read_jsonl
@@ -2133,6 +2157,136 @@ class DashboardTests(unittest.TestCase):
 
 class HistoryPagingTests(unittest.TestCase):
     pass
+
+
+class StrategyAdmissionPolicyTests(unittest.TestCase):
+    """Negative out-of-sample strategies must not receive production capital."""
+
+    def _policy(self, path: Path, *, now_ms: int | None = None):
+        from ta.strategy_policy import strategy_admission
+
+        config = Config.load(PROJECT / "config")
+        return strategy_admission(config, edge_path=path, now_ms=now_ms)
+
+    def test_bad_enough_sample_is_quarantined_and_thin_sample_collects(self) -> None:
+        now_ms = 1_793_478_400_000
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "edge.json"
+            path.write_text(json.dumps({
+                "generated_at": "2026-10-31T09:00:00+00:00",
+                "rows": [
+                    {"strategy": "trend_breakout", "trades": 86,
+                     "total_return_pct": -1.28},
+                    {"strategy": "trend_pullback", "trades": 99,
+                     "total_return_pct": 0.35},
+                    {"strategy": "mean_reversion", "trades": 12,
+                     "total_return_pct": -1.83},
+                ],
+            }), encoding="utf-8")
+            out = self._policy(path, now_ms=now_ms)
+
+        by_name = {row["strategy"]: row for row in out["decisions"]}
+        self.assertEqual(by_name["trend_breakout"]["state"], "quarantined")
+        self.assertFalse(by_name["trend_breakout"]["admitted"])
+        self.assertEqual(by_name["trend_pullback"]["state"], "admitted")
+        self.assertEqual(by_name["mean_reversion"]["state"], "collecting")
+        self.assertIn("trend_breakout", out["quarantined"])
+        self.assertNotIn("trend_breakout", out["admitted"])
+        self.assertEqual(by_name["carry_funding"]["state"], "live_evidence")
+
+    def test_missing_evidence_fails_open_without_hiding_the_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._policy(Path(tmp) / "missing.json")
+        self.assertFalse(out["evidence_available"])
+        self.assertTrue(out["error"])
+        self.assertEqual(set(out["admitted"]), {
+            "trend_breakout", "trend_pullback", "mean_reversion",
+            "carry_funding", "trend_breakout_daily", "new_listing_breakout",
+        })
+
+    def test_stale_negative_evidence_stays_quarantined(self) -> None:
+        now_ms = 1_793_564_800_000   # 2026-11-01 00:00 UTC
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "edge.json"
+            path.write_text(json.dumps({
+                "generated_at": "2026-10-20T00:00:00+00:00",
+                "rows": [
+                    {"strategy": "trend_breakout", "trades": 86,
+                     "total_return_pct": -1.28},
+                ],
+            }), encoding="utf-8")
+            out = self._policy(path, now_ms=now_ms)
+        self.assertTrue(out["evidence_stale"])
+        self.assertIn("trend_breakout", out["quarantined"])
+
+
+class RiskBudgetReportTests(unittest.TestCase):
+    """Risk budgets must expose occupancy and release conditions without guessing."""
+
+    def _report(self, *, include_pair: bool = True):
+        import datetime
+
+        from ta.risk_budget import build_risk_budget
+
+        config = Config.load(PROJECT / "config")
+        now_ms = int(datetime.datetime(
+            2026, 10, 31, 12, 0,
+            tzinfo=datetime.timezone(datetime.timedelta(hours=8)),
+        ).timestamp() * 1000)
+        rows = [
+            {
+                "kind": "equity",
+                "ts": now_ms,
+                "equity": 100_000.0,
+                "positions": {
+                    "AAA/USDT": 10.0,
+                    "AAA/USDT:USDT": -10.0,
+                    "XMU/USDT": 2.0,
+                    "BTC-USD-261127-80000-C": 1.0,
+                },
+                "marks": {"AAA/USDT": 2.0, "XMU/USDT": 100.0},
+            },
+            {
+                "kind": "blocked", "ts": now_ms - 1000,
+                "request": {"symbol": "AAA/USDT"},
+                "reason": "leg_positions: spot 5 >= 5",
+            },
+            {
+                "kind": "blocked", "ts": now_ms - 2000,
+                "request": {"symbol": "AAA/USDT:USDT"},
+                "reason": "max_positions",
+            },
+        ]
+        pairs = {"AAA/USDT": {"base_qty": 10.0}} if include_pair else {}
+        return build_risk_budget(
+            config, rows, pairs=pairs, now_ms=now_ms, total_heat_pct=0.0
+        )
+
+    def test_leg_gross_and_block_reasons_use_the_risk_engine_classification(self) -> None:
+        report = self._report()
+        by_name = {row["leg"]: row for row in report["legs"]}
+        self.assertEqual(by_name["spot"]["positions"], 1)
+        self.assertAlmostEqual(by_name["spot"]["gross_usd"], 20.0)
+        self.assertEqual(by_name["derivatives"]["positions"], 1)
+        self.assertAlmostEqual(by_name["derivatives"]["gross_usd"], 20.0)
+        self.assertAlmostEqual(by_name["tradfi"]["gross_usd"], 200.0)
+        self.assertFalse(by_name["options"]["gross_known"])
+        self.assertEqual(by_name["spot"]["blocked_24h"], 1)
+        self.assertEqual(by_name["derivatives"]["blocked_24h"], 1)
+
+    def test_an_unmatched_derivative_is_unknown_not_zero(self) -> None:
+        report = self._report(include_pair=False)
+        derivatives = next(row for row in report["legs"] if row["leg"] == "derivatives")
+        self.assertFalse(derivatives["gross_known"])
+        self.assertEqual(derivatives["gross_missing_symbols"], ["AAA/USDT:USDT"])
+
+    def test_markdown_states_that_per_leg_heat_is_not_available(self) -> None:
+        from ta.risk_budget import markdown
+
+        text = markdown(self._report())
+        self.assertIn("腿级 heat 不做猜测", text)
+        self.assertIn("最近 24h 阻塞原因", text)
+        self.assertIn("未知", text)
 
 
 class PairedExecutionTests(unittest.TestCase):
@@ -6828,6 +6982,19 @@ class DailyReviewDecompositionTests(unittest.TestCase):
         text = markdown("2026-10-12", stats)
         self.assertNotIn("可复制部分", text)
         self.assertIn("拿不到：没有费率文件", text)
+
+    def test_negative_funding_never_renders_as_plus_dollar_minus(self) -> None:
+        """Regression from 2026-10-30: CRV printed as ``+$-57.97``."""
+        from scripts.daily_review import markdown, signed_usd
+
+        self.assertEqual(signed_usd(-57.97), "-$57.97")
+        stats = self._stats(
+            delta=-10.0, funding_bill=-5.0, fees=0.0, live_total=-2.0
+        )
+        stats["funding_by_symbol"] = {"CRV/USDT:USDT": -57.97}
+        text = markdown("2026-10-30", stats)
+        self.assertNotIn("+$-", text)
+        self.assertIn("CRV/USDT:USDT -$57.97", text)
 
 
 class TradfiWatchListTests(unittest.TestCase):

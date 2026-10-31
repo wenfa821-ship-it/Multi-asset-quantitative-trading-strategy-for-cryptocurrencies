@@ -1,6 +1,6 @@
 {
  "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
- "updated": "2026-10-27",
+ "updated": "2026-10-31",
  "rows": [
   {
    "id": "path-1",
@@ -477,6 +477,41 @@
    "state": "done",
    "gate": "**2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.29 已发布（tag/verify/artifact 绿）、部署并 PASS：runner/watch/dashboard PID 37455/37465/37462，首 tick 完成，source/config 指纹一致，kill=0、degraded=0。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check \"verify\" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变",
    "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；当前生产版本 v1.1.29"
+  },
+  {
+   "id": "r2-strategy-admission",
+   "item": "第二轮 · 策略实盘准入闸门：足够样本外证据为负的策略不再获得生产资金",
+   "state": "done",
+   "gate": "2026-10-31：`data/readiness/edge.json` 中三条方向性策略样本外均为负（trend_breakout -1.28% / 86 笔、trend_pullback -1.01% / 99 笔、mean_reversion -1.83% / 192 笔）。新增 `ta.strategy_policy`：≥30 笔样本外且收益 ≤0 即隔离；样本不足保留为小仓收集中；carry 走实盘 gate 5；研究命令显式指定策略时仍可运行。runner 启动时自动执行，报告写入 `data/readiness/strategy-admission.json` 并接入每日任务",
+   "next": "随下一版本发布并重启生效；生效后生产策略应为 carry_funding、trend_breakout_daily、new_listing_breakout，三条负期望方向性策略隔离"
+  },
+  {
+   "id": "r2-strategy-attribution",
+   "item": "第二轮 · 策略级成交归因：每个持仓按入场策略聚合，而不是只看账户总权益",
+   "state": "done",
+   "gate": "平仓配对现在同时保留入场与出场 tag，并把 `trend_pullback + trend_pullback:exit` 归一为同一策略；看板输出 `by_strategy` 笔数、净额、胜率、手续费。历史 `ccxt` / `manual-reconcile` 标签保留原名，不冒充策略",
+   "next": "随 dashboard 重启后显示；后续成交可直接按策略比较净收益与费用"
+  },
+  {
+   "id": "r2-review-integrity",
+   "item": "第二轮 · 日报符号完整性：负资金费不得显示成 `+$-N`",
+   "state": "done",
+   "gate": "新增 `signed_usd()` 并覆盖资金费总额、补记、最大项与逐标的分布；2026-10-30 的 CRV `+$-57.97` 回归已加测试",
+   "next": "—"
+  },
+  {
+   "id": "r2-risk-budget",
+   "item": "第二轮 · 风险预算占用审计：每条腿的仓位、heat、容量和阻塞原因形成统一预算表",
+   "state": "done",
+   "gate": "新增 `ta.risk_budget` + `scripts/risk_budget.py` + `reports/risk-budget.md`，看板新增四腿风险预算表。2026-10-31 11:49 CST：spot 5/5、名义 $9,496/$31,918（29.8%），derivatives 5/5、$9,496/$21,279（44.6%），TradFi 0/4、options 0/3；最近 24h 有 91 次 spot 容量阻塞。账户 heat 0%，但账本没有逐腿止损距离，因此腿级 heat 明确标未知、不猜测",
+   "next": "随 v1.2.0 发布并重启看板后显示；若后续要精确腿级 heat，需要在 equity 快照中持久化每个持仓的止损距离，单独另立任务"
+  },
+  {
+   "id": "r2-release",
+   "item": "第二轮 · v1.2.0 发布与部署验收",
+   "state": "in_progress",
+   "gate": "用户已明确授权继续发布并重启。v1.2.0 正在按 RELEASING.md 执行：完整门禁、短分支 CI、main fast-forward、不可变 tag、服务重启与 deploy-verify",
+   "next": "完成后回填 tag/CI/PID/build id/首 tick；失败则保留候选 SHA 并按 lifecycle.py rollback-plan 处理"
   },
   {
    "id": "production-security-hardening",

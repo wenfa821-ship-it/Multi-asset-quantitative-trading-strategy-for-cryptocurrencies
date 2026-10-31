@@ -214,6 +214,13 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # 五条合计约 5 分钟），注释此前写的「~25s」是补深前的旧数 —— 那时 15m 只有约 2,200 根，
     # 现在是 17,292 根。它也是整轮里最重的一步：21:10 那轮全程 **32 分 47 秒**。
     ("live_readiness.py", ["--write", "--backtest"]),
+    # Convert the fresh walk-forward report into the production strategy policy.
+    # The runner and dashboard import the same pure function, so the written
+    # report and enforcement cannot drift into two interpretations of gate 1.
+    ("strategy_admission.py", ["--write"]),
+    # Read-only leg budget: used/limit, slot pressure, 24h block reasons and the
+    # concrete release condition. This changes no risk threshold.
+    ("risk_budget.py", ["--write"]),
     # The NUMBERS half of the daily review, written to docs/reviews/<date>.md. It
     # reviews the PREVIOUS complete CST day (so the 09:10 run closes yesterday, and
     # the 21:10 run rewrites the same file - idempotent by construction). The prose

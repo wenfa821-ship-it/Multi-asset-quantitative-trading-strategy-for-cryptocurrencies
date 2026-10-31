@@ -128,6 +128,10 @@
   <section class="span4"><h2>风控限额（实时的美元口径）</h2><div id="risk" class="kv"></div>
     <h2 style="margin-top:14px">分层限额</h2><div id="tiers" class="kv"></div></section>
 
+  <section class="span12"><h2>四腿风险预算占用（只读）</h2>
+    <div id="risk-budget"></div>
+  </section>
+
   <section class="span6"><h2>策略与参数</h2><div id="strategies"></div></section>
   <section class="span6"><h2>已平仓交易（按持仓配对，净额已扣双边手续费）</h2>
     <div class="muted" style="margin-bottom:6px">只含机器人自己的成交；你在 OKX 手动下的单不会出现在这里，所以笔数/盈亏与 OKX 的历史记录本来就不相等。</div>
@@ -135,6 +139,7 @@
       <th>平仓时间</th><th>标的</th><th class="num">成本</th><th class="num">净额</th>
       <th class="num">手续费</th><th class="num">收益%</th><th>出场</th>
     </tr></thead><tbody></tbody></table></div>
+    <div id="trade-attribution" class="muted" style="margin-top:8px"></div>
   </section>
 
   <section class="span8"><h2>运行时间线（订单 / 成交 / 风控拦截 / 告警）</h2>
@@ -725,12 +730,41 @@ function renderRisk(r) {
       最多 ${t.max_positions ?? '-'} 仓 · 每日 ${t.max_trades_per_day ?? '-'} 笔</div>`).join('');
 }
 
+function renderRiskBudget(b) {
+  if (!b || !b.available) {
+    $('#risk-budget').innerHTML = '<div class="muted">暂无可用权益快照，无法计算预算占用。</div>';
+    return;
+  }
+  const rows = (b.legs || []).map(x => {
+    const gross = x.gross_known
+      ? `${usd(x.gross_usd, 0)} / ${usd(x.max_gross_usd, 0)}`
+      : `未知 / ${usd(x.max_gross_usd, 0)}`;
+    const used = x.gross_used_pct == null ? '未知' : `${n(x.gross_used_pct, 1)}%`;
+    return `<tr><td>${esc(x.leg)}</td>
+      <td class="num">${x.positions}/${x.max_positions}</td>
+      <td class="num">${gross}</td><td class="num">${used}</td>
+      <td class="num">${x.blocked_24h}</td>
+      <td>${esc(x.release_condition)}</td></tr>`;
+  }).join('');
+  $('#risk-budget').innerHTML = `<table><thead><tr>
+    <th>腿</th><th class="num">仓位</th><th class="num">名义 / 上限</th>
+    <th class="num">已用</th><th class="num">24h 阻塞</th><th>释放条件</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div class="muted" style="margin-top:6px">腿级 heat 不从账本推断；账户 heat：
+      ${b.total_heat_pct == null ? '不可用' : n(b.total_heat_pct, 3) + '%'}</div>`;
+}
+
 function renderStrategies(list) {
   $('#strategies').innerHTML = list.map(s => {
     const pct = s.partial_fraction ? `${Math.round(s.partial_fraction*100)}%` : '—';
+    const admission = s.admission || {};
+    const chip = !s.enabled ? '停用'
+      : admission.admitted ? (admission.state === 'collecting' ? '收集中' : '实盘准入')
+      : '实盘隔离';
     return `<div class="strat">
-      <h3>${esc(s.name)} <span class="chip">${s.enabled ? '启用' : '停用'}</span></h3>
+      <h3>${esc(s.name)} <span class="chip">${chip}</span></h3>
       <p>${esc(s.description || '')}</p>
+      <p class="muted">准入依据：${esc(admission.reason || '无')}</p>
       <div class="kv">
         <div>周期</div><div>${esc(s.timeframe || '-')}${s.confirm ? ' · 确认 ' + esc(s.confirm) : ''}</div>
         <div>标的</div><div>${esc((s.symbols || []).join(', ') || '-')}</div>
@@ -750,6 +784,12 @@ function renderTrades(t) {
     <td class="num ${cls(x.ret_pct)}">${n(x.ret_pct, 2)}%</td>
     <td><span class="chip">${esc(x.tag || '-')}</span></td></tr>`).join('');
   $('#trades tbody').innerHTML = rows || '<tr><td colspan="7" class="dim">还没有已平仓的交易</td></tr>';
+  const attribution = (t.by_strategy || []).map(x =>
+    `${esc(x.strategy)}：${x.count} 笔，净 ${money(x.net)}，胜率 ${n(x.win_rate,1)}%，费 ${usd(x.fees,2)}`
+  ).join('；');
+  $('#trade-attribution').textContent = attribution
+    ? `策略归因：${attribution}`
+    : '';
 }
 
 function renderTimeline(rows) {
@@ -1036,6 +1076,7 @@ async function refresh() {
     renderFlags(d.redflags);
     renderChart(d.equity);
     renderRisk(d.risk);
+    renderRiskBudget(d.risk_budget);
     renderStrategies(d.strategies);
     renderTrades(d.trades);
     renderTimeline(d.timeline);

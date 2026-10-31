@@ -35,7 +35,7 @@
 runner 每次成功构建后会把版本、Git commit/tag、dirty 状态、config 指纹和 build id 写到
 `data/runtime/provenance.json`；看板与 `lifecycle.py verify` 读取同一份身份，避免“版本号一样但运行的不是同一份代码/配置”。
 
-**当前版本 v1.1.29**（2026-10-27；**这行现在被 `scripts/version_sync.py --check` 每轮核对** —— 它此前停在 v1.1.7 整整 15 个版本，见 §70.10.18）。版本线：1.0.0 = 四腿封板；1.1.0 = 期权腿的适配/数据层交付（策略未接入，因为这套模拟环境买不到期权）；**1.1.x = 修复/观测/工具**（资金费双口径、前置执行闸门、看板面板、研究侧日线解冻、§70.6 门槛数字化、门槛文案与守卫接线…），逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
+**当前版本 v1.2.0**（2026-10-31；**这行现在被 `scripts/version_sync.py --check` 每轮核对**）。版本线：1.0.0 = 四腿封板；1.1.x = 期权适配、修复、观测与工具；**1.2.0 = 第二代资金治理**（负期望策略准入隔离、策略级成交归因、四腿风险预算与数据完整性），逐条见 `CHANGELOG.md`。1.0 的范围 = **四腿系统（现货 / 永续 / carry / TradFi）
 接入实盘配置并运行 + 风控四道闸门 + 对账 + funding 入账 + 数据管道 + 上文这套发布管理**。
 
 2026-10-10 范围调整（用户决定）：原五步路径的第 5 步**期权策略移入 1.1**（它等的是 5–7 天
@@ -46,7 +46,7 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 
 <!-- PROGRESS:BEGIN -->
 
-> 生成自 `docs/progress.json`（`python3 scripts/progress.py`），更新于 2026-10-27。
+> 生成自 `docs/progress.json`（`python3 scripts/progress.py`），更新于 2026-10-31。
 > **每轮先读这张表，收尾时更新它** —— 它是「下一步做什么」的唯一事实来源。
 
 | # | 项目 | 状态 | 闸门 / 依据 | 下一步 |
@@ -119,10 +119,15 @@ IV/RV 新鲜样本，属外部条件）；期权腿的 20% 额度在 1.0 里**�
 | `sibling-raw-health-false-dead` | 看板上**兄弟项目**那一行 `solana_rpc` 报的是假死（源在跑，原始归档从 10-11 起没人写） | **✅ 完成** | 兄弟项目 `latest.json` 的 `raw_health` 四行里，三个源是今天 05:15:31Z、`solana_rpc` 停在 10-11T10:00:08Z，看起来像它挂了 2.3 天。实际它这一轮还在产出：`data/candidates/20261013T042005Z.csv` 里 45 行 Solana 有 3 行 `top10_source=solana_rpc（扣掉最大账户·近似）`。真因是两个东西被同一张表统计：`raw_health()` 遍历 `data/raw/` 下的**目录**，而两个**自算**源（Solana RPC / EVM Blockscout）只写结果、不落原始记录。**2026-10-13 用户批准后已按 ① 修**：兄弟项目 v0.34.6 在 `top10_for` 里做成「调用即归档」（`solana_rpc` + `blockscout`，`skipped`/失败原因一并留存，`store` 为可选参数不影响旧调用），176 测试绿 | 维护：下一轮采集（18:20 CST）起 `data/raw/solana_rpc/` 与 `data/raw/blockscout/` 会跟着更新，父项目面板那行假死自然消失。父项目这边仍**不做过滤** —— 过滤等于替对方解释它自己的证据（README §71） |
 | `daily-review-timing` | 07:00 那条每日复盘是**下界**：它比费率序列补齐（09:10 每日任务）早 2 小时，引用「实盘费率口径资金费」会偏低 | **✅ 完成** | 实测 10-12：07:00 跑出 **+$0.5617**（脚本自标「序列只到 20:00」），09:19 重算是 **+$1.0850**（序列到当日 24:00）—— **差 48%**。**2026-10-13 用户批准后已按建议改排期**：automation `tradingagent` 的 rrule 由 `BYHOUR=7` 改为 **`BYHOUR=10`**（09:30 太紧：09:19 跑完只留 11 分钟余量），prompt 同步改写并写明原因；README §16 的区块说明同时记录三次排期沿革与「历史条目按当时口径读」 | 维护：10:00 之后本节与权威文件 docs/reviews/<date>.md 用同一份收口数据；若某天每日任务 10:00 还没跑完，脚本仍会自己标「下界」 |
 | `release-lifecycle` | 生产系统全生命周期：trunk-based、候选校验、不可变 tag、运行态 provenance、部署验收与回滚 | **✅ 完成** | **2026-10-27 按用户决定执行**：不建长期 develop/test 分支；`main` 保持可部署，功能用短分支，生产按不可变 tag。`scripts/lifecycle.py` 提供 preflight/verify/status/rollback-plan；runner 启动写 Git/tag/dirty/config 指纹/build id，看板与 `/api/health` 显示同一身份；版本快照拒绝 dirty tree 和版本号不一致；CI 在 macOS 跑测试并校验 tag artifact。v1.1.29 已发布（tag/verify/artifact 绿）、部署并 PASS：runner/watch/dashboard PID 37455/37465/37462，首 tick 完成，source/config 指纹一致，kill=0、degraded=0。公开仓库 Ruleset 已实测：直接推新 SHA 会被 `Required status check "verify" is expected` 拒绝；同一 SHA 先在 `ci/<sha12>` 通过 verify 后，可 fast-forward 到 main，无需 PR 或管理员 bypass，force-push/删除保护保持不变 | 维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；当前生产版本 v1.1.29 |
+| `r2-strategy-admission` | 第二轮 · 策略实盘准入闸门：足够样本外证据为负的策略不再获得生产资金 | **✅ 完成** | 2026-10-31：`data/readiness/edge.json` 中三条方向性策略样本外均为负（trend_breakout -1.28% / 86 笔、trend_pullback -1.01% / 99 笔、mean_reversion -1.83% / 192 笔）。新增 `ta.strategy_policy`：≥30 笔样本外且收益 ≤0 即隔离；样本不足保留为小仓收集中；carry 走实盘 gate 5；研究命令显式指定策略时仍可运行。runner 启动时自动执行，报告写入 `data/readiness/strategy-admission.json` 并接入每日任务 | 随下一版本发布并重启生效；生效后生产策略应为 carry_funding、trend_breakout_daily、new_listing_breakout，三条负期望方向性策略隔离 |
+| `r2-strategy-attribution` | 第二轮 · 策略级成交归因：每个持仓按入场策略聚合，而不是只看账户总权益 | **✅ 完成** | 平仓配对现在同时保留入场与出场 tag，并把 `trend_pullback + trend_pullback:exit` 归一为同一策略；看板输出 `by_strategy` 笔数、净额、胜率、手续费。历史 `ccxt` / `manual-reconcile` 标签保留原名，不冒充策略 | 随 dashboard 重启后显示；后续成交可直接按策略比较净收益与费用 |
+| `r2-review-integrity` | 第二轮 · 日报符号完整性：负资金费不得显示成 `+$-N` | **✅ 完成** | 新增 `signed_usd()` 并覆盖资金费总额、补记、最大项与逐标的分布；2026-10-30 的 CRV `+$-57.97` 回归已加测试 | — |
+| `r2-risk-budget` | 第二轮 · 风险预算占用审计：每条腿的仓位、heat、容量和阻塞原因形成统一预算表 | **✅ 完成** | 新增 `ta.risk_budget` + `scripts/risk_budget.py` + `reports/risk-budget.md`，看板新增四腿风险预算表。2026-10-31 11:49 CST：spot 5/5、名义 $9,496/$31,918（29.8%），derivatives 5/5、$9,496/$21,279（44.6%），TradFi 0/4、options 0/3；最近 24h 有 91 次 spot 容量阻塞。账户 heat 0%，但账本没有逐腿止损距离，因此腿级 heat 明确标未知、不猜测 | 随 v1.2.0 发布并重启看板后显示；若后续要精确腿级 heat，需要在 equity 快照中持久化每个持仓的止损距离，单独另立任务 |
+| `r2-release` | 第二轮 · v1.2.0 发布与部署验收 | **🔧 进行中** | 用户已明确授权继续发布并重启。v1.2.0 正在按 RELEASING.md 执行：完整门禁、短分支 CI、main fast-forward、不可变 tag、服务重启与 deploy-verify | 完成后回填 tag/CI/PID/build id/首 tick；失败则保留候选 SHA 并按 lifecycle.py rollback-plan 处理 |
 | `production-security-hardening` | 实盘前安全闭环：密钥不进入公开仓库、看板不向任意网页暴露、真实资金需要多重确认、OKX key 禁止提现权限 | **🔧 进行中** | 2026-10-27 审计确认 live secret/passphrase 从未进入 Git；但公开 history 含旧的 **OKX Demo API key ID**（无 secret，Demo key 权限实测 read_only,trade）。当前 tracked tree 已全部脱敏，新增 `security_audit.py` 并接入 preflight/CI；看板 `Origin: null` 漏洞、Python 版本泄露、真实资金单一开关风险已修。v1.1.29 已部署并把 50110/IP whitelist 归类为 external；当前出口 209.9.203.250 已加入 Demo 白名单，账户/tick/日任务均已恢复。用户 2026-10-30 决定暂不固定 Clash 节点，接受代理 IP 漂移并在漂移时更新白名单。仍待用户吊销旧 Demo key、为当前出口更新 Live key 白名单、配置 TA_ALERT_WEBHOOK_URL；实盘门槛仍 0/5 | 安全闭环剩余动作：按用户决定保留动态出口并在漂移时更新白名单；轮换 Demo key；配置 Live key 与外部 webhook；随后重估 live readiness |
 | `demo-canary` | v1.1.28 部署后的 OKX Demo 实际订单往返、临时账本与对账闭环 | **✅ 完成** | 2026-10-28 00:08 CST 受控 canary：DOGE/USDT 买入约 $23（293.929712 DOGE），随后只卖出本次到账的 293.929712 DOGE；买卖各一笔 filled，临时 ledger 2 笔成交，book position=0，fees=$0.04595591，现金净损耗 $0.09004537（含双边费与约 19bps 价差），OMS reconcile ok=true。场馆最终 DOGE free=0、open orders=0、canary closed orders=2；生产 ledger 无 canary ID/tag；runner 全程继续 tick，deploy-verify 仍 PASS | 维护：发布或交易所适配变更后重跑同规模 canary；真实资金仍受 live readiness 0/5 与 live key IP 白名单阻断 |
 
-**合计**：✅ 完成 61 · 🔧 进行中 1 · ⏳ 等数据 8。
+**合计**：✅ 完成 65 · 🔧 进行中 2 · ⏳ 等数据 8。
 <!-- PROGRESS:END -->
 
 上表由 `docs/progress.json` 生成（`python3 scripts/progress.py`；`--check` 会检查过期）。
@@ -2249,6 +2254,51 @@ walk-forward。这是我们**唯一能靠自己补上的空白**，不需要新�
 >
 > **历史条目按当时的口径读**：10-13 10:00 之前写的那几条（含 10-12 那条的 +$0.5617）是**下界**，
 > 引用时以 `docs/reviews/<date>.md` 为准 —— 那里是 09:19/21:10 由每日任务重算的版本。
+
+### 2026-10-30 复盘：0 成交，账面 **+$332.19（+0.314%）**；公开费率资金费 **-$164.24**，可复制下界 **-$488.00**
+
+**一句话**：权益 105,828.53 → **106,160.72（+$332.19 / +0.314%）**，当天 **0 成交、手续费 $0**；
+模拟盘账单资金费为 **+$655.9531 / 81 次**，但按公开费率 × 当日持仓名义计算为 **-$164.2395**
+（两者方向相反，不能用倍数关系互相换算）。计入其余 -$323.7612 后，可复制部分（下界）为
+**-$488.0007**；账面上涨主要来自模拟盘资金费与标记价变动，不能归因于策略。配对守恒 PASS。
+
+| 项目 | 数值 |
+|---|---|
+| 期初 → 期末权益 | $105,828.53 → **106,160.72（+$332.19 / +0.314%）** |
+| 峰 / 谷 | 106,239.87 / 105,828.53 |
+| 成交 | **0 笔**，手续费 **$0.0000** |
+| 资金费（账单口径） | **+$655.9531 / 81 次结算**；ACT +$455.90、HBAR +$450.10、BNB +$14.73、CRV -$57.97、SHIB -$206.81 |
+| ↳ 其中**补记** | **+$106.8206 / 19 次** |
+| 资金费（**实盘费率口径**） | **-$164.2395**（公开费率 × 当日持仓名义；脚本未标“序列只到”，按完整序列计） |
+| ↳ 可复制部分（下界） | **-$488.0007**（= 公开费率资金费 -$164.2395 + 其余 -$323.7612；其余含价差与标记价变动） |
+| 期末持仓 | **5 条现货腿 + 5 条永续腿** |
+| 配对守恒 | **PASS**：5 组 carry 双腿均存在 |
+| 拦下 | **45 次**：`leg_positions: spot 5 >= 5`×40、`paused: venue degraded (account)`×5 |
+| 名额机会成本 | 40 次 / **8 个代币**；expected_net 中位 **+846.852 bps**、p90 **+3794.816 bps**（字段样本 40） |
+| 风险事件 | 21 条：venue degraded - new entries suspended×14、reconciliation mismatch×7 |
+
+#### 三个真问题
+
+1. **账面正收益不是策略收益**：当天 0 fill，公开费率资金费为 **-$164.2395**，可复制下界
+   **-$488.0007**；+0.314% 的账面变化不能用于评价四策略或 carry 的边际。
+2. **5/5 容量继续封顶，但证据仍不够扩容**：40 次容量拒绝只覆盖 **8 个代币**，而且同一代币
+   会在多轮重复出现；未达到“20 个独立代币 + 连续 3 日净边际”两条件。
+3. **网络降级开始影响执行**：21 条风险事件里有 14 次 venue degraded，另有 5 次因
+   `paused: venue degraded (account)` 直接拦单；当天动态出口触发过白名单问题，恢复后主循环已自动推进。
+
+#### 优化建议（每条都能被第二个人复核）
+
+1. **维持 5/5 容量，不因中位 +846.852 bps 扩容**：先按 `expected_net_bps` 去重到独立代币，
+   达到至少 20 个不同代币，并用 `data/carry/rotation.jsonl` 核对候选相对 incumbent 的连续
+   3 日净边际；当前只有 40 行 / 8 个代币的重复样本，未达门槛。
+2. **资金费结论只引用公开费率与可复制下界**：复核命令为
+   `python3 scripts/daily_review.py --date 2026-10-30 --write`；结论行是 **-$164.2395**，
+   可复制下界是 **-$488.0007**，不要引用账单 +$655.9531 或账面 +0.314%。
+3. **不因零成交日和标记价波动调整策略参数**：10-30 没有 fill，无法评价趋势、反转、突破或换腿；
+   等有独立成交与完整费用样本后再比较策略。
+4. **把 venue degraded 当运维问题处理，不用策略参数补洞**：继续记录白名单漂移与
+   `ta_venue_degraded_total`，恢复标准是 ticks 推进、watchdog breach 清零、当前 degraded=0；
+   本次恢复未重启进程。
 
 ### 2026-10-29 复盘：账面 **+$379.67（+0.362%）**，公开费率资金费 **+$47.74**，可复制部分 **-$216.38**
 
