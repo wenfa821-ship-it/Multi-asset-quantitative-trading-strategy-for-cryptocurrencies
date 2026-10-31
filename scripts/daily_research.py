@@ -205,6 +205,9 @@ SCRIPT_STEPS: tuple[tuple[str, list[str]], ...] = (
     # `carry_live.py` 只读公共费率与行情（不下单、不要 key），走全场永续目录约 139 条。
     ("carry_live.py", ["--write", "data/carry/screen_live.json", "--days", "3"]),
     ("carry_rotation.py", ["--write"]),
+    # Deduplicate capacity refusals by token/day and apply the independent-token
+    # and 3-day persistence gates before even proposing a slot review.
+    ("carry_capacity.py", ["--write"]),
     # README 70.6's six "mature enough for real money" gates, as numbers instead of
     # prose (2026-10-13). Offline and read-only; it reads the ledger/alerts/carry
     # artifacts the steps above just refreshed, so it runs after them. `--backtest`

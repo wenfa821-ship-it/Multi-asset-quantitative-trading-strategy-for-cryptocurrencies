@@ -1,12 +1,14 @@
 # Changelog
 
-当前版本：**v1.2.1**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.2.2**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-31T12:48 起，1 条留痕）
+## Unreleased（自 2026-10-31T12:48 起，3 条留痕）
 
 - `2026-10-31T13:06` **ops** v1.2.1 发布部署 PASS：首条 stops equity 快照与真实腿级 heat 已生效
+- `2026-10-31T20:12` **research** carry 名额价值审计：155 次拦截只覆盖 10 个独立代币，维持 5/5 不扩容
+- `2026-10-31T20:13` **decision** 用户继续下一阶段：carry 名额价值审计进入 v1.2.2 发布流程
 
 ## v1.2.1 — 2026-10-31T12:48
 

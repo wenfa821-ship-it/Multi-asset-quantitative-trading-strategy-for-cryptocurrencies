@@ -517,8 +517,15 @@
    "id": "r2-release",
    "item": "第二轮 · v1.2.0/v1.2.1 发布与部署验收",
    "state": "done",
-   "gate": "2026-10-31 发布完成：v1.2.0 release `a5530f5a55eb`；v1.2.1 release `17a774c08bcd` 与 tag `v1.2.1`。两次候选/main/tag CI 全绿，tag verify 与 release-artifact 均 success。当前 runner/watch/dashboard=27023/27025/27026，build=`a3e6cf49a85b5a83`；首 tick、stops 快照、live 读取和 deploy-verify 均 PASS，kill=0、degraded=0、watchdog 无 breach。生产策略为 carry_funding / trend_breakout_daily / new_listing_breakout。旧 Demo key ID 历史例外仍不阻断模拟盘，实盘 readiness 0/5",
+   "gate": "2026-10-31 发布完成：v1.2.0 release `a5530f5a55eb`；v1.2.1 release `17a774c08bcd` 与 tag `v1.2.1`；v1.2.2 正在发布 carry 名额价值审计。当前 runner/watch/dashboard=27023/27025/27026，build=`a3e6cf49a85b5a83`；首 tick、stops 快照、live 读取和 deploy-verify 均 PASS。生产策略为 carry_funding / trend_breakout_daily / new_listing_breakout。旧 Demo key ID 历史例外仍不阻断模拟盘，实盘 readiness 0/5",
    "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；旧 Demo key 轮换、Live key 白名单与 webhook 仍是实盘前 P0"
+  },
+  {
+   "id": "carry-capacity-audit",
+   "item": "carry 名额价值审计：区分重复拦截与独立、多日持续的加槽需求",
+   "state": "done",
+   "gate": "新增 `ta.carry_capacity`、`scripts/carry_capacity.py`、`reports/carry-capacity.md` 并接入每日任务。2026-10-29..31 UTC：155 次 spot 5/5 容量拦截，但去重后仅 **10 个独立代币**，低于扩容门槛 20；其中 6 个候选连续 3 天 expected_net 均高于 20 bps，说明存在持续机会但样本宽度不足。没有修改 max_positions 或任何下单参数",
+   "next": "维持 5/5。只有独立代币达到 ≥20 且至少一个候选连续 3 天过净边际时，才进入用户审批的加槽审查；报告随每日任务自动更新"
   },
   {
    "id": "production-security-hardening",

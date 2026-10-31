@@ -4,6 +4,7 @@ without installing anything; pytest also collects them.
 
 from __future__ import annotations
 
+import datetime
 import shutil
 import json
 import sys
@@ -2299,6 +2300,56 @@ class RiskBudgetReportTests(unittest.TestCase):
         spot = next(row for row in report["legs"] if row["leg"] == "spot")
         self.assertFalse(spot["heat_known"])
         self.assertIsNone(spot["heat_usd"])
+
+
+class CarryCapacityAuditTests(unittest.TestCase):
+    """Repeated refusals must not masquerade as independent slot demand."""
+
+    NOW = int(datetime.datetime(
+        2026, 10, 31, 12, 0, tzinfo=datetime.timezone.utc
+    ).timestamp() * 1000)
+
+    def _row(self, symbol: str, days_ago: int, edge: float, tag: str = "carry") -> dict:
+        return {
+            "kind": "blocked",
+            "ts": self.NOW - days_ago * 86_400_000,
+            "reason": "leg_positions: spot 5 >= 5",
+            "expected_net_bps": edge,
+            "request": {"symbol": symbol, "tag": tag},
+        }
+
+    def test_repeated_same_token_is_not_twenty_independent_tokens(self) -> None:
+        from ta.carry_capacity import carry_capacity_audit
+
+        rows = [self._row("AAA/USDT", day, 100.0) for day in range(3)]
+        rows += [self._row("AAA/USDT", 0, 100.0) for _ in range(50)]
+        report = carry_capacity_audit(rows, now_ms=self.NOW)
+        self.assertEqual(report["distinct_tokens"], 1)
+        self.assertTrue(report["eligible_candidates"])
+        self.assertFalse(report["sample_ready"])
+        self.assertFalse(report["expansion_ready"])
+
+    def test_twenty_distinct_tokens_and_one_persistent_candidate_pass(self) -> None:
+        from ta.carry_capacity import carry_capacity_audit
+
+        rows = [self._row(f"A{i}/USDT", 0, 10.0) for i in range(19)]
+        rows += [self._row("KEEP/USDT", day, 50.0) for day in range(3)]
+        report = carry_capacity_audit(rows, now_ms=self.NOW)
+        self.assertEqual(report["distinct_tokens"], 20)
+        self.assertEqual(report["persistent_tokens"], 1)
+        self.assertTrue(report["expansion_ready"])
+        self.assertIn("slot review allowed", report["verdict"])
+
+    def test_old_or_non_carry_blocks_do_not_count(self) -> None:
+        from ta.carry_capacity import carry_capacity_audit
+
+        rows = [
+            self._row("OLD/USDT", 10, 500.0),
+            self._row("DIRECTIONAL/USDT", 0, 500.0, tag="trend_pullback"),
+        ]
+        report = carry_capacity_audit(rows, now_ms=self.NOW)
+        self.assertEqual(report["capacity_blocks"], 0)
+        self.assertEqual(report["distinct_tokens"], 0)
 
 
 class PairedExecutionTests(unittest.TestCase):
