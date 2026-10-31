@@ -2155,6 +2155,10 @@ class DashboardTests(unittest.TestCase):
 
     def test_dashboard_header_and_kpi_grids_share_stable_alignment(self) -> None:
         html = (PROJECT / "src" / "ta" / "web" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("<title>HS · 多资产组合量化交易策略 / 数字货币</title>", html)
+        self.assertIn('<span class="brand-mark">HS</span>', html)
+        self.assertIn("<h1>多资产组合量化交易策略</h1>", html)
+        self.assertIn('<span class="brand-sub">数字货币</span>', html)
         self.assertIn('class="header-shell"', html)
         self.assertIn('class="header-primary"', html)
         self.assertIn('class="header-status"', html)
