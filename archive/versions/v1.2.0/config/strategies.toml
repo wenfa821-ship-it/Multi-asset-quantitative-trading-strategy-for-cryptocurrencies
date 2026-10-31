@@ -1,0 +1,288 @@
+# Strategy parameters. `enabled` + CLI --strategy decide what actually runs.
+# Symbol lists accept `tier:<name>` so the universe stays defined in one place.
+
+# ---------------------------------------------------------------------------
+# Slow trend following on 1h, confirmed on 4h. Few trades, widest stops.
+# ---------------------------------------------------------------------------
+[strategies.trend_breakout]
+enabled                = true
+description            = "Donchian breakout + EMA regime + 4h agreement + volume + retest confirmation."
+timeframe              = "1h"
+confirm_timeframe      = "4h"
+confirm_ema            = 50
+entry_lookback         = 55
+exit_lookback          = 20
+ema_fast               = 20
+ema_slow               = 100
+atr_period             = 14
+volume_period          = 20
+# require stronger volume on the breakout bar (1.1 admitted too many fake-outs)
+min_volume_multiple    = 1.3
+regime_filter          = true
+min_edge_cost_multiple = 4.0
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank half at 1R, move stop to breakeven, then let the
+# ATR trailing stop carry the runner. A 2R cap was reached in <8% of trades
+# and only truncated the winners that did work. (Same idea as trend_pullback.)
+take_profit_r_multiple = 0
+# retest confirmation: after a breakout registers, wait for a pullback that
+# holds the level, then enter with a stop below the pullback low. This filters
+# false breakouts (the main source of stop-outs) and tightens risk per trade.
+# Set retest_window_bars = 0 to restore the original "buy the breakout bar".
+# Window/tolerance are calibrated to 1h crypto vol (ATR ~0.5-1%): 15 bars ~1
+# day is a normal retest window, 1.0% tolerance ~1 ATR is "back at the level".
+retest_window_bars     = 15
+retest_tolerance_pct   = 1.0
+retest_stop_atr_multiple = 0.5
+max_stop_pct           = 4.0
+symbols                = ["tier:majors", "tier:alts"]
+
+# ---------------------------------------------------------------------------
+# The frequency workhorse: buy the dip inside an uptrend on 15m, 1h agreement.
+# ---------------------------------------------------------------------------
+[strategies.trend_pullback]
+enabled                = true
+description            = "Uptrend + RSI pullback pivot + strong reclaim candle, ATR/swing stop."
+timeframe              = "15m"
+confirm_timeframe      = "1h"
+confirm_ema            = 50
+# the higher timeframe must be advancing: 1h EMA50 now > 1h EMA50 N bars ago.
+# A flat/declining EMA with price above it is a weak trend that does not resume
+# after a pullback - the main source of the old 25.6% win rate.
+confirm_slope_lookback = 5
+ema_fast               = 21
+ema_slow               = 55
+rsi_period             = 14
+rsi_entry_max          = 42.0
+# the pullback must have made a local pivot and started back up; no falling
+# knives. RSI(now) > RSI(prev bar) confirms the dip has turned.
+require_rsi_up         = true
+# reclaim candle must close in the upper half of its range, not merely above
+# the prior close - filters weak/doji reclaims that immediately fail.
+require_strong_reclaim = true
+# only buy pullbacks inside a genuine trend_up regime (20/100 EMA), never in a
+# range. A pullback in a range is counter-trend mean reversion against you.
+require_trend_up       = true
+atr_period             = 14
+swing_lookback         = 10
+stop_buffer_pct        = 0.25
+max_stop_pct           = 4.0
+volume_period          = 20
+# a real pullback-resumption has demand behind it. 0.8 admitted any random
+# candle; 1.3 matches trend_breakout's proven floor.
+min_volume_multiple    = 1.3
+min_edge_cost_multiple = 3.0
+max_holding_bars       = 64
+partial_fraction       = 0.5
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank half at 1R, let the trailing stop carry the runner.
+# Measured: a 1.6R target was reached in ~0% of 15m trades, so a hard cap only
+# truncates winners. Set 1.6 back if you prefer a deterministic exit.
+take_profit_r_multiple = 0
+regime_filter          = true
+symbols                = ["tier:majors", "tier:alts"]
+
+# ---------------------------------------------------------------------------
+# Mean reversion, majors only, and only when the tape is genuinely ranging.
+# ---------------------------------------------------------------------------
+[strategies.mean_reversion]
+enabled                = true
+description            = "Z-score dip on 15m inside a range, exits back at the mean."
+timeframe              = "15m"
+confirm_timeframe      = "1h"
+confirm_ema            = 50
+sma_period             = 50
+z_entry                = -1.5
+z_exit                 = 0.0
+atr_period             = 14
+max_vol_percentile     = 90.0
+min_edge_cost_multiple = 3.0
+take_profit_r_multiple = 2.5
+partial_fraction       = 0.5
+breakeven_at_r         = 0.8
+regime_filter          = true
+symbols                = ["tier:majors"]
+
+# ---------------------------------------------------------------------------
+# New listings only: tightest tier, tightest stop, hard time stop.
+# `trust_venue_history` also treats "venue returned less history than asked for"
+# as a young listing, so a fresh coin is picked up without editing config.
+# ---------------------------------------------------------------------------
+[strategies.perp_trend_funding]
+# Perp leg (README §21). Written fresh for swaps - deliberately NOT a port of the
+# spot book, because the spot strategies were already shown to be negative out of
+# sample and leverage would only multiply that.
+#
+# DISABLED ON PURPOSE. It must not trade until:
+#   1. CcxtVenue supports market_type = "swap" (not written yet), and
+#   2. this strategy has been backtested WITH REAL FUNDING HISTORY.
+# Point 2 is the important one: our OHLCV history carries no funding, so the
+# strategy falls back to funding_rate_bps (default 0) and its funding gate is
+# effectively wide open. A backtest run on price data alone measures the
+# trend-pullback skeleton only, never the gate - which is the one mechanism this
+# project has actually measured as non-negative.
+enabled                 = false
+description             = "Trend pullback gated by funding rate (swap leg, disabled pending integration)"
+timeframe               = "1h"
+confirm_timeframe       = ""
+symbols                 = ["tier:majors"]
+ema_fast                = 21
+ema_slow                = 55
+atr_period              = 14
+pullback_atr            = 1.0
+stop_atr_multiple       = 2.0
+max_stop_pct            = 3.0
+max_funding_long_bps    = 3.0
+min_funding_short_bps   = -3.0
+partial_fraction        = 0.5
+breakeven_at_r          = 1.0
+# 0 = no time cap (2026-10-07 structural test). The 48-bar cap was the dominant
+# exit (72% of out-of-sample exits were time_loss vs 20% time_win), so it was
+# cutting trend trades before they could develop. This is the ONE change that
+# targets the main failure mode rather than a parameter sweep.
+max_holding_bars        = 0
+min_edge_cost_multiple  = 3.0
+
+# ---------------------------------------------------------------------------
+# Carry: collect perp funding with a delta-neutral pair (README 26/36/37).
+#
+# DISABLED ON PURPOSE. The three pieces all exist and are tested - the screener
+# (scripts/carry_live.py, live funding + credibility gates), the executor
+# (execution/paired.py, spot-long + perp-short with its unwind invariants) and
+# this strategy's decision rule - but the RUNNER does not yet pair them: it is
+# single-venue, so a carry signal today would open the spot leg alone. That is a
+# naked long, not a carry, so the strategy must stay off until the runner can
+# send both legs. Enabling this line before then would be the same class of
+# mistake as the tdMode key that was wired to a value OKX refuses.
+# ---------------------------------------------------------------------------
+[strategies.carry_funding]
+# RE-ENABLED 2026-10-08 after the controlled two-leg verification passed
+# (scripts/pair_check.py: spot filled and WAITED FOR, hedge sent at the same
+# base size, BOTH legs in the ledger, and flat afterwards). Five separate defects
+# were found and fixed to get there - see README 43:
+#   1. an async `status=open, filled=0` was read as "not filled"
+#   2. the wait watched the order record, which the OMS never updates post-submit
+#   3. the "not filled" path had no real balance reader, so its unwind never fired
+#   4. perp fills come back in CONTRACTS while the module spoke base units
+#   5. closing did not mark the hedge short, so `buy + reduceOnly` OPENED a long
+# The pool is deliberately narrow (six symbols) until it runs clean in production.
+enabled                 = true
+description             = "Funding carry: proposes the spot leg of a delta-neutral pair (needs runner pairing)"
+timeframe               = "1h"
+confirm_timeframe       = ""
+# Screened 2026-10-08 from the live funding of all 147 perps (README 41): the 48
+# contracts that (a) have positive funding through the credibility gates,
+# (b) break even inside 30 days at the measured 44.9bps round trip, AND
+# (c) HAVE A SPOT LEG. The last condition is the one that bites: the highest
+# funding names (NG 80%/yr, TRIA 50%, GPRO 50%) are perp-only listings, so no
+# carry pair can be formed at all - of the 75 credible candidates only 48 have
+# both legs. Opening a perp-only name would be a naked short, which this project
+# refuses to call carry (README 26/37).
+symbols                 = ["tier:carry"]
+settlements_per_day     = 3.0      # 8h funding; hourly contracts need 24.0
+round_trip_bps          = 44.9     # measured two-leg round trip (README 27.3)
+intended_hold_days      = 30.0
+min_edge_bps            = 20.0     # required margin over the round trip
+exit_funding_bps        = -2.0     # leave when funding turns into a cost
+# These three exist because the FIRST day of live carry churned: it opened six
+# pairs, sold three of them eight minutes later, re-opened and sold again - 31
+# fills and $284 of fees in an afternoon, against $11 the day before. The cause
+# was deciding on the INSTANTANEOUS funding print instead of the multi-day mean
+# the screener ranks by. Carry only pays if it holds.
+lookback_samples        = 90       # ~30 days of 8h prints, the venue's real mean
+min_samples             = 6        # never decide on fewer prints than this
+min_hold_hours          = 24.0     # an exit cannot fire before this, however the rate spikes
+warmup_bars             = 3
+# Passive spot entry (README 68). The entry spread is the largest single cost
+# carry pays - measured 12.6-72.6 bps on one leg, against ~2 bps/day of funding -
+# so paying none of it is worth more than any parameter tweak. Both preconditions
+# were verified against the real venue on 2026-10-09 with
+# scripts/cancel_path_check.py: a post-only order that would take liquidity is
+# ACCEPTED and then killed by the exchange (cancelSource=31, zero fill), and a
+# resting order can be cancelled (cancelSource=1, confirmed gone).
+passive_entry           = true
+# 1.2 rotation, CLOSE ONLY (2026-10-11, user decision "启用"): when the daily
+# detector (scripts/carry_rotation.py) reports that a held pair has stopped paying -
+# median funding below the floor on every day of the window, breakeven inside the
+# hold, older than min_hold_hours - the RUNNER closes that pair through its own
+# executor, so pairs.json, the ledger and the book stay consistent. The freed slot is
+# filled by the normal carry entry on a later tick, never by a hand-rolled two-leg
+# sequence. Guardrails in ta/execution/rotation.py: hold the pair, notional <= 5% of
+# equity, at most one rotation per calendar day. Set false to turn it off.
+rotation_enabled        = true
+# How long the resting order is left before it is pulled and the leg goes to
+# market. Carry holds for days, so a few seconds of price drift is a cheap price
+# for 10-70 bps of spread - but the fallback is mandatory, never a wait forever.
+passive_wait_seconds    = 6.0
+
+# ---------------------------------------------------------------------------
+# TradFi sleeve (README 62/63): daily bars on tokenised equities.
+#
+# Why this is enabled now. The 30% TradFi leg has never traded. Its block was
+# written as a research question - "does the Donchian breakout have an edge at
+# daily cadence on equities?" - and left off because ~90 daily bars cannot
+# answer it. The instruction is to take the risk and START COLLECTING instead of
+# waiting for a verdict, so this runs at the tightest size in the book.
+#
+# The warmups are deliberately SHORTER than config-tradfi's research block
+# (10/20 vs 20/30). Measured 2026-10-09: with the 20/30 warmup the daily sleeve
+# produced 0 trades on 49 usable bars with 10 blocked orders - it could not have
+# collected anything. A short warmup admits more false breakouts, which is what
+# [tiers.tradfi]'s size caps are for.
+#
+# Cost basis, measured on a real minimum-size round trip the same day
+# (scripts/order_path_check.py on XMU/USDT): 10 bps fee per side + ~0.5 bp of
+# spread each way = ~21 bps round trip - 2x cheaper than the crypto carry's
+# measured 44.9 bps and 67x cheaper than the $200 on-chain round trip (1.4%).
+# ---------------------------------------------------------------------------
+[strategies.trend_breakout_daily]
+enabled                 = true
+description             = "Donchian breakout on daily bars, TradFi sleeve (short warmup, collecting data)"
+timeframe               = "1d"
+confirm_timeframe       = ""
+symbols                 = ["tier:tradfi"]
+entry_lookback          = 10
+exit_lookback           = 5
+ema_fast                = 5
+ema_slow                = 20
+atr_period              = 14
+volume_period           = 10
+min_volume_multiple     = 1.2
+stop_atr_multiple       = 2.0
+max_stop_pct            = 6.0
+take_profit_r_multiple  = 0
+partial_fraction        = 0.5
+breakeven_at_r          = 1.0
+max_holding_bars        = 20
+min_edge_cost_multiple  = 3.0
+
+[strategies.new_listing_breakout]
+enabled                = true
+description            = "New-listing breakout: tight stop, bank at 1R, trail the runner."
+timeframe              = "15m"
+entry_lookback         = 20
+exit_lookback          = 10
+ema_period             = 20
+atr_period             = 14
+rsi_period             = 14
+rsi_max                = 88.0
+volume_period          = 20
+# stronger volume gate: a real new-listing breakout prints 2x+ volume; the
+# weakest breakouts (vol ~1.5x) were concentrated in the time-stop bucket.
+min_volume_multiple    = 1.8
+# tighter stop than majors: stops are rarely hit here (<6% of trades), so the
+# main effect is raising R-multiples on the winners, not adding stop-outs.
+stop_atr_multiple      = 1.2
+max_stop_pct           = 4.0
+max_holding_bars       = 64
+partial_fraction       = 0.6
+breakeven_at_r         = 1.0
+# 0 = no hard target: bank 60% at 1R, move stop to breakeven, then let the
+# 10-bar-low trailing exit carry the runner. A 2.5R cap was reached in <10% of
+# 15m new-listing trades, so it only trapped the runner 40% into a time stop at
+# ~breakeven. (Same idea that lifted trend_breakout OOS from -0.22% to +0.52%.)
+take_profit_r_multiple = 0
+trust_venue_history    = true
+min_edge_cost_multiple = 3.0
+symbols                = ["tier:new"]
