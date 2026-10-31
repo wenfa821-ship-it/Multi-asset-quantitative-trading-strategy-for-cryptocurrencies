@@ -509,9 +509,9 @@
   {
    "id": "r2-release",
    "item": "第二轮 · v1.2.0 发布与部署验收",
-   "state": "in_progress",
-   "gate": "用户已明确授权继续发布并重启。v1.2.0 正在按 RELEASING.md 执行：完整门禁、短分支 CI、main fast-forward、不可变 tag、服务重启与 deploy-verify",
-   "next": "完成后回填 tag/CI/PID/build id/首 tick；失败则保留候选 SHA 并按 lifecycle.py rollback-plan 处理"
+   "state": "done",
+   "gate": "2026-10-31 发布完成：release commit `a5530f5a55eb`、annotated tag `v1.2.0`；候选/main/tag CI 全绿，tag 的 verify 与 release-artifact 均 success。重启后 runner/watch/dashboard=19787/19789/19790，build=`ecca1f2f631c144b`；首 tick 完成、deploy-verify PASS、kill=0、degraded=0、watchdog 无 breach。日志确认三条负期望策略被隔离，实际策略为 carry_funding / trend_breakout_daily / new_listing_breakout。已知旧 Demo key ID 历史例外不阻断本次模拟盘发布，实盘 readiness 仍 0/5",
+   "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；旧 Demo key 轮换、Live key 白名单与 webhook 仍是实盘前 P0"
   },
   {
    "id": "production-security-hardening",
