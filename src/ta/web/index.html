@@ -26,7 +26,7 @@
     backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid rgba(83,112,137,.34);
     box-shadow:0 8px 30px rgba(0,0,0,.2)}
   .header-shell{width:100%;max-width:1480px;margin:0 auto;padding:10px 24px 0}
-  .header-primary{display:grid;grid-template-columns:minmax(190px,.72fr) minmax(460px,1.5fr) auto;
+  .header-primary{display:grid;grid-template-columns:minmax(210px,.7fr) minmax(430px,1.35fr) auto;
     align-items:center;gap:20px;min-height:46px}
   .brand{display:flex;align-items:center;gap:10px;min-width:190px}
   .brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
@@ -52,14 +52,14 @@
   .header-status>.badge.warnb{color:var(--warn)}
   .header-status>span+span::before{content:"";display:inline-block;width:1px;height:11px;
     margin:0 10px;background:var(--line);vertical-align:-1px}
-  main{max-width:1480px;margin:0 auto;padding:22px 24px 34px;display:grid;
-    grid-template-columns:repeat(12,1fr);gap:18px}
+  main{max-width:1480px;margin:0 auto;padding:20px 24px 34px;display:grid;
+    grid-template-columns:repeat(12,1fr);gap:14px}
   section{position:relative;overflow:hidden;background:var(--panel);
-    border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+    border:1px solid var(--line);border-radius:16px;padding:18px 20px;
     box-shadow:var(--shadow);transition:border-color .18s ease,transform .18s ease}
   section:hover{border-color:var(--line2)}
-  section h2{font-size:11px;margin:0 0 12px;color:#9eb1c1;font-weight:700;
-    text-transform:uppercase;letter-spacing:1px}
+  section h2{font-size:13px;margin:0 0 12px;color:#d4e0ea;font-weight:720;
+    letter-spacing:.2px}
   section h2::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
     background:var(--accent);margin:0 8px 2px 0;box-shadow:0 0 10px var(--accent)}
   .span12{grid-column:span 12}
@@ -71,9 +71,9 @@
   .kpi{display:flex;flex-direction:column;min-width:0;min-height:128px;padding:13px 14px;
     border:1px solid rgba(48,68,88,.72);border-radius:11px;
     background:linear-gradient(145deg,rgba(22,34,47,.94),rgba(13,22,32,.88))}
-  .kpi .v{font-size:22px;font-weight:740;font-variant-numeric:tabular-nums;line-height:1.25;
+  .kpi .v{font-size:25px;font-weight:750;font-variant-numeric:tabular-nums;line-height:1.22;
     margin:4px 0 2px;letter-spacing:-.3px}
-  .kpi .k{font-size:10px;color:#9eb1c1;text-transform:uppercase;letter-spacing:.8px}
+  .kpi .k{font-size:10.5px;color:#9eb1c1;letter-spacing:.45px}
   .kpi .s{font-size:10.5px;color:var(--dim);margin-top:auto;padding-top:4px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{position:sticky;top:0;z-index:1;text-align:left;color:#9eb1c1;font-weight:650;font-size:10px;
@@ -112,15 +112,28 @@
   .strat p{margin:0 0 8px;color:var(--dim);font-size:12.5px}
   .kv{display:grid;grid-template-columns:minmax(92px,auto) 1fr;gap:6px 12px;font-size:12.5px}
   .kv div:nth-child(odd){color:var(--dim)}
-  .navtabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%;
-    max-width:640px;justify-self:center;padding:3px;border:1px solid var(--line);
-    border-radius:10px;background:#0c141d}
-  .navtabs button{display:flex;min-width:0;gap:8px;align-items:center;justify-content:space-between;
-    background:transparent;border:0;color:var(--dim);padding:7px 10px;border-radius:7px;
-    font-size:12px;cursor:pointer;text-align:left;white-space:nowrap}
-  .navtabs button.active{color:var(--fg);background:#172534;box-shadow:inset 0 0 0 1px #2f485e}
-  .navtabs .badge{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .navtabs button:hover{color:var(--fg)}
+  .app-nav{display:flex;gap:4px;align-items:center;justify-content:center;justify-self:center;
+    max-width:760px;padding:4px;border:1px solid var(--line);border-radius:12px;background:#0c141d}
+  .app-nav>button,.nav-more>button{display:inline-flex;min-width:0;align-items:center;justify-content:center;
+    gap:6px;background:transparent;border:0;color:var(--dim);padding:8px 14px;border-radius:8px;
+    font-size:12.5px;font-weight:620;cursor:pointer;white-space:nowrap}
+  .app-nav>button.active,.nav-more>button.active,.nav-more.open>button{
+    color:var(--fg);background:#172b3d;box-shadow:inset 0 0 0 1px #315069}
+  .app-nav>button:hover,.nav-more>button:hover{color:var(--fg)}
+  .nav-more{position:relative}
+  .nav-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;
+    background:#101b27;border:1px solid var(--line2);border-radius:11px;box-shadow:0 18px 40px rgba(0,0,0,.4);
+    display:grid;gap:3px}
+  .workspace-switch{display:flex;gap:3px;min-width:0}
+  .workspace-switch button{border:0;background:transparent;color:var(--dim);padding:8px 12px;
+    border-radius:8px;font-size:12.5px;font-weight:680;cursor:pointer;white-space:nowrap}
+  .workspace-switch button.active{color:var(--fg);background:#172b3d;box-shadow:inset 0 0 0 1px #315069}
+  .workspace-switch button:hover{color:var(--fg)}
+  #more-toggle strong{color:var(--fg);font-weight:650}
+  .workspace-pages{display:grid;gap:3px}
+  .nav-menu button{border:0;background:transparent;color:var(--dim);text-align:left;padding:9px 10px;
+    border-radius:7px;cursor:pointer;font-size:12.5px}
+  .nav-menu button:hover,.nav-menu button.active{color:var(--fg);background:#172b3d}
   .viewgrid{display:contents}
   [hidden]{display:none !important}
   .pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:11px;
@@ -138,6 +151,12 @@
     margin-bottom:10px;flex-wrap:wrap}
   .panel-head h2{margin:0}
   .panel-sub{color:var(--dim);font-size:11px;margin-top:3px}
+  .page-banner{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+    background:linear-gradient(110deg,rgba(20,36,50,.96),rgba(10,18,27,.92))}
+  .page-banner .eyebrow{font-size:10px;color:var(--accent);letter-spacing:1.5px;font-weight:750}
+  .page-banner h2{font-size:22px;margin:3px 0 5px;letter-spacing:-.2px}
+  .page-banner p{margin:0;color:var(--dim);font-size:12.5px;max-width:760px}
+  .page-banner .page-meta{color:var(--dim);font-size:11px;text-align:right;white-space:nowrap}
   .segmented{display:flex;align-items:center;gap:3px;background:#0a1119;border:1px solid var(--line);
     border-radius:8px;padding:3px}
   .segmented button{border:0;background:transparent;color:var(--dim);padding:5px 9px;
@@ -163,6 +182,40 @@
   .equity-stat b{display:block;margin-top:3px;font-size:13px;font-variant-numeric:tabular-nums}
   .chart-wrap{border:1px solid rgba(42,58,75,.62);border-radius:10px;padding:8px 6px 4px;
     background:linear-gradient(180deg,rgba(15,26,38,.62),rgba(8,14,21,.35))}
+  .pulse-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .pulse-item{padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#0c151f}
+  .pulse-item span{display:block;color:var(--dim);font-size:10.5px}
+  .pulse-item strong{display:block;margin-top:3px;font-size:18px;font-variant-numeric:tabular-nums}
+  .strategy-list{display:grid;gap:8px}
+  .strategy-item{border:1px solid var(--line);border-radius:10px;background:#0d1722;overflow:hidden}
+  .strategy-item summary{display:grid;grid-template-columns:minmax(180px,1.15fr) auto minmax(170px,.8fr) auto;
+    gap:12px;align-items:center;padding:11px 13px;cursor:pointer;list-style:none}
+  .strategy-item summary::-webkit-details-marker{display:none}
+  .strategy-item summary::after{content:"展开";color:var(--dim);font-size:10px;grid-column:4;text-align:right}
+  .strategy-item[open] summary::after{content:"收起"}
+  .strategy-item summary strong{font-size:13px}.strategy-item summary small{color:var(--dim);display:block}
+  .strategy-meta{color:#b8c7d3;font-size:11.5px;text-align:right}
+  .strategy-details{padding:0 13px 12px;border-top:1px solid rgba(42,58,75,.6)}
+  .strategy-details .kv{margin-top:10px}
+  .order-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:12px}
+  .order-summary .pulse-item strong{font-size:21px}
+  .subtabs{display:flex;gap:5px;flex-wrap:wrap;margin:2px 0 10px}
+  .subtabs button{border:1px solid var(--line);background:#0c151f;color:var(--dim);
+    padding:7px 11px;border-radius:8px;cursor:pointer;font-size:11.5px}
+  .subtabs button.active{color:var(--fg);border-color:#315069;background:#172b3d}
+  .subtabs button b{margin-left:5px;color:var(--accent);font-size:10px}
+  .order-pane{max-height:480px;overflow:auto}
+  .order-pane table{min-width:760px}
+  .order-side-buy{color:var(--up)}.order-side-sell{color:var(--warn)}
+  .order-reason{max-width:360px;white-space:normal;color:var(--dim)}
+  @media(max-width:760px){
+    .page-banner{align-items:flex-start;flex-direction:column;gap:8px}
+    .page-banner .page-meta{text-align:left;white-space:normal}
+    .strategy-item summary{grid-template-columns:1fr auto;gap:5px 10px}
+    .strategy-item summary::after{display:none}
+    .strategy-meta{grid-column:1/-1;text-align:left}
+    .order-summary,.pulse-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
   footer{max-width:1480px;margin:0 auto;padding:4px 24px 40px;color:var(--dim);font-size:11px}
   @media(max-width:1180px){
     .kpis-balanced,#nc-bars{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -170,7 +223,7 @@
   @media(max-width:1000px){
     .header-shell{padding:10px 16px 0}.brand{min-width:0}
     .header-primary{grid-template-columns:minmax(0,1fr) auto;gap:9px 14px}
-    .navtabs{grid-column:1/-1;grid-row:2;max-width:none}
+    .app-nav{grid-column:1/-1;grid-row:2;max-width:none;justify-content:flex-start;flex-wrap:wrap;overflow:visible}
     .header-status{flex-wrap:wrap;gap:5px 12px;white-space:normal}
     .header-status>span+span::before{display:none}
     main{padding:18px 16px 28px;gap:14px}
@@ -180,12 +233,13 @@
   @media(max-width:620px){
     .header-shell{padding:9px 14px 0}.brand-mark{width:30px;height:30px}
     .brand-sub{display:none}.header-actions .readonly{display:none}
-    .navtabs button{padding:7px 8px;font-size:11px}.navtabs .badge{font-size:9.5px}
+    .app-nav>button,.nav-more>button{padding:7px 10px;font-size:11.5px}
     section{padding:14px;border-radius:12px}
     .equity-value{font-size:21px}.equity-grid{grid-template-columns:1fr}
     .segmented{max-width:100%;overflow:auto}
     .step{grid-template-columns:16px minmax(0,1fr)}
     .step .detail{grid-column:2}
+    .order-summary,.pulse-grid{grid-template-columns:1fr}
   }
   @media(max-width:480px){
     .kpis-balanced,#nc-bars{grid-template-columns:1fr}
@@ -198,11 +252,31 @@
     <div class="header-primary">
       <div class="brand"><span class="brand-mark">HS</span><div><h1>多资产组合量化交易策略</h1>
         <span class="brand-sub">数字货币</span></div></div>
-      <nav class="navtabs" aria-label="策略页面">
-        <button data-view="portfolio" class="active">多资产组合策略
-          <span id="health" class="badge ok">加载中…</span></button>
-        <button data-view="newcoin">新币主观量化策略
-          <span id="nc-badge" class="badge warnb">加载中…</span></button>
+      <nav class="app-nav" aria-label="策略工作区与页面">
+        <div class="workspace-switch" role="tablist" aria-label="策略分类">
+          <button data-workspace="portfolio" class="active">多资产组合策略</button>
+          <button data-workspace="newcoin">新币主观量化策略</button>
+        </div>
+        <div class="nav-more" id="nav-more">
+          <button id="more-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+            页面 <strong id="current-page-label">总览</strong> <span>⌄</span></button>
+          <div id="more-menu" class="nav-menu" hidden>
+            <div class="workspace-pages" data-workspace-pages="portfolio">
+              <button data-view="overview">总览</button>
+              <button data-view="strategy">策略与风控</button>
+              <button data-view="orders">订单中心</button>
+              <button data-view="research">链上研究</button>
+              <button data-view="operations">运维与留痕</button>
+            </div>
+            <div class="workspace-pages" data-workspace-pages="newcoin" hidden>
+              <button data-view="newcoin-overview">进度总览</button>
+              <button data-view="newcoin-candidates">候选与决策</button>
+              <button data-view="newcoin-evidence">证据与漏斗</button>
+              <button data-view="newcoin-scoring">前向评分与台账</button>
+              <button data-view="newcoin-operations">采集与留痕</button>
+            </div>
+          </div>
+        </div>
       </nav>
       <div class="header-actions">
         <span class="muted readonly">只读 · 不下单</span>
@@ -210,35 +284,31 @@
       </div>
     </div>
     <div class="header-status" aria-label="系统状态">
+      <span id="health" class="badge ok">加载中…</span>
       <span id="venue"></span>
       <span id="release">release: 加载中…</span>
       <span id="updated"></span>
       <span id="freshness"></span>
+      <span id="nc-badge" class="badge warnb">加载中…</span>
       <span id="collection"></span>
     </div>
   </div>
 </header>
 
 <main>
-<div id="view-portfolio" class="viewgrid">
+<div id="view-overview" class="viewgrid">
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">LIVE OVERVIEW</div><h2>交易总览</h2>
+      <p>账户、权益、风险信号与系统状态集中在一页；策略参数和订单流水分别进入对应工作区。</p></div>
+    <div class="page-meta">只读监控 · OKX Demo</div>
+  </section>
   <section class="span12"><h2>关键指标</h2><div id="kpis" class="kpis kpis-balanced"></div></section>
   <section class="span12" id="decisions-section" hidden><h2>待你决定（两个项目）</h2>
     <div id="decisions"></div>
     <div class="muted" style="margin-top:6px">来源：本项目的 <code>docs/progress.json</code> 与兄弟项目发布的进度表 ——
       只列 <code>state = waiting_decision</code> 的行。其余「等数据/等闸门」的条目不在这一块。</div>
   </section>
-  <section class="span12" id="readiness-section" hidden><h2>切实盘门槛（README §70.6）</h2>
-    <div id="readiness"></div>
-    <div class="muted" style="margin-top:6px">来源：<code>reports/live-readiness.md</code>
-      （<code>scripts/live_readiness.py</code> 每天算一次，只读本地文件）。第 6 条按定义不可自动判 ——
-      它要的是实盘最小仓位实测，不是算出来的数。</div>
-  </section>
   <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
-  <section class="span12"><h2>常驻服务与告警看门狗</h2>
-    <div id="services"></div>
-    <div id="thresholds" style="margin-top:12px"></div>
-  </section>
-
   <section class="span8">
     <div class="panel-head">
       <div><h2>权益曲线</h2><div class="panel-sub">按最后数据时点向前选择区间，损益同步重算</div></div>
@@ -251,48 +321,104 @@
     <div id="equity-stats"></div>
     <div id="chart" class="chart-wrap"></div>
   </section>
-  <section class="span4"><h2>风控限额（实时的美元口径）</h2><div id="risk" class="kv"></div>
-    <h2 style="margin-top:14px">分层限额</h2><div id="tiers" class="kv"></div></section>
-
-  <section class="span12"><h2>四腿风险预算占用（只读）</h2>
-    <div id="risk-budget"></div>
+  <section class="span4"><h2>系统脉搏</h2>
+    <div id="overview-pulse" class="pulse-grid"></div>
+    <div class="muted" style="margin-top:10px">队列与委托来自订单中心聚合；完整风险预算见「策略与风控」。</div>
   </section>
+</div>
 
-  <section class="span6"><h2>策略与参数</h2><div id="strategies"></div></section>
-  <section class="span6"><h2>已平仓交易（按持仓配对，净额已扣双边手续费）</h2>
-    <div class="muted" style="margin-bottom:6px">只含机器人自己的成交；你在 OKX 手动下的单不会出现在这里，所以笔数/盈亏与 OKX 的历史记录本来就不相等。</div>
-    <div class="scroll"><table id="trades"><thead><tr>
-      <th>平仓时间</th><th>标的</th><th class="num">成本</th><th class="num">净额</th>
-      <th class="num">手续费</th><th class="num">收益%</th><th>出场</th>
-    </tr></thead><tbody></tbody></table></div>
-    <div id="trade-attribution" class="muted" style="margin-top:8px"></div>
+<div id="view-strategy" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">STRATEGY &amp; RISK</div><h2>策略与风控</h2>
+      <p>默认只展示策略状态和关键参数；完整阈值、标的和准入依据按需展开，避免同一条参数重复占屏。</p></div>
+    <div class="page-meta">先看门禁，再看参数</div>
   </section>
-
-  <section class="span8"><h2>运行时间线（订单 / 成交 / 风控拦截 / 告警）</h2>
-    <div id="timeline" class="scroll"></div>
+  <section class="span8"><h2>策略清单</h2><div id="strategies" class="strategy-list"></div></section>
+  <section class="span4"><h2>实时风控限额</h2><div id="risk" class="kv"></div>
+    <h2 style="margin-top:18px">分层退出参数</h2><div id="tiers" class="kv"></div>
   </section>
-  <section class="span4"><h2>链上研究</h2><div id="onchain"></div></section>
-
-  <section class="span12"><h2>资金费率中性（carry）：唯一未被随机对照证伪的方向</h2>
-    <div id="carry"></div>
+  <section class="span12"><h2>四腿风险预算占用</h2><div id="risk-budget"></div></section>
+  <section class="span12" id="readiness-section" hidden><h2>切实盘门槛（README §70.6）</h2>
+    <div id="readiness"></div>
+    <div class="muted" style="margin-top:6px">来源：<code>reports/live-readiness.md</code>；
+      第 6 条按定义不可自动判，需要实盘最小仓位实测。</div>
   </section>
+</div>
 
-  <section class="span12"><h2>期权腿（1.1）：闸门每天自动判，能不能执行取决于环境</h2>
-    <div id="options"></div>
+<div id="view-orders" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">ORDER CENTER</div><h2>订单中心</h2>
+      <p>当前持仓、排队信号、未成交委托、已平仓交易和事件流使用同一套标的、时间、数量与金额口径。</p></div>
+    <div class="page-meta" id="order-freshness">等待数据</div>
   </section>
-
-  <section class="span12"><h2>环境监测（六维）：只观察，不接仓位刹车</h2>
-    <div id="monitor"></div>
+  <section class="span12">
+    <div class="panel-head"><div><h2>统一订单视图</h2>
+      <div class="panel-sub">只含机器人自身记录；OKX 手工单不混入。</div></div></div>
+    <div id="order-summary" class="order-summary"></div>
+    <div id="order-tabs" class="subtabs" role="tablist" aria-label="订单中心分类">
+      <button data-order-view="positions" class="active">当前持仓 <b id="order-count-positions">0</b></button>
+      <button data-order-view="queued">排队信号 <b id="order-count-queued">0</b></button>
+      <button data-order-view="pending">未成交委托 <b id="order-count-pending">0</b></button>
+      <button data-order-view="closed">已平仓 <b id="order-count-closed">0</b></button>
+      <button data-order-view="activity">事件流</button>
+    </div>
+    <div id="order-pane-positions" class="order-pane">
+      <table><thead><tr><th>名称</th><th>方向</th><th class="num">数量</th>
+        <th class="num">价格</th><th class="num">金额</th><th>时间</th><th>状态</th></tr></thead>
+        <tbody id="order-positions"></tbody></table>
+    </div>
+    <div id="order-pane-queued" class="order-pane" hidden>
+      <table><thead><tr><th>名称</th><th>方向</th><th>最近尝试</th>
+        <th class="num">数量</th><th class="num">参考价</th><th class="num">金额</th>
+        <th class="num">24h 次数</th><th>原因</th></tr></thead>
+        <tbody id="order-queued"></tbody></table>
+    </div>
+    <div id="order-pane-pending" class="order-pane" hidden>
+      <table><thead><tr><th>订单号</th><th>名称</th><th>方向</th><th>时间</th>
+        <th class="num">剩余数量</th><th class="num">价格</th><th class="num">金额</th><th>状态</th></tr></thead>
+        <tbody id="order-pending"></tbody></table>
+    </div>
+    <div id="order-pane-closed" class="order-pane" hidden>
+      <table><thead><tr><th>平仓时间</th><th>名称</th><th class="num">数量</th>
+        <th class="num">成本</th><th class="num">净额</th><th class="num">手续费</th>
+        <th class="num">收益%</th><th>策略 / 来源</th></tr></thead>
+        <tbody id="order-closed"></tbody></table>
+      <div id="trade-attribution" class="muted" style="margin-top:10px"></div>
+    </div>
+    <div id="order-pane-activity" class="order-pane" hidden>
+      <div id="timeline"></div>
+    </div>
   </section>
+</div>
 
-  <section class="span12"><h2>留痕：bug 修复 · 策略调整 · 决策 · 研究结论</h2>
+<div id="view-research" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">RESEARCH DESK</div><h2>链上研究</h2>
+      <p>候选池、资金费率、期权与环境监测集中展示；新币主观量化策略从「更多」进入，避免与 CEX 主表混读。</p></div>
+    <div class="page-meta">研究结论与执行风险分开</div>
+  </section>
+  <section class="span12"><h2>链上候选概览</h2><div id="onchain"></div></section>
+  <section class="span6"><h2>资金费率中性（CARRY）</h2><div id="carry"></div></section>
+  <section class="span6"><h2>期权腿</h2><div id="options"></div></section>
+  <section class="span12"><h2>环境监测（六维）</h2><div id="monitor"></div></section>
+</div>
+
+<div id="view-operations" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">OPERATIONS</div><h2>运维与留痕</h2>
+      <p>服务健康、告警阈值、决策记录和原始文件集中在这里；订单事件已移入订单中心。</p></div>
+    <div class="page-meta">运行状态 · 审计证据</div>
+  </section>
+  <section class="span12"><h2>常驻服务与告警看门狗</h2>
+    <div id="services"></div><div id="thresholds" style="margin-top:12px"></div>
+  </section>
+  <section class="span12"><h2>留痕：修复 · 决策 · 研究结论</h2>
     <div id="audit-filter" style="margin-bottom:10px"></div>
     <div class="scroll"><table id="audit"><thead><tr>
       <th>时间</th><th>类型</th><th>标题</th><th>说明</th>
     </tr></thead><tbody></tbody></table></div>
   </section>
-
-  <section class="span6"><h2>参数迭代记录（refit，含 ACCEPT / REJECT 判据）</h2>
+  <section class="span6"><h2>参数迭代记录</h2>
     <div class="scroll"><table id="refit"><thead><tr>
       <th>策略</th><th>决策</th><th class="num">改善</th><th>原因</th>
     </tr></thead><tbody></tbody></table></div>
@@ -304,18 +430,42 @@
   </section>
 </div>
 
-<div id="view-newcoin" class="viewgrid" hidden>
+<div id="view-newcoin-overview" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">NEW LISTING RESEARCH</div><h2>新币主观量化策略</h2>
+      <p>独立于多资产组合策略的候选筛查与证据系统；分账、分闸门、分页面，不沿用 CEX 策略结论。</p></div>
+    <div class="page-meta">只读采集 · 未接真实下单</div>
+  </section>
   <section class="span12"><h2>新币主观量化策略 · 证据标准进度（现阶段唯一诚实的"进展"）</h2>
     <div id="nc-bars" class="kpis kpis-balanced"></div>
     <div id="nc-gates" style="margin-top:12px"></div>
-    <div class="muted" style="margin-top:8px">这个项目与左边那个<b>不共用闸门</b>：
+    <div class="muted" style="margin-top:8px">这个项目与<b>多资产组合策略不共用闸门</b>：
       它按"决策过程是否可回看"判，不按统计显著性判（低频主观决策 30 笔也构不成分布）。</div>
   </section>
+</div>
 
-  <section class="span12"><h2>今日候选（只读采集 · 未交易 · 筛查只负责淘汰）</h2>
-    <div id="nc-candidates"></div>
+<div id="view-newcoin-candidates" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">NEW LISTING · CANDIDATES</div><h2>候选与决策</h2>
+      <p>只读采集与人工判断分开：先看今天过闸的候选，再对待评估标的作出做/不做记录。</p></div>
+    <div class="page-meta">未知不等于通过</div>
   </section>
+  <section class="span12"><h2>今日候选（只读采集 · 未交易 · 筛查只负责淘汰）</h2><div id="nc-candidates"></div></section>
+  <section class="span12"><h2>待评估清单（过闸了，但还没有人真正看过）</h2>
+    <div id="nc-awaiting"></div>
+    <div id="nc-decision" style="margin-top:10px"></div>
+    <div class="muted" style="margin-top:6px">证据标准要求<b>放弃也要记录</b>（与买入同权），
+      否则样本是幸存者偏差。判断由人来做：做 → <code>new_thesis.py</code>，
+      不做 → <code>record_skip.py</code>（理由同样必须可复核）。</div>
+  </section>
+</div>
 
+<div id="view-newcoin-evidence" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">NEW LISTING · EVIDENCE</div><h2>证据与漏斗</h2>
+      <p>按链覆盖率、样本日期和筛选漏斗判断“数据不够”还是“标的不行”。</p></div>
+    <div class="page-meta">样本量按不同标的统计</div>
+  </section>
   <section class="span12"><h2>按链覆盖（样板池现在是跨链的）</h2>
     <div id="nc-chains"></div>
     <div class="muted" style="margin-top:6px">「集中度 0/x」不是没风险，是<b>没数据</b>：
@@ -336,33 +486,42 @@
       <b>「数不成立」</b>= 不可能的值（例如 GT 把 sui 池子的创建时间报成 1970 → 池子「57 岁」），
       已从「不好」里单独分出，并进 <code>data/candidates/rejections.jsonl</code> 的判决台账。</div>
   </section>
+</div>
 
-  <section class="span12"><h2>待评估清单（过闸了，但还没有人真正看过）</h2>
-    <div id="nc-awaiting"></div>
-    <div id="nc-decision" style="margin-top:10px"></div>
-    <div class="muted" style="margin-top:6px">证据标准要求<b>放弃也要记录</b>（与买入同权），
-      否则样本是幸存者偏差。判断由人来做：做 → <code>new_thesis.py</code>，
-      不做 → <code>record_skip.py</code>（理由同样必须可复核）。</div>
-  </section>
-
-  <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
-    <div id="nc-raw"></div>
-    <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
+<div id="view-newcoin-scoring" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">NEW LISTING · FORWARD TEST</div><h2>前向评分与台账</h2>
+      <p>同一标的只认第一次测量，区分按测量行和按标的两种样本口径。</p></div>
+    <div class="page-meta">窗口没走完不补数</div>
   </section>
   <section class="span6"><h2>前向打分（没有模拟盘 → 带时刻的快照 + 后来的价格历史）</h2>
     <div id="nc-scores"></div>
   </section>
-
   <section class="span6"><h2>前向台账（累积：一次测量一行，永不重算）</h2>
     <div id="nc-ledger"></div>
     <div class="muted" style="margin-top:6px">同一「标的×轮次×窗口」只认<b>第一次</b>测量
       （离目标时刻最近）。台账号数只增不减 —— 这就是「样本在长」的证据。
       <b>样本量看「不同标的」那一列</b>（同一个代币被记多次 ≠ 多个样本）。</div>
   </section>
+</div>
 
+<div id="view-newcoin-operations" class="viewgrid" hidden>
+  <section class="span12 page-banner">
+    <div><div class="eyebrow">NEW LISTING · OPERATIONS</div><h2>采集与留痕</h2>
+      <p>采集源健康、路径进度和变更记录；新币策略保持独立审计链。</p></div>
+    <div class="page-meta">新币研究专用</div>
+  </section>
+  <section class="span6"><h2>采集健康（记录数 / 最后到达时刻）</h2>
+    <div id="nc-raw"></div>
+    <div class="muted" style="margin-top:6px">"今天没有候选"和"源挂了"必须长得不一样 —— 这张表就是把两者分开的地方。</div>
+  </section>
+  <section class="span6"><h2>数据源（实测状态）</h2><div id="nc-sources" class="kv"></div></section>
   <section class="span8"><h2>路径进度表</h2><div id="nc-progress" class="scroll"></div></section>
-  <section class="span4"><h2>数据源（实测状态）</h2><div id="nc-sources" class="kv"></div></section>
-
+  <section class="span4"><h2>当前边界</h2><div class="kv">
+    <div>资金</div><div>与多资产组合策略分账</div>
+    <div>闸门</div><div>独立证据标准，不共用 CEX 准入门槛</div>
+    <div>下单</div><div>未接真实执行</div>
+  </div></section>
   <section class="span12"><h2>最近留痕</h2><div id="nc-changelog" class="scroll"></div></section>
 </div>
 </main>
@@ -405,24 +564,112 @@ python3 -m ta dashboard --port 9200</pre>
 const n = (v, d = 2) => (v === null || v === undefined || isNaN(v)) ? '-' : Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
 const money = (v, d = 2) => (v >= 0 ? '+$' : '-$') + Math.abs(Number(v)).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
 const usd = (v, d = 0) => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
+const maybeUsd = (v, d = 2) => (v === null || v === undefined || v === '' || isNaN(v)) ? '—' : usd(v, d);
 const ts = (ms) => { if (!ms) return '-'; const d = new Date(Number(ms)); return d.toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); };
 const cls = (v) => v > 0 ? 'up' : (v < 0 ? 'down' : 'dim');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const KIND = {bug:'缺陷', decision:'决策', research:'研究', ops:'运维', strategy:'策略'};
 
-// ---- 两个项目的切换（2026-10-11 用户要求分开展示）----------------------------
-// 只用显示切换，请求仍然是同一个快照：多请求就多一种"某一边没刷新"的假象。
-let VIEW = 'portfolio';
-function setView(name) {
-  VIEW = name;
-  document.querySelectorAll('.navtabs button').forEach(b =>
-    b.classList.toggle('active', b.dataset.view === name));
-  document.querySelector('#view-portfolio').hidden = name !== 'portfolio';
-  document.querySelector('#view-newcoin').hidden = name !== 'newcoin';
-  try { localStorage.setItem('dashboard.view', name); } catch (e) { /* 忽略 */ }
+// 一个快照、多个工作区。二级页收进“更多”，避免把所有内容堆成一条长页面。
+const WORKSPACES = {
+  portfolio: {
+    default: 'overview',
+    views: {overview: '总览', strategy: '策略与风控', orders: '订单中心',
+      research: '链上研究', operations: '运维与留痕'}
+  },
+  newcoin: {
+    default: 'newcoin-overview',
+    views: {'newcoin-overview': '进度总览', 'newcoin-candidates': '候选与决策',
+      'newcoin-evidence': '证据与漏斗', 'newcoin-scoring': '前向评分与台账',
+      'newcoin-operations': '采集与留痕'}
+  }
+};
+const VIEWS = Object.values(WORKSPACES).flatMap(workspace => Object.keys(workspace.views));
+const VIEW_ALIASES = {portfolio: 'overview', newcoin: 'newcoin-overview'};
+let VIEW = 'overview';
+let WORKSPACE = 'portfolio';
+function closeMoreMenu() {
+  $('#more-menu').hidden = true;
+  $('#nav-more').classList.remove('open');
+  $('#more-toggle').setAttribute('aria-expanded', 'false');
 }
-document.querySelectorAll('.navtabs button').forEach(b => b.onclick = () => setView(b.dataset.view));
-try { const saved = localStorage.getItem('dashboard.view'); if (saved) setView(saved); } catch (e) { /* 忽略 */ }
+function setView(name) {
+  name = VIEW_ALIASES[name] || name;
+  if (!VIEWS.includes(name)) name = 'overview';
+  VIEW = name;
+  WORKSPACE = Object.keys(WORKSPACES).find(key => name in WORKSPACES[key].views) || 'portfolio';
+  VIEWS.forEach(view => {
+    const el = document.querySelector('#view-' + view);
+    if (el) el.hidden = view !== name;
+  });
+  document.querySelectorAll('.workspace-switch button').forEach(button => {
+    const active = button.dataset.workspace === WORKSPACE;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-selected', 'true');
+    else button.setAttribute('aria-selected', 'false');
+  });
+  document.querySelectorAll('[data-workspace-pages]').forEach(group => {
+    group.hidden = group.dataset.workspacePages !== WORKSPACE;
+  });
+  document.querySelectorAll('#more-menu [data-view]').forEach(button => {
+    const active = button.dataset.view === name;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  $('#current-page-label').textContent = WORKSPACES[WORKSPACE].views[name] || '页面';
+  closeMoreMenu();
+  try {
+    localStorage.setItem('dashboard.view', name);
+    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+  } catch (e) { /* 忽略 */ }
+}
+document.querySelectorAll('.workspace-switch button').forEach(button => {
+  button.onclick = () => setView(WORKSPACES[button.dataset.workspace].default);
+});
+document.querySelectorAll('#more-menu [data-view]').forEach(button => {
+  button.onclick = () => setView(button.dataset.view);
+});
+$('#more-toggle').onclick = (event) => {
+  event.stopPropagation();
+  const open = $('#more-menu').hidden;
+  $('#more-menu').hidden = !open;
+  $('#nav-more').classList.toggle('open', open);
+  $('#more-toggle').setAttribute('aria-expanded', String(open));
+};
+document.addEventListener('click', (event) => {
+  if (!$('#nav-more').contains(event.target)) closeMoreMenu();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMoreMenu();
+});
+try {
+  const hashView = location.hash.slice(1);
+  const saved = hashView || localStorage.getItem('dashboard.view');
+  setView(saved || 'overview');
+} catch (e) {
+  setView('overview');
+}
+window.addEventListener('hashchange', () => {
+  const name = location.hash.slice(1);
+  if (name && VIEWS.includes(VIEW_ALIASES[name] || name)) setView(name);
+});
+
+let ORDER_VIEW = 'positions';
+function setOrderView(name) {
+  ORDER_VIEW = name;
+  document.querySelectorAll('#order-tabs button').forEach(button =>
+    button.classList.toggle('active', button.dataset.orderView === name));
+  document.querySelectorAll('[id^="order-pane-"]').forEach(pane =>
+    pane.hidden = pane.id !== 'order-pane-' + name);
+  try { localStorage.setItem('dashboard.orderView', name); } catch (e) { /* 忽略 */ }
+}
+document.querySelectorAll('#order-tabs button').forEach(button =>
+  button.onclick = () => setOrderView(button.dataset.orderView));
+try {
+  const savedOrderView = localStorage.getItem('dashboard.orderView');
+  if (savedOrderView) setOrderView(savedOrderView);
+} catch (e) { /* 忽略 */ }
 
 const NC_STATE = {done:'✅ 完成', in_progress:'🔧 进行中', gated:'⏳ 等闸门', waiting_data:'⏳ 等数据',
   waiting_decision:'⏳ 等决定', blocked:'⛔ 阻塞', not_started:'⬜ 未开始', next_phase:'🔜 下一版本'};
@@ -972,41 +1219,114 @@ function renderRiskBudget(b) {
 }
 
 function renderStrategies(list) {
-  $('#strategies').innerHTML = list.map(s => {
-    const pct = s.partial_fraction ? `${Math.round(s.partial_fraction*100)}%` : '—';
+  const stateOf = (s) => {
     const admission = s.admission || {};
-    const chip = !s.enabled ? '停用'
+    return !s.enabled ? '停用'
       : admission.admitted ? (admission.state === 'collecting' ? '收集中' : '实盘准入')
       : '实盘隔离';
-    return `<div class="strat">
-      <h3>${esc(s.name)} <span class="chip">${chip}</span></h3>
-      <p>${esc(s.description || '')}</p>
-      <p class="muted">准入依据：${esc(admission.reason || '无')}</p>
-      <div class="kv">
+  };
+  const counts = list.reduce((acc, strategy) => {
+    const state = stateOf(strategy);
+    acc[state] = (acc[state] || 0) + 1;
+    return acc;
+  }, {});
+  const summary = `<div class="pulse-grid" style="margin-bottom:12px">
+    <div class="pulse-item"><span>全部策略</span><strong>${list.length}</strong></div>
+    <div class="pulse-item"><span>可运行 / 收集中</span><strong>${(counts['实盘准入'] || 0) + (counts['收集中'] || 0)}</strong></div>
+    <div class="pulse-item"><span>隔离</span><strong>${counts['实盘隔离'] || 0}</strong></div>
+    <div class="pulse-item"><span>停用</span><strong>${counts['停用'] || 0}</strong></div>
+  </div>`;
+  $('#strategies').innerHTML = summary + list.map(s => {
+    const pct = s.partial_fraction ? `${Math.round(s.partial_fraction*100)}%` : '—';
+    const admission = s.admission || {};
+    const stop = s.stop_atr ? `${s.stop_atr}×ATR` : '分层止损';
+    const tp = s.take_profit_r ? `${s.take_profit_r}R` : '移动止损';
+    return `<details class="strategy-item">
+      <summary>
+        <div><strong>${esc(s.name)}</strong><small>${esc(s.description || '')}</small></div>
+        <span class="chip">${stateOf(s)}</span>
+        <div class="strategy-meta">${esc(s.timeframe || '-')}${s.confirm ? ' · ' + esc(s.confirm) : ''}<br>${stop} · ${tp} · ${s.edge_cost_multiple ?? '-'}× 成本</div>
+      </summary>
+      <div class="strategy-details"><div class="kv">
         <div>周期</div><div>${esc(s.timeframe || '-')}${s.confirm ? ' · 确认 ' + esc(s.confirm) : ''}</div>
         <div>标的</div><div>${esc((s.symbols || []).join(', ') || '-')}</div>
-        <div>止损 / 止盈</div><div>${s.stop_atr ? s.stop_atr + '×ATR' : '按层级（见右侧分层限额）'} · ${s.take_profit_r ? s.take_profit_r + 'R' : '无硬止盈，移动止损接管'}</div>
+        <div>止损 / 止盈</div><div>${stop} · ${tp}</div>
         <div>分批 / 保本</div><div>${pct} @1R · 保本 ${s.breakeven_at_r ?? '-'}R</div>
         <div>边缘/成本门槛</div><div>${s.edge_cost_multiple ?? '-'}× 成本</div>
-      </div></div>`;
+        <div>准入依据</div><div>${esc(admission.reason || '无')}</div>
+      </div></div></details>`;
   }).join('');
 }
 
-function renderTrades(t) {
-  const rows = (t.closed || []).map(x => `<tr>
-    <td class="dim">${ts(x.closed_ts)}</td><td>${esc(x.symbol)}</td>
-    <td class="num">${usd(x.cost, 2)}</td>
-    <td class="num ${cls(x.net)}">${money(x.net)}</td>
-    <td class="num dim">${n(x.fees, 2)}</td>
-    <td class="num ${cls(x.ret_pct)}">${n(x.ret_pct, 2)}%</td>
-    <td><span class="chip">${esc(x.tag || '-')}</span></td></tr>`).join('');
-  $('#trades tbody').innerHTML = rows || '<tr><td colspan="7" class="dim">还没有已平仓的交易</td></tr>';
-  const attribution = (t.by_strategy || []).map(x =>
-    `${esc(x.strategy)}：${x.count} 笔，净 ${money(x.net)}，胜率 ${n(x.win_rate,1)}%，费 ${usd(x.fees,2)}`
+function renderOverviewPulse(oc) {
+  const s = (oc && oc.summary) || {};
+  $('#overview-pulse').innerHTML = `
+    <div class="pulse-item"><span>当前持仓</span><strong>${s.positions ?? 0}</strong></div>
+    <div class="pulse-item"><span>排队信号</span><strong>${s.queued_signals ?? 0}</strong></div>
+    <div class="pulse-item"><span>24h 风控拦截</span><strong>${s.blocked_24h ?? 0}</strong></div>
+    <div class="pulse-item"><span>已平仓净额</span><strong class="${cls(s.closed_net || 0)}">${money(s.closed_net || 0)}</strong></div>`;
+}
+
+function renderOrderCenter(oc, rows) {
+  oc = oc || {};
+  const s = oc.summary || {};
+  $('#order-freshness').textContent = oc.live
+    ? `实时报价 ${ts(oc.as_of)}` : '实时报价不可用 · 显示账本可得字段';
+  $('#order-summary').innerHTML = `
+    <div class="pulse-item"><span>当前持仓</span><strong>${s.positions ?? 0}</strong></div>
+    <div class="pulse-item"><span>排队信号</span><strong>${s.queued_signals ?? 0}</strong></div>
+    <div class="pulse-item"><span>24h 拦截 / 未成交</span><strong>${s.blocked_24h ?? 0} / ${s.pending_orders ?? 0}</strong></div>
+    <div class="pulse-item"><span>已平仓 ${s.closed_trades ?? 0} 笔 · 净额</span>
+      <strong class="${cls(s.closed_net || 0)}">${money(s.closed_net || 0)}</strong></div>`;
+  $('#order-count-positions').textContent = s.positions ?? 0;
+  $('#order-count-queued').textContent = s.queued_signals ?? 0;
+  $('#order-count-pending').textContent = s.pending_orders ?? 0;
+  $('#order-count-closed').textContent = s.closed_trades ?? 0;
+
+  $('#order-positions').innerHTML = (oc.positions || []).map(row => `<tr>
+    <td><b>${esc(row.symbol)}</b></td><td class="order-side-buy">持有</td>
+    <td class="num">${n(row.qty, 8)}</td>
+    <td class="num">${maybeUsd(row.price, 6)}</td>
+    <td class="num">${maybeUsd(row.notional, 2)}</td>
+    <td class="dim">${ts(oc.as_of)}</td><td><span class="chip strategy">持仓</span></td></tr>`).join('')
+    || '<tr><td colspan="7" class="dim">当前没有已托管的持仓</td></tr>';
+
+  $('#order-queued').innerHTML = (oc.queued || []).map(row => `<tr>
+    <td><b>${esc(row.symbol)}</b></td>
+    <td class="${row.side === 'buy' ? 'order-side-buy' : 'order-side-sell'}">${row.side === 'buy' ? '买入' : '卖出'}</td>
+    <td class="dim">${ts(row.last_ts)}</td>
+    <td class="num">${n(row.qty, 8)}</td>
+    <td class="num">${maybeUsd(row.price, 6)}</td>
+    <td class="num">${maybeUsd(row.notional, 2)}</td>
+    <td class="num">${row.attempts_24h ?? 0}</td>
+    <td class="order-reason">${esc(row.reason || '—')}<br><span class="dim">${esc(row.tag || '')}</span></td>
+    </tr>`).join('') || '<tr><td colspan="8" class="dim">过去 24h 没有排队中的信号</td></tr>';
+
+  $('#order-pending').innerHTML = (oc.pending_orders || []).map(row => `<tr>
+    <td class="dim" title="${esc(row.client_order_id)}">${esc(String(row.client_order_id || '').slice(0, 14))}${String(row.client_order_id || '').length > 14 ? '…' : ''}</td>
+    <td><b>${esc(row.symbol)}</b></td>
+    <td class="${row.side === 'buy' ? 'order-side-buy' : 'order-side-sell'}">${row.side === 'buy' ? '买入' : '卖出'}</td>
+    <td class="dim">${ts(row.ts)}</td><td class="num">${n(row.qty, 8)}</td>
+    <td class="num">${maybeUsd(row.price, 6)}</td><td class="num">${maybeUsd(row.notional, 2)}</td>
+    <td><span class="chip">${esc(row.status || 'open')}</span></td></tr>`).join('')
+    || '<tr><td colspan="8" class="dim">没有剩余未成交委托</td></tr>';
+
+  $('#order-closed').innerHTML = (oc.closed || []).map(row => `<tr>
+    <td class="dim">${ts(row.closed_ts)}</td><td><b>${esc(row.symbol)}</b></td>
+    <td class="num">${row.qty == null ? '—' : n(row.qty, 8)}</td>
+    <td class="num">${usd(row.cost, 2)}</td>
+    <td class="num ${cls(row.net)}">${money(row.net)}</td>
+    <td class="num dim">${n(row.fees, 2)}</td>
+    <td class="num ${cls(row.ret_pct)}">${n(row.ret_pct, 2)}%</td>
+    <td><span class="chip">${esc(row.tag || '-')}</span></td></tr>`).join('')
+    || '<tr><td colspan="8" class="dim">还没有已平仓交易</td></tr>';
+  const attribution = (oc.by_strategy || []).map(row =>
+    `${esc(row.strategy)}：${row.count} 笔，净 ${money(row.net)}，胜率 ${n(row.win_rate, 1)}%`
   ).join('；');
-  $('#trade-attribution').textContent = attribution
-    ? `策略归因：${attribution}`
-    : '';
+  $('#trade-attribution').textContent = attribution ? `策略归因：${attribution}` : '';
+
+  renderTimeline(rows);
+  renderOverviewPulse(oc);
 }
 
 function renderTimeline(rows) {
@@ -1295,8 +1615,26 @@ async function refresh() {
     renderRisk(d.risk);
     renderRiskBudget(d.risk_budget);
     renderStrategies(d.strategies);
-    renderTrades(d.trades);
-    renderTimeline(d.timeline);
+    const orderCenter = d.order_center || {
+      as_of: (d.summary.live || {}).read_at || d.generated_at,
+      live: !!(d.summary.live || {}).available,
+      summary: {
+        positions: (d.summary.live || {}).position_count || d.summary.open_positions || 0,
+        queued_signals: 0,
+        blocked_24h: 0,
+        pending_orders: 0,
+        closed_trades: d.trades.count || 0,
+        closed_net: d.trades.net_total || 0,
+        closed_win_rate: d.trades.win_rate || 0
+      },
+      positions: Object.entries((d.summary.live || {}).positions || {}).map(([symbol, qty]) => ({
+        symbol, qty, price: null, notional: null, status: '持仓'
+      })),
+      queued: [], pending_orders: [],
+      closed: d.trades.closed || [],
+      by_strategy: d.trades.by_strategy || []
+    };
+    renderOrderCenter(orderCenter, d.timeline);
     renderOnchain(d.onchain);
     renderOptions(d.options);
     renderCarry(d.carry);

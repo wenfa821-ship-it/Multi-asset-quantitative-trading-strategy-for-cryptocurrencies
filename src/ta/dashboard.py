@@ -191,6 +191,7 @@ def round_trips(fills: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         "symbol": symbol,
                         "opened_ts": pos["opened_ts"],
                         "closed_ts": fill.get("ts"),
+                        "qty": round(pos["entry_qty"], 12),
                         "cost": round(cost, 4),
                         "proceeds": round(pos["proceeds"], 4),
                         "fees": round(pos["fees"], 4),
@@ -536,6 +537,7 @@ class DashboardData:
             base = self.config.app.base_currency
             cash = float((totals.get(base) or 0.0))
             positions: dict[str, float] = {}
+            position_details: list[dict[str, Any]] = []
             dust: dict[str, float] = {}
             # Same rule the runner uses: a holding the bot could never sell is
             # rounding residue, not a position. OKX charges spot fees in the base
@@ -544,6 +546,7 @@ class DashboardData:
             trivial_usd = self.config.risk.per_trade.min_order_notional_usd / 4.0
             value = 0.0
             dust_value = 0.0
+            holdings: list[tuple[str, float, str]] = []
             for ccy, amount in totals.items():
                 amount = float(amount or 0.0)
                 if ccy == base or amount <= 0:
@@ -551,7 +554,15 @@ class DashboardData:
                 symbol = f"{ccy}/{base}"
                 if symbol not in (exchange.markets or {}):
                     continue
-                price = float(exchange.fetch_ticker(symbol).get("last") or 0.0)
+                holdings.append((ccy, amount, symbol))
+            symbols = sorted({symbol for _, _, symbol in holdings})
+            try:
+                tickers = exchange.fetch_tickers(symbols) if symbols else {}
+            except Exception:  # noqa: BLE001 - fall back to individual public tickers
+                tickers = {}
+            for ccy, amount, symbol in holdings:
+                ticker = tickers.get(symbol) or exchange.fetch_ticker(symbol)
+                price = float(ticker.get("last") or 0.0)
                 if price <= 0:
                     continue
                 notional = amount * price
@@ -561,12 +572,21 @@ class DashboardData:
                     dust_value += notional
                 else:
                     positions[symbol] = amount
+                    position_details.append({
+                        "symbol": symbol,
+                        "qty": amount,
+                        "price": round(price, 12),
+                        "notional": round(notional, 2),
+                    })
             result = {
                 "available": True,
                 "error": "",
                 "cash": round(cash, 6),
                 "equity": round(cash + value, 6),
                 "positions": positions,
+                "position_details": sorted(
+                    position_details, key=lambda row: row["notional"], reverse=True
+                ),
                 "position_count": len(positions),
                 "dust_count": len(dust),
                 "dust_notional": round(dust_value, 6),
@@ -707,6 +727,152 @@ class DashboardData:
             "best": max((t["net"] for t in closed), default=0.0),
             "worst": min((t["net"] for t in closed), default=0.0),
             "by_strategy": by_strategy,
+        }
+
+    def order_center(self) -> dict[str, Any]:
+        """One normalized view for positions, queued signals and order history.
+
+        The old page spread this information over KPIs, the closed-trade table
+        and the event timeline. This method keeps the source records intact but
+        gives the UI one stable schema with the fields an operator actually
+        needs: symbol, time, quantity, amount and state.
+        """
+        ledger = self._ledger()
+        live = self.live_venue()
+        closed = self.trades()
+        now_ms = int(time.time() * 1000)
+        since_ms = now_ms - 24 * 60 * 60 * 1000
+
+        position_details = list(live.get("position_details") or [])
+        if not position_details and live.get("available"):
+            position_details = [
+                {"symbol": symbol, "qty": float(qty), "price": None, "notional": None}
+                for symbol, qty in (live.get("positions") or {}).items()
+            ]
+        positions = [{
+            "symbol": item["symbol"],
+            "qty": float(item.get("qty") or 0.0),
+            "price": item.get("price"),
+            "notional": item.get("notional"),
+            "status": "持仓",
+        } for item in position_details]
+
+        # Repeated risk refusals are one queued intent, not N independent rows.
+        queued: dict[str, dict[str, Any]] = {}
+        blocked_total = 0
+        for event in ledger:
+            if event.get("kind") != "blocked" or int(event.get("ts") or 0) < since_ms:
+                continue
+            blocked_total += 1
+            request = event.get("request") or {}
+            symbol = str(request.get("symbol") or event.get("symbol") or "")
+            if not symbol:
+                continue
+            row = queued.setdefault(symbol, {
+                "symbol": symbol,
+                "side": request.get("side") or "",
+                "tag": request.get("tag") or "",
+                "reason": event.get("reason") or "",
+                "first_ts": int(event.get("ts") or 0),
+                "last_ts": int(event.get("ts") or 0),
+                "qty": float(request.get("qty") or 0.0),
+                "price": None,
+                "notional": None,
+                "attempts_24h": 0,
+            })
+            row["attempts_24h"] = int(row["attempts_24h"]) + 1
+            if int(event.get("ts") or 0) >= int(row["last_ts"]):
+                row.update({
+                    "side": request.get("side") or row["side"],
+                    "tag": request.get("tag") or row["tag"],
+                    "reason": event.get("reason") or row["reason"],
+                    "last_ts": int(event.get("ts") or 0),
+                    "qty": float(request.get("qty") or 0.0),
+                })
+
+        prices = {
+            row["symbol"]: float(row["price"])
+            for row in position_details
+            if row.get("price")
+        }
+        missing = [symbol for symbol in queued if symbol not in prices]
+        if missing:
+            try:
+                exchange = self._live_client()
+                try:
+                    tickers = exchange.fetch_tickers(missing)
+                except Exception:  # noqa: BLE001 - fall back to per-symbol public quotes
+                    tickers = {}
+                for symbol in missing:
+                    try:
+                        ticker = tickers.get(symbol) or exchange.fetch_ticker(symbol)
+                        price = float(ticker.get("last") or 0.0)
+                    except Exception:  # noqa: BLE001 - one quote must not break the center
+                        price = 0.0
+                    if price > 0:
+                        prices[symbol] = price
+            except Exception:  # noqa: BLE001 - render quantity even when quotes fail
+                pass
+        queued_rows = []
+        for row in queued.values():
+            price = prices.get(row["symbol"])
+            if price:
+                row["price"] = round(price, 12)
+                row["notional"] = round(float(row["qty"]) * price, 2)
+            queued_rows.append(row)
+        queued_rows.sort(key=lambda row: row["last_ts"], reverse=True)
+
+        fills_by_order: dict[str, float] = {}
+        for event in ledger:
+            if event.get("kind") == "fill" and event.get("client_order_id"):
+                key = str(event["client_order_id"])
+                fills_by_order[key] = fills_by_order.get(key, 0.0) + float(event.get("qty") or 0.0)
+        latest_orders: dict[str, dict[str, Any]] = {}
+        for event in ledger:
+            if event.get("kind") == "order" and event.get("client_order_id"):
+                latest_orders[str(event["client_order_id"])] = event
+        pending_orders = []
+        for client_id, event in latest_orders.items():
+            if int(event.get("ts") or 0) < since_ms:
+                continue
+            qty = float(event.get("qty") or 0.0)
+            # Market-order acknowledgements may say status=open before the
+            # subsequent fill row arrives. Any matched fill means the order is
+            # not sitting in the venue queue; unlike a limit order, it should not
+            # remain here forever because of fee/contract-unit rounding.
+            if qty <= 0 or client_id in fills_by_order:
+                continue
+            price = float(event.get("avg_price") or event.get("price") or 0.0)
+            pending_orders.append({
+                "client_order_id": client_id,
+                "symbol": event.get("symbol") or "",
+                "side": event.get("side") or "",
+                "tag": event.get("tag") or "",
+                "ts": int(event.get("ts") or 0),
+                "qty": round(qty, 12),
+                "price": price or None,
+                "notional": round(qty * price, 2) if price else None,
+                "status": event.get("status") or "open",
+            })
+        pending_orders.sort(key=lambda row: row["ts"], reverse=True)
+
+        return {
+            "as_of": int(live.get("read_at") or now_ms),
+            "live": bool(live.get("available")),
+            "summary": {
+                "positions": len(positions),
+                "queued_signals": len(queued_rows),
+                "blocked_24h": blocked_total,
+                "pending_orders": len(pending_orders),
+                "closed_trades": int(closed.get("count") or 0),
+                "closed_net": closed.get("net_total", 0.0),
+                "closed_win_rate": closed.get("win_rate", 0.0),
+            },
+            "positions": positions,
+            "queued": queued_rows,
+            "pending_orders": pending_orders,
+            "closed": closed.get("closed", []),
+            "by_strategy": closed.get("by_strategy", []),
         }
 
     def timeline(self) -> list[dict[str, Any]]:
@@ -1737,6 +1903,7 @@ class DashboardData:
             "summary": self.summary(),
             "equity": self.equity_series(),
             "trades": self.trades(),
+            "order_center": self.order_center(),
             "timeline": self.timeline(),
             "strategies": self.strategies(),
             "risk": self.risk_limits(),

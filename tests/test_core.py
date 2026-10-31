@@ -2165,6 +2165,70 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('id="collection"', html)
         self.assertIn("#nc-bars{grid-template-columns:repeat(5", html)
         self.assertIn('class="kpis kpis-balanced"', html)
+        self.assertIn('id="view-overview"', html)
+        self.assertIn('id="view-strategy"', html)
+        self.assertIn('id="view-orders"', html)
+        self.assertIn('id="view-research"', html)
+        self.assertIn('id="view-operations"', html)
+        self.assertIn('data-workspace="portfolio"', html)
+        self.assertIn('data-workspace="newcoin"', html)
+        self.assertIn('id="view-newcoin-overview"', html)
+        self.assertIn('id="view-newcoin-candidates"', html)
+        self.assertIn('id="view-newcoin-evidence"', html)
+        self.assertIn('id="view-newcoin-scoring"', html)
+        self.assertIn('id="view-newcoin-operations"', html)
+        self.assertIn('id="more-toggle"', html)
+        self.assertIn('id="order-positions"', html)
+        self.assertIn('id="order-queued"', html)
+        self.assertIn('id="order-closed"', html)
+
+    def test_order_center_normalises_positions_queue_and_closed_trades(self) -> None:
+        import json as _json
+        import time as _time
+        from unittest.mock import patch
+
+        from ta.dashboard import DashboardData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "project"
+            (work / "config").mkdir(parents=True)
+            (work / "data").mkdir(parents=True)
+            for toml in CONFIG_DIR.glob("*.toml"):
+                shutil.copy(toml, work / "config" / toml.name)
+            now = int(_time.time() * 1000)
+            rows = [
+                {"ts": now - 5000, "kind": "fill", "symbol": "BTC/USDT", "side": "buy",
+                 "qty": 1.0, "price": 100.0, "fee": 1.0, "tag": "trend_breakout"},
+                {"ts": now - 1000, "kind": "fill", "symbol": "BTC/USDT", "side": "sell",
+                 "qty": 1.0, "price": 110.0, "fee": 1.0, "tag": "trend_breakout:exit"},
+                {"ts": now - 500, "kind": "blocked", "symbol": "ETH/USDT",
+                 "request": {"symbol": "ETH/USDT", "side": "buy", "qty": 2.0, "tag": "carry"},
+                 "reason": "leg_positions: spot 5 >= 5"},
+                {"ts": now - 200, "kind": "order", "client_order_id": "open-1",
+                 "symbol": "SOL/USDT", "side": "buy", "qty": 3.0, "price": 0.0,
+                 "status": "open", "tag": "trend_breakout"},
+            ]
+            (work / "data" / "ledger.okx_demo.jsonl").write_text(
+                "\n".join(_json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+            )
+            data = DashboardData(work / "config")
+            live = {
+                "available": True,
+                "position_details": [
+                    {"symbol": "BTC/USDT", "qty": 0.5, "price": 100.0, "notional": 50.0}
+                ],
+                "positions": {"BTC/USDT": 0.5},
+            }
+            with patch.object(data, "live_venue", return_value=live):
+                center = data.order_center()
+
+        self.assertEqual(center["summary"]["positions"], 1)
+        self.assertEqual(center["summary"]["queued_signals"], 1)
+        self.assertEqual(center["summary"]["pending_orders"], 1)
+        self.assertEqual(center["summary"]["closed_trades"], 1)
+        self.assertEqual(center["positions"][0]["notional"], 50.0)
+        self.assertEqual(center["queued"][0]["qty"], 2.0)
+        self.assertEqual(center["closed"][0]["symbol"], "BTC/USDT")
 
     def test_audit_changelog_is_append_only_and_valid(self) -> None:
         from ta.dashboard import read_jsonl

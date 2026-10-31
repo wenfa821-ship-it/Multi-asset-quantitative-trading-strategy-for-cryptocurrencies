@@ -1,12 +1,13 @@
 # Changelog
 
-当前版本：**v1.2.3**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
+当前版本：**v1.2.4**（`VERSION` 是唯一事实来源；`pyproject.toml` 与 `ta.__version__` 由 `scripts/version_sync.py --check` 强制一致）。
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## Unreleased（自 2026-10-31T21:21 起，1 条留痕）
+## Unreleased（自 2026-10-31T21:21 起，2 条留痕）
 
 - `2026-10-31T21:37` **ops** v1.2.3 发布部署 PASS：HS 品牌、导航与响应式布局已上线
+- `2026-10-31T21:55` **ops** 看板信息架构重构：双策略工作区、二级页面下拉与统一订单中心
 
 ## v1.2.3 — 2026-10-31T21:21
 
