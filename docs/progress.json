@@ -517,7 +517,7 @@
    "id": "r2-release",
    "item": "第二轮 · v1.2.0/v1.2.1/v1.2.2/v1.2.3 发布与部署验收",
    "state": "done",
-   "gate": "2026-10-31 发布完成：v1.2.0 release `a5530f5a55eb`；v1.2.1 release `17a774c08bcd`；v1.2.2 release `b47b4ed05ae8`；v1.2.3 release `5556ecda8c6c` 与 tag `v1.2.3`，修复看板导航、HS 品牌、响应式网格和表格对齐。当前 runner/watch/dashboard=`55367/55374/55377`，build=`e6471ce3daa1a22d`；首 tick 后 `make deploy-verify` PASS，kill=0、degraded=0。生产策略为 carry_funding / trend_breakout_daily / new_listing_breakout。旧 Demo key ID 历史例外仍不阻断模拟盘，实盘 readiness 0/5",
+   "gate": "2026-10-31 发布完成：v1.2.0 `a5530f5a55eb`；v1.2.1 `17a774c08bcd`；v1.2.2 `b47b4ed05ae8`；v1.2.3 `5556ecda8c6c`；v1.2.4 `4f99c0cd4dc3` 与 tag `v1.2.4`。当前 runner/watch/dashboard=`63603/63598/63595`，build=`e5b3a44b182c3dec`；首 tick 后 `make deploy-verify` PASS，状态 v1.2.4、source clean、kill=0、degraded=0。生产策略为 carry_funding / trend_breakout_daily / new_listing_breakout。旧 Demo key ID 历史例外仍不阻断模拟盘，实盘 readiness 0/5",
    "next": "维护：后续代码变更继续短分支 verify → main → 不可变 tag → 重启 → deploy-verify；旧 Demo key 轮换、Live key 白名单与 webhook 仍是实盘前 P0"
   },
   {
@@ -539,7 +539,7 @@
    "item": "看板信息架构重构：双策略工作区、精简策略参数与统一订单中心",
    "state": "done",
    "gate": "v1.2.4 保留两个一级策略分类并列：多资产组合策略与新币主观量化策略；二级页面由当前策略的「页面」下拉切换。多资产内部为总览/策略与风控/订单中心/链上研究/运维与留痕，新币内部为进度总览/候选与决策/证据与漏斗/前向评分与台账/采集与留痕。策略参数改为可展开摘要并合并风险预算、限额与实盘门槛；新增只读 `order_center` 聚合层，统一当前持仓、24h 排队信号、未成交委托、已平仓交易和事件流。",
-   "next": "发布后复核 dashboard provenance、订单中心真实字段与 1280/900/390px 布局；交易配置和下单路径保持不变"
+   "next": "已随 v1.2.4 发布并部署；继续只读监控订单中心聚合与权益曲线交互，交易配置和下单路径保持不变"
   },
   {
    "id": "production-security-hardening",
