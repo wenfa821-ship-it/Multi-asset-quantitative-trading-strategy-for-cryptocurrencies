@@ -4,11 +4,11 @@
 
 版本规则见 [`docs/RELEASING.md`](docs/RELEASING.md)：**1.0.0 = 第一阶段封板**（四腿系统接入并运行 + 风控/对账/数据管道/发布管理就位）；1.0 之后按语义化版本 —— MAJOR 表示架构或配置模式不兼容，MINOR 表示新增能力（**1.1 = 期权策略与期权腿**），PATCH 表示修复。每个版本冻结在 `archive/versions/<v>/`（config + changelog + progress + manifest + NOTES）。
 
-## v1.2.3 — 2026-10-31T21:15
+## v1.2.3 — 2026-10-31T21:21
 
-- 测试 **530** 绿 · 权益 $106,669.20 · 记录时的包版本 1.2.3
+- 测试 **530** 绿 · 权益 $106,666.91 · 记录时的包版本 1.2.3
 
-Dashboard navigation and responsive alignment; 530 tests passed; accepted old Demo key history exception remains.
+HS dashboard branding, navigation and responsive layout fixes; 530 tests passed; accepted old Demo key history exception remains.
 
 ## v1.2.2 — 2026-10-31T20:38
 

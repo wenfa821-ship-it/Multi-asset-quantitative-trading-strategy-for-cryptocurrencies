@@ -1,18 +1,26 @@
 {
  "version": "v1.2.3",
  "package_version": "1.2.3",
- "created_at": "2026-10-31T21:15:35+08:00",
+ "created_at": "2026-10-31T21:21:18+08:00",
  "tests_passed": 530,
  "source": {
-  "git_sha": "5e40beb692204ab2868e0dfada73d9f26da71620",
+  "git_sha": "746a9623c79c547548d04d604a2d7b34cb268080",
   "git_branch": "ci-v1.2.2-dashboard-docs",
   "git_tag": "",
   "nearest_tag": "v1.2.2",
-  "commits_since_tag": 2,
+  "commits_since_tag": 4,
   "changed_since_tag": [
    "CHANGELOG.md",
    "README.md",
    "VERSION",
+   "archive/versions/v1.2.3/NOTES.md",
+   "archive/versions/v1.2.3/changelog.jsonl",
+   "archive/versions/v1.2.3/config/app.toml",
+   "archive/versions/v1.2.3/config/onchain.toml",
+   "archive/versions/v1.2.3/config/risk.toml",
+   "archive/versions/v1.2.3/config/strategies.toml",
+   "archive/versions/v1.2.3/manifest.json",
+   "archive/versions/v1.2.3/progress.json",
    "docs/changelog.jsonl",
    "docs/progress.json",
    "pyproject.toml",
@@ -25,7 +33,7 @@
   "source_dirty": false,
   "git_status_entries": 0
  },
- "source_sha256": "236e6ca9ad437bcfe0b5f998ae0080638d23b3cd24c5f0868dca6f84e21f271d",
+ "source_sha256": "55336dc080b6da941921e26a74667bb8d65c5bc009b30ee015692c5bf92b9a84",
  "source_files": [
   {
    "path": ".github/workflows/ci.yml",
@@ -637,7 +645,7 @@
   },
   {
    "path": "src/ta/web/index.html",
-   "sha256": "cd7b7631a271c1f5556bd6ebab159dbc93e48a577e1f0b051fbcca950e56ec93"
+   "sha256": "2d6b562ac021e5f15890c4595a27c200af8f7987bea7e21bac904b7471355aff"
   },
   {
    "path": "src/trading_agent.egg-info/PKG-INFO",
@@ -700,8 +708,8 @@
   }
  ],
  "account": {
-  "equity": 106669.2,
-  "cash": 97229.66,
+  "equity": 106666.91,
+  "cash": 97229.35,
   "positions": {
    "BNB/USDT": 2.822217,
    "SHIB/USDT": 410134800.0,
@@ -714,7 +722,7 @@
    "CRV/USDT:USDT": -5970.0,
    "ACT/USDT:USDT": -22912.0
   },
-  "as_of_ms": 1793452443864
+  "as_of_ms": 1793452806764
  },
  "progress": {
   "note": "项目名：多资产组合策略（2026-10-11 用户定名；目录仍为 trading-agent）。渲染进 README.md 的 '进度表' 区块（scripts/progress.py）。state ∈ done/in_progress/gated/waiting_data/blocked/not_started。每轮工作开始先读它、结束更新它 —— 这一张表是『下一步做什么』的唯一事实来源。**挂起政策（2026-10-11 用户决定）**：剩余的 waiting_data 项一律**不再逐轮更新**，等进入实盘阶段再统一重估；在此之前它们不需要任何动作。",
@@ -1249,7 +1257,7 @@
     "id": "dashboard-equity-range-ui",
     "item": "运营看板视觉重构与权益曲线区间损益",
     "state": "done",
-    "gate": "前端视觉层已重构：统一深色控制台、清晰卡片层级、响应式头部与指标网格；权益曲线支持 1D/7D/30D/90D/ALL，每个按钮直接显示该期损益与收益率，选中后同步显示起止权益、峰谷、最大回撤和点数。v1.2.3 进一步把顶部导航拆成等宽页面切换、操作区和独立状态带；多资产 KPI 为桌面 4×2，新币 KPI 为 5×2，平板 2 列、窄屏 1 列，门槛详情与数据表在窄屏不再压坏列宽。浏览器已实测 1280/900/390px",
+    "gate": "前端视觉层已重构：品牌统一为 **HS · 多资产组合量化交易策略 / 数字货币**，顶部导航拆成等宽页面切换、操作区和独立状态带；权益曲线支持 1D/7D/30D/90D/ALL，每个按钮直接显示该期损益与收益率，选中后同步显示起止权益、峰谷、最大回撤和点数。多资产 KPI 为桌面 4×2，新币 KPI 为 5×2，平板 2 列、窄屏 1 列，门槛详情与数据表在窄屏不再压坏列宽。浏览器已实测 1280/900/390px",
     "next": "已随 v1.2.3 完成发布与部署后继续复用 `#equity-range`、`renderEquityChart()` 和 `.kpis-balanced`；新增卡片时保持成组数量与断点测试"
    },
    {
