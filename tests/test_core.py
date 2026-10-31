@@ -2145,10 +2145,13 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("runtime_enabled", rows["trend_breakout"])
         self.assertIn("admitted", rows["trend_breakout"]["admission"])
 
-    def test_equity_chart_exposes_selectable_ranges_with_pnl(self) -> None:
+    def test_equity_chart_exposes_granularity_and_custom_range_with_pnl(self) -> None:
         html = (PROJECT / "src" / "ta" / "web" / "index.html").read_text(encoding="utf-8")
-        for value in ("1d", "7d", "30d", "90d", "all"):
-            self.assertIn(f'data-range="{value}"', html)
+        for value in ("intraday", "day", "week", "month", "year"):
+            self.assertIn(f'data-granularity="{value}"', html)
+        self.assertIn('id="equity-start" type="datetime-local"', html)
+        self.assertIn('id="equity-end" type="datetime-local"', html)
+        self.assertIn('id="equity-apply-range"', html)
         self.assertIn("区间损益", html)
         self.assertIn("最大回撤", html)
         self.assertIn("renderEquityChart()", html)

@@ -163,15 +163,17 @@
     border-radius:6px;font-size:11px;cursor:pointer;transition:.16s ease}
   .segmented button:hover{color:var(--fg)}
   .segmented button.active{background:#183047;color:var(--accent);box-shadow:inset 0 0 0 1px #28516f}
-  #equity-range{gap:5px;padding:4px}
-  #equity-range button{display:grid;grid-template-columns:auto auto;align-items:baseline;
-    column-gap:6px;min-width:76px;padding:6px 9px;text-align:left;line-height:1.2}
-  #equity-range button span{font-weight:700;letter-spacing:.4px}
-  #equity-range button strong{font-size:11px;font-variant-numeric:tabular-nums}
-  #equity-range button small{grid-column:1/-1;margin-top:3px;font-size:9.5px;
-    color:var(--dim);font-variant-numeric:tabular-nums}
-  #equity-range button.up strong,#equity-range button.up small{color:var(--up)}
-  #equity-range button.down strong,#equity-range button.down small{color:var(--down)}
+  .chart-toolbar{display:grid;gap:8px;margin-bottom:10px}
+  .chart-tool-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .chart-tool-label{font-size:10px;color:var(--dim);letter-spacing:.8px;min-width:44px}
+  #equity-granularity button{min-width:48px;text-align:center}
+  .custom-range{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;
+    border:1px solid var(--line);border-radius:9px;background:#0a1119}
+  .custom-range label{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:11px}
+  .custom-range input{color:var(--fg);background:#111d29;border:1px solid var(--line2);
+    border-radius:7px;padding:6px 8px;font:inherit;font-size:11px;color-scheme:dark}
+  .custom-range button{border:1px solid #315069;background:#172b3d;color:var(--fg);
+    border-radius:7px;padding:6px 10px;cursor:pointer;font-size:11px}
   .equity-stats{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:2px 0 10px}
   .equity-value{font-size:24px;font-weight:760;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
   .equity-delta{font-size:13px;font-weight:650;font-variant-numeric:tabular-nums}
@@ -237,6 +239,9 @@
     section{padding:14px;border-radius:12px}
     .equity-value{font-size:21px}.equity-grid{grid-template-columns:1fr}
     .segmented{max-width:100%;overflow:auto}
+    .chart-tool-row{align-items:flex-start}.chart-tool-label{width:100%}
+    .custom-range{align-items:stretch}.custom-range label{flex:1 1 190px}
+    .custom-range input{width:100%}
     .step{grid-template-columns:16px minmax(0,1fr)}
     .step .detail{grid-column:2}
     .order-summary,.pulse-grid{grid-template-columns:1fr}
@@ -311,11 +316,26 @@
   <section class="span12" id="flags-section" hidden><h2>红旗与告警</h2><div id="flags"></div></section>
   <section class="span8">
     <div class="panel-head">
-      <div><h2>权益曲线</h2><div class="panel-sub">按最后数据时点向前选择区间，损益同步重算</div></div>
-      <div id="equity-range" class="segmented" role="group" aria-label="权益曲线时间区间">
-        <button data-range="1d">1D</button><button data-range="7d" class="active">7D</button>
-        <button data-range="30d">30D</button><button data-range="90d">90D</button>
-        <button data-range="all">ALL</button>
+      <div><h2>权益曲线</h2><div class="panel-sub">选择粒度和起止时间；损益按原始权益回算，曲线按粒度聚合</div></div>
+    </div>
+    <div class="chart-toolbar">
+      <div class="chart-tool-row">
+        <span class="chart-tool-label">粒度</span>
+        <div id="equity-granularity" class="segmented" role="group" aria-label="权益曲线粒度">
+          <button data-granularity="intraday" class="active">分时</button>
+          <button data-granularity="day">日</button>
+          <button data-granularity="week">周</button>
+          <button data-granularity="month">月</button>
+          <button data-granularity="year">年</button>
+        </div>
+      </div>
+      <div id="equity-custom-range" class="custom-range">
+        <span class="chart-tool-label">区间</span>
+        <label>开始 <input id="equity-start" type="datetime-local"></label>
+        <span class="dim">至</span>
+        <label>结束 <input id="equity-end" type="datetime-local"></label>
+        <button id="equity-apply-range" type="button">应用区间</button>
+        <span id="equity-range-error" class="down" style="font-size:11px"></span>
       </div>
     </div>
     <div id="equity-stats"></div>
@@ -1054,21 +1074,57 @@ function renderFlags(flags) {
 }
 
 let EQUITY_DATA = {points: [], count: 0};
-const EQUITY_WINDOWS = { '1d': 1, '7d': 7, '30d': 30, '90d': 90 };
-const EQUITY_LABELS = {'1d':'1D','7d':'7D','30d':'30D','90d':'90D','all':'ALL'};
-let EQUITY_RANGE = (() => {
+const EQUITY_GRANULARITY_LABELS = {
+  intraday: '分时', day: '日', week: '周', month: '月', year: '年'
+};
+let EQUITY_GRANULARITY = (() => {
   try {
-    const saved = localStorage.getItem('ta.equityRange');
-    return Object.prototype.hasOwnProperty.call(EQUITY_LABELS, saved) ? saved : '7d';
-  } catch (_) { return '7d'; }
+    const saved = localStorage.getItem('ta.equityGranularity');
+    return Object.prototype.hasOwnProperty.call(EQUITY_GRANULARITY_LABELS, saved) ? saved : 'intraday';
+  } catch (_) { return 'intraday'; }
+})();
+let EQUITY_BOUNDS = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ta.equityBounds') || 'null');
+    if (saved && Number.isFinite(Number(saved.start)) && Number.isFinite(Number(saved.end))) {
+      return {start: Number(saved.start), end: Number(saved.end)};
+    }
+  } catch (_) { /* 忽略 */ }
+  return null;
 })();
 
-function equitySlice(all, range) {
-  const latest = all[all.length - 1].ts;
-  const days = EQUITY_WINDOWS[range];
-  let pts = days ? all.filter(p => p.ts >= latest - days * 86400000) : all;
-  let fallback = false;
-  if (pts.length < 2) { pts = all.slice(-2); fallback = true; }
+function equityDateInput(ms) {
+  const d = new Date(Number(ms));
+  const pad = value => String(value).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function equityBucketTs(ts, granularity) {
+  const d = new Date(Number(ts));
+  if (granularity === 'intraday') return Number(ts);
+  if (granularity === 'day') return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  if (granularity === 'week') {
+    const mondayOffset = (d.getDay() + 6) % 7;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - mondayOffset).getTime();
+  }
+  if (granularity === 'month') return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  return new Date(d.getFullYear(), 0, 1).getTime();
+}
+
+function aggregateEquity(points, granularity) {
+  if (granularity === 'intraday' || points.length < 2) return points.slice();
+  const buckets = new Map();
+  points.forEach(point => buckets.set(equityBucketTs(point.ts, granularity), point));
+  const sampled = Array.from(buckets.values()).sort((a, b) => a.ts - b.ts);
+  return sampled.length >= 2 ? sampled : [points[0], points[points.length - 1]];
+}
+
+function equitySlice(all, bounds, granularity) {
+  const pts = all.filter(point => point.ts >= bounds.start && point.ts <= bounds.end);
+  if (pts.length < 2) {
+    return {pts: [], chartPts: [], empty: true, start: 0, end: 0,
+      delta: 0, pct: 0, peak: 0, trough: 0, maxDrawdown: 0};
+  }
   const start = Number(pts[0].equity || 0);
   const end = Number(pts[pts.length - 1].equity || 0);
   const values = pts.map(p => Number(p.equity || 0));
@@ -1078,7 +1134,7 @@ function equitySlice(all, range) {
     if (runningPeak > 0) maxDrawdown = Math.max(maxDrawdown, (runningPeak - value) / runningPeak * 100);
   }
   return {
-    pts, fallback, start, end,
+    pts, chartPts: aggregateEquity(pts, granularity), empty: false, start, end,
     delta: end - start,
     pct: start ? (end - start) / start * 100 : 0,
     peak: Math.max(...values), trough: Math.min(...values), maxDrawdown,
@@ -1097,28 +1153,34 @@ function renderEquityChart() {
     $('#chart').innerHTML = '<div class="muted">还没有足够的权益记录</div>';
     return;
   }
-  const summaries = {};
-  Object.keys(EQUITY_LABELS).forEach(range => { summaries[range] = equitySlice(all, range); });
-  document.querySelectorAll('#equity-range button').forEach(button => {
-    const range = button.dataset.range;
-    const summary = summaries[range];
-    const tone = summary.delta >= 0 ? 'up' : 'down';
-    button.classList.toggle(tone, true);
-    button.classList.toggle(tone === 'up' ? 'down' : 'up', false);
-    button.innerHTML = `<span>${EQUITY_LABELS[range]}</span><strong>${money(summary.delta)}</strong>
-      <small>${summary.pct >= 0 ? '+' : ''}${n(summary.pct,2)}%</small>`;
-    button.setAttribute('aria-label',
-      `${EQUITY_LABELS[range]} 区间损益 ${money(summary.delta)}，收益率 ${n(summary.pct,3)}%`);
+  const latest = all[all.length - 1].ts;
+  if (!EQUITY_BOUNDS) EQUITY_BOUNDS = {start: latest - 30 * 86400000, end: latest};
+  EQUITY_BOUNDS = {
+    start: Math.max(EQUITY_BOUNDS.start, all[0].ts),
+    end: Math.min(EQUITY_BOUNDS.end, latest)
+  };
+  $('#equity-start').value = equityDateInput(EQUITY_BOUNDS.start);
+  $('#equity-end').value = equityDateInput(EQUITY_BOUNDS.end);
+  $('#equity-start').max = equityDateInput(latest);
+  $('#equity-end').max = equityDateInput(latest);
+  document.querySelectorAll('#equity-granularity button').forEach(button => {
+    button.classList.toggle('active', button.dataset.granularity === EQUITY_GRANULARITY);
   });
-  const current = summaries[EQUITY_RANGE];
+  const current = equitySlice(all, EQUITY_BOUNDS, EQUITY_GRANULARITY);
+  if (current.empty) {
+    $('#equity-stats').innerHTML = '<div class="muted">所选区间内至少需要 2 个权益点。</div>';
+    $('#chart').innerHTML = '<div class="muted">所选区间没有足够数据，请调整开始或结束时间。</div>';
+    return;
+  }
   const pts = current.pts;
-  const {start, end, delta, pct, peak, trough, maxDrawdown, fallback} = current;
+  const chartPts = current.chartPts;
+  const {start, end, delta, pct, peak, trough, maxDrawdown} = current;
   const tone = delta >= 0 ? 'up' : 'down';
   const drawdownText = maxDrawdown > 0 ? `-${n(maxDrawdown,3)}%` : '0.000%';
-  const rangeName = ({'1d':'1 天','7d':'7 天','30d':'30 天','90d':'90 天','all':'全部'})[EQUITY_RANGE];
+  const granularityName = EQUITY_GRANULARITY_LABELS[EQUITY_GRANULARITY];
 
   $('#equity-stats').innerHTML = `<div class="equity-stats">
-    <div><div class="equity-meta">${rangeName}区间损益</div>
+    <div><div class="equity-meta">所选区间损益 · ${granularityName}线</div>
       <div class="equity-value ${tone}">${money(delta)}</div>
       <div class="equity-delta ${tone}">${pct >= 0 ? '+' : ''}${n(pct,3)}%
         <span class="muted">· ${usd(start)} → ${usd(end)}</span></div></div>
@@ -1127,18 +1189,18 @@ function renderEquityChart() {
       <div class="equity-stat"><span>区间谷值</span><b>${usd(trough)}</b></div>
       <div class="equity-stat"><span>最大回撤</span><b class="down">${drawdownText}</b></div>
     </div>
-    <div class="equity-meta">${pts.length} / ${EQUITY_DATA.count || all.length} 个点
-      · ${ts(pts[0].ts)} → ${ts(pts[pts.length - 1].ts)}${fallback ? ' · 区间内样本不足，展示最后 2 点' : ''}</div>
+    <div class="equity-meta">${chartPts.length} 个${granularityName}点 / ${pts.length} 个原始点
+      · ${ts(pts[0].ts)} → ${ts(pts[pts.length - 1].ts)}</div>
   </div>`;
 
   const W = 960, H = 260, P = 42;
-  const x0 = pts[0].ts, x1 = pts[pts.length - 1].ts;
+  const x0 = chartPts[0].ts, x1 = chartPts[chartPts.length - 1].ts;
   let lo = trough, hi = peak;
   const pad = (hi - lo) * 0.14 || Math.max(1, Math.abs(end) * 0.001);
   lo -= pad; hi += pad;
   const X = t => P + (W - 2*P) * (x1 === x0 ? 0.5 : (t - x0) / (x1 - x0));
   const Y = v => H - P - (H - 2*P) * ((v - lo) / (hi - lo));
-  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.ts).toFixed(1)},${Y(Number(p.equity)).toFixed(1)}`).join(' ');
+  const line = chartPts.map((p, i) => `${i ? 'L' : 'M'}${X(p.ts).toFixed(1)},${Y(Number(p.equity)).toFixed(1)}`).join(' ');
   const area = `${line} L${X(x1).toFixed(1)},${H-P} L${X(x0).toFixed(1)},${H-P} Z`;
   const colour = delta >= 0 ? 'var(--up)' : 'var(--down)';
   const fill = delta >= 0 ? '#45d483' : '#ff647c';
@@ -1150,7 +1212,7 @@ function renderEquityChart() {
   }).join('');
   const xMid = X((x0 + x1) / 2);
   $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
-      aria-label="${rangeName}权益曲线，区间损益 ${money(delta)}">
+      aria-label="所选区间${granularityName}线权益曲线，区间损益 ${money(delta)}">
     <defs><linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${fill}" stop-opacity=".24"/>
       <stop offset="1" stop-color="${fill}" stop-opacity="0"/>
@@ -1164,6 +1226,33 @@ function renderEquityChart() {
     <text x="${W-P}" y="${H-12}" fill="#8ea1b2" font-size="10" text-anchor="end">${ts(x1)}</text>
   </svg>`;
 }
+
+document.querySelectorAll('#equity-granularity button').forEach(button => {
+  button.onclick = () => {
+    EQUITY_GRANULARITY = button.dataset.granularity;
+    try { localStorage.setItem('ta.equityGranularity', EQUITY_GRANULARITY); } catch (_) { /* 忽略 */ }
+    renderEquityChart();
+  };
+});
+
+function applyEquityRange() {
+  const start = Date.parse($('#equity-start').value);
+  const end = Date.parse($('#equity-end').value);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    $('#equity-range-error').textContent = '结束时间必须晚于开始时间';
+    return;
+  }
+  EQUITY_BOUNDS = {start, end};
+  $('#equity-range-error').textContent = '';
+  try { localStorage.setItem('ta.equityBounds', JSON.stringify(EQUITY_BOUNDS)); } catch (_) { /* 忽略 */ }
+  renderEquityChart();
+}
+$('#equity-apply-range').onclick = applyEquityRange;
+[$('#equity-start'), $('#equity-end')].forEach(input => {
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') applyEquityRange();
+  });
+});
 
 function renderRisk(r) {
   const cap = r.absolute_order_cap > 0 ? usd(r.absolute_order_cap) : '未设上限';
@@ -1667,17 +1756,6 @@ async function poll() {
   try { await refresh(); } finally { refreshing = false; }
   setTimeout(poll, 15000);
 }
-document.querySelectorAll('#equity-range button').forEach(button => {
-  button.classList.toggle('active', button.dataset.range === EQUITY_RANGE);
-  button.addEventListener('click', () => {
-    EQUITY_RANGE = button.dataset.range || '7d';
-    try { localStorage.setItem('ta.equityRange', EQUITY_RANGE); } catch (_) {}
-    document.querySelectorAll('#equity-range button').forEach(item => {
-      item.classList.toggle('active', item === button);
-    });
-    renderEquityChart();
-  });
-});
 if (SERVED) {
   poll();
 } else {
